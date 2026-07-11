@@ -1,0 +1,18 @@
+<h1 class="mb-1 text-xl font-bold tracking-tight text-ink-950">How should we reach you?</h1>
+<p class="mb-5 text-sm text-ink-500">
+  Choose how you receive registration and draw notifications.
+</p>
+
+<div class="flex flex-col gap-2.5">
+  <PlayerComponents.option_card
+    :for={{value, label, desc} <- @notification_defs}
+    selected={@attrs["notification_preference"] == value}
+    phx-click="choose"
+    phx-value-field="notification_preference"
+    phx-value-choice={value}
+  >
+    <div class="text-[15px] font-semibold text-ink-950">{label}</div>
+    <div class="mt-0.5 text-[13px] text-ink-500">{desc}</div>
+  </PlayerComponents.option_card>
+</div>
+<.field_error field={@form[:notification_preference]} />

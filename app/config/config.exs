@@ -9,7 +9,14 @@ import Config
 
 config :cuevolution,
   ecto_repos: [Cuevolution.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime, binary_id: true]
+
+# Configure Oban
+config :cuevolution, Oban,
+  engine: Oban.Engines.Basic,
+  repo: Cuevolution.Repo,
+  plugins: [Oban.Plugins.Pruner],
+  queues: [notifications: 10]
 
 # Configure the endpoint
 config :cuevolution, CuevolutionWeb.Endpoint,

@@ -1,0 +1,96 @@
+<PlayerComponents.app_shell current_player={@current_player} active={:fixtures} flash={@flash}>
+  <PlayerComponents.eyebrow>Draws &amp; Fixtures</PlayerComponents.eyebrow>
+  <h1 class="mb-5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">My fixtures</h1>
+
+  <div
+    :if={@upcoming != []}
+    class="mb-6 flex items-start gap-3 rounded-2xl bg-ink-950 px-5 py-4 text-ink-25"
+  >
+    <div class="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
+      ◆
+    </div>
+    <div>
+      <div class="mb-0.5 text-[15px] font-semibold">A new draw has been published</div>
+      <div class="text-[13.5px] text-ink-300">
+        You have {length(@upcoming)} upcoming {ngettext_fixture(length(@upcoming))}.
+        Notifications were sent to your email and SMS.
+      </div>
+    </div>
+  </div>
+
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Upcoming</h2>
+
+  <div :if={@upcoming == []} class="mb-8">
+    <PlayerComponents.empty_state icon="hero-calendar" title="No upcoming fixtures">
+      When the admin publishes a draw, your matches — with opponent, venue and time — will
+      show up here and we'll notify you.
+    </PlayerComponents.empty_state>
+  </div>
+
+  <div
+    :if={@upcoming != []}
+    class="mb-8 grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5"
+  >
+    <PlayerComponents.card :for={fixture <- @upcoming}>
+      <div class="mb-3 flex items-center justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          {fixture.type}
+        </span>
+        <PlayerComponents.stage_badge stage={fixture.stage} />
+      </div>
+      <div class="mb-0.5 text-[13px] text-ink-400">vs</div>
+      <div class="mb-3.5 text-[19px] font-bold tracking-tight text-ink-950">
+        {fixture.opponent}
+      </div>
+      <div class="flex flex-col gap-1.5 text-sm text-ink-700">
+        <div class="flex gap-2">
+          <span class="w-[52px] shrink-0 text-ink-400">When</span>
+          <span class="font-semibold text-ink-950">{fixture.date} · {fixture.time}</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="w-[52px] shrink-0 text-ink-400">Where</span>
+          <span>{fixture.venue}</span>
+        </div>
+      </div>
+    </PlayerComponents.card>
+  </div>
+
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Recent results</h2>
+
+  <PlayerComponents.empty_state
+    :if={@results == []}
+    icon="hero-clock"
+    title="No matches played yet"
+  >
+    Results appear here once the admin records your first match.
+  </PlayerComponents.empty_state>
+
+  <div
+    :if={@results != []}
+    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm"
+  >
+    <div
+      :for={result <- @results}
+      class="flex items-center gap-3.5 border-b border-ink-100 px-4 py-3.5 last:border-b-0"
+    >
+      <div class={[
+        "flex size-[34px] shrink-0 items-center justify-center rounded-full font-mono text-sm font-semibold",
+        result.won && "bg-green-100 text-green-600",
+        !result.won && "bg-red-50 text-red-700"
+      ]}>
+        {if result.won, do: "W", else: "L"}
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="text-[15px] font-semibold text-ink-950">vs {result.opponent}</div>
+        <div class="text-[13px] text-ink-400">{result.date} · {result.stage}</div>
+      </div>
+      <div class={[
+        "font-mono text-sm font-semibold",
+        result.won && "text-green-600",
+        !result.won && "text-red-700"
+      ]}>
+        {if result.won, do: "Won", else: "Lost"} {result.score}
+      </div>
+    </div>
+  </div>
+</PlayerComponents.app_shell>

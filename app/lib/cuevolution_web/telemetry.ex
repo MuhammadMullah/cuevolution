@@ -1,6 +1,9 @@
 defmodule CuevolutionWeb.Telemetry do
   use Supervisor
   import Telemetry.Metrics
+  require Logger
+
+  @slow_query_threshold_ms 50
 
   def start_link(arg) do
     Supervisor.start_link(__MODULE__, arg, name: __MODULE__)
@@ -8,6 +11,13 @@ defmodule CuevolutionWeb.Telemetry do
 
   @impl true
   def init(_arg) do
+    :telemetry.attach(
+      "cuevolution-slow-query-logger",
+      [:cuevolution, :repo, :query],
+      &__MODULE__.handle_repo_query/4,
+      nil
+    )
+
     children = [
       # Telemetry poller will execute the given period measurements
       # every 10_000ms. Learn more here: https://hexdocs.pm/telemetry_metrics
@@ -17,6 +27,17 @@ defmodule CuevolutionWeb.Telemetry do
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
+  end
+
+  @doc false
+  def handle_repo_query(_event, %{total_time: total_time}, metadata, _config) do
+    total_time_ms = System.convert_time_unit(total_time, :native, :millisecond)
+
+    if total_time_ms > @slow_query_threshold_ms do
+      Logger.warning(
+        "slow query (#{total_time_ms}ms): #{inspect(metadata.query)} #{inspect(metadata.params)}"
+      )
+    end
   end
 
   def metrics do

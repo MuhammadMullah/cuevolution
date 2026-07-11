@@ -1,0 +1,36 @@
+<h1 class="mb-1 text-xl font-bold tracking-tight text-ink-950">Contact &amp; login</h1>
+<p class="mb-5 text-sm text-ink-500">
+  We use these to send fixture and confirmation notifications.
+</p>
+
+<% {email_variant, email_msg} = email_hint(@attrs["email"], @form) %>
+<PlayerComponents.input
+  field={@form[:email]}
+  type="email"
+  label="Email"
+  placeholder="you@example.com"
+  hint={email_msg}
+  hint_variant={email_variant}
+/>
+<% {mobile_variant, mobile_msg} = mobile_hint(@form) %>
+<PlayerComponents.input
+  field={@form[:mobile_number]}
+  label="Mobile number"
+  placeholder="0712 345 678"
+  hint={mobile_msg}
+  hint_variant={mobile_variant}
+/>
+<% {username_variant, username_msg} = username_hint(@attrs["username"], @form) %>
+<PlayerComponents.input
+  field={@form[:username]}
+  label="Username"
+  placeholder="unique handle"
+  hint={username_msg}
+  hint_variant={username_variant}
+/>
+<PlayerComponents.input
+  field={@form[:password]}
+  type="password"
+  label="Password"
+  placeholder="8-15 characters, mixed case, a number and a symbol"
+/>

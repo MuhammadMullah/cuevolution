@@ -1,0 +1,5 @@
+<Layouts.app flash={@flash}>
+  <h1>Admin Dashboard</h1>
+  <p>Welcome, {@current_admin.email}</p>
+  <.button href={~p"/admin/logout"} method="delete">Log out</.button>
+</Layouts.app>

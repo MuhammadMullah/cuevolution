@@ -27,7 +27,7 @@ defmodule Cuevolution.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, "test.ci": :test]
     ]
   end
 
@@ -65,7 +65,16 @@ defmodule Cuevolution.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:bcrypt_elixir, "~> 3.2"},
+      {:oban, "~> 2.19"},
+      {:ex_phone_number, "~> 0.4"},
+      {:mogrify, "~> 0.9"},
+      {:ex_machina, "~> 2.8", only: :test},
+      {:mox, "~> 1.2", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.13", only: :dev, runtime: false}
     ]
   end
 
@@ -80,7 +89,16 @@ defmodule Cuevolution.MixProject do
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      # Regions are required reference data (every player/venue needs a
+      # region_id), unlike the demo accounts/venues/teams in seeds.exs — so
+      # the test DB gets just this seed file, not the full script, keeping
+      # it minimal. regions_seeds.exs self-executes when loaded.
+      test: [
+        "ecto.create --quiet",
+        "ecto.migrate --quiet",
+        "run priv/repo/seeds/regions_seeds.exs",
+        "test"
+      ],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind cuevolution", "esbuild cuevolution"],
       "assets.deploy": [
@@ -88,7 +106,8 @@ defmodule Cuevolution.MixProject do
         "esbuild cuevolution --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      "test.ci": ["format --check-formatted", "credo --strict", "test"]
     ]
   end
 end

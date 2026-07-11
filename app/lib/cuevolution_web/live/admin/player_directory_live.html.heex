@@ -1,0 +1,32 @@
+<Layouts.app flash={@flash}>
+  <h1>Player Directory</h1>
+
+  <.form for={@filter_form} phx-change="filter" id="player-filter-form">
+    <.input
+      field={@filter_form[:region_id]}
+      type="select"
+      label="Region"
+      prompt="All regions"
+      options={Enum.map(@regions, &{&1.name, &1.id})}
+    />
+    <.input
+      field={@filter_form[:category]}
+      type="select"
+      label="Category"
+      prompt="All categories"
+      options={[{"Male", "male"}, {"Female", "female"}]}
+    />
+    <.input field={@filter_form[:username]} label="Search username" />
+  </.form>
+
+  <.table
+    id="players"
+    rows={@streams.players}
+    row_click={fn {_id, player} -> JS.navigate(~p"/admin/players/#{player.id}") end}
+  >
+    <:col :let={{_id, player}} label="Username">{player.username}</:col>
+    <:col :let={{_id, player}} label="Name">{player.first_name} {player.last_name}</:col>
+    <:col :let={{_id, player}} label="Region">{player.region.name}</:col>
+    <:col :let={{_id, player}} label="Category">{player.gender}</:col>
+  </.table>
+</Layouts.app>

@@ -1,0 +1,84 @@
+<PlayerComponents.guest_shell max_width="max-w-[600px]" flash={@flash}>
+  <div :if={!@registered} class="mb-6">
+    <div class="mb-2 flex items-baseline justify-between">
+      <PlayerComponents.eyebrow>Create Account</PlayerComponents.eyebrow>
+      <div class="font-mono text-xs text-ink-400">Step {@step} of {@last_step}</div>
+    </div>
+    <div class="h-1.5 overflow-hidden rounded-full bg-ink-100">
+      <div
+        class="h-full rounded-full bg-red-500 transition-all duration-300 ease-out"
+        style={"width: #{@step / @last_step * 100}%"}
+      >
+      </div>
+    </div>
+  </div>
+
+  <.form
+    :if={!@registered}
+    for={@form}
+    id="registration-form"
+    phx-change="validate"
+    phx-submit="save"
+  >
+    <div :if={@step == 1}>{step_1(assigns)}</div>
+    <div :if={@step == 2}>{step_2(assigns)}</div>
+    <div :if={@step == 3}>{step_3(assigns)}</div>
+    <div :if={@step == 4}>{step_4(assigns)}</div>
+
+    <div class="mt-7 flex gap-3">
+      <PlayerComponents.button
+        :if={@step > 1}
+        type="button"
+        variant="secondary"
+        phx-click="back"
+      >
+        Back
+      </PlayerComponents.button>
+      <PlayerComponents.button
+        :if={@step < @last_step}
+        type="button"
+        variant="primary"
+        full_width
+        phx-click="next"
+      >
+        Continue
+      </PlayerComponents.button>
+      <PlayerComponents.button
+        :if={@step == @last_step}
+        type="submit"
+        variant="primary"
+        full_width
+      >
+        Create account
+      </PlayerComponents.button>
+    </div>
+  </.form>
+
+  <p :if={!@registered} class="mt-4 text-center text-[13.5px] text-ink-500">
+    Already have an account?
+    <.link navigate={~p"/login"} class="font-semibold text-red-600 hover:text-red-700">
+      Sign in
+    </.link>
+  </p>
+
+  <div :if={@registered} class="py-4 text-center">
+    <div class="mx-auto mb-5 flex size-16 items-center justify-center rounded-full bg-red-50 text-2xl text-red-600">
+      ✓
+    </div>
+    <h1 class="mb-2 text-2xl font-bold tracking-tight text-ink-950">You're registered!</h1>
+    <p class="mx-auto mb-6 max-w-sm text-[15px] leading-relaxed text-ink-500">
+      Welcome to Cuevolution, {@attrs["first_name"]}. You're now in the {region_name(
+        assigns,
+        @attrs["region_id"]
+      )} region.
+    </p>
+    <form action={~p"/login"} method="post">
+      <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+      <input type="hidden" name="player[login]" value={@attrs["email"]} />
+      <input type="hidden" name="player[password]" value={@attrs["password"]} />
+      <PlayerComponents.button type="submit" variant="primary">
+        Enter the app
+      </PlayerComponents.button>
+    </form>
+  </div>
+</PlayerComponents.guest_shell>

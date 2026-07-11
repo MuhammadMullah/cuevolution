@@ -1,0 +1,45 @@
+<Layouts.app flash={@flash}>
+  <h1>Venue Management</h1>
+
+  <.form for={@filter_form} phx-change="filter" id="venue-filter-form">
+    <.input
+      field={@filter_form[:region_id]}
+      type="select"
+      label="Filter by region"
+      prompt="All regions"
+      options={Enum.map(@regions, &{&1.name, &1.id})}
+    />
+  </.form>
+
+  <.table id="venues" rows={@venues}>
+    <:col :let={venue} label="Name">{venue.name}</:col>
+    <:col :let={venue} label="Region">{venue.region.name}</:col>
+    <:col :let={venue} label="Active">{venue.active}</:col>
+    <:action :let={venue}>
+      <.button phx-click="edit" phx-value-id={venue.id}>Edit</.button>
+    </:action>
+    <:action :let={venue}>
+      <.button
+        :if={venue.active}
+        phx-click="deactivate"
+        phx-value-id={venue.id}
+        data-confirm="Deactivate this venue?"
+      >
+        Deactivate
+      </.button>
+    </:action>
+  </.table>
+
+  <h2>{if @editing_venue, do: "Edit venue", else: "Add a venue"}</h2>
+  <.form for={@form} id="venue-form" phx-change="validate" phx-submit="save">
+    <.input field={@form[:name]} label="Name" />
+    <.input
+      field={@form[:region_id]}
+      type="select"
+      label="Region"
+      options={Enum.map(@regions, &{&1.name, &1.id})}
+    />
+    <.button type="submit">{if @editing_venue, do: "Update", else: "Create"}</.button>
+    <.button :if={@editing_venue} type="button" phx-click="cancel_edit">Cancel</.button>
+  </.form>
+</Layouts.app>

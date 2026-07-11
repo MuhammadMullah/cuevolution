@@ -28,6 +28,7 @@ defmodule CuevolutionWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import CuevolutionWeb.ConnCase
+      import Cuevolution.Factory
     end
   end
 

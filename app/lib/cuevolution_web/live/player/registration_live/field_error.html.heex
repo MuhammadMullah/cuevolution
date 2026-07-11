@@ -1,0 +1,6 @@
+<p
+  :for={msg <- Enum.map(@field.errors, &CuevolutionWeb.CoreComponents.translate_error/1)}
+  class="mt-1.5 text-[12.5px] font-medium text-danger"
+>
+  {msg}
+</p>

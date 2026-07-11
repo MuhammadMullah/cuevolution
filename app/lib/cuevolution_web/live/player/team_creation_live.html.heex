@@ -1,0 +1,25 @@
+<PlayerComponents.app_shell current_player={@current_player} active={:team} flash={@flash}>
+  <PlayerComponents.eyebrow>Your Team</PlayerComponents.eyebrow>
+
+  <div class="mx-auto max-w-lg py-4 text-center sm:py-10">
+    <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-ink-950 text-2xl font-bold text-ink-25">
+      +
+    </div>
+    <h1 class="mb-2 text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">
+      You're not on a team yet
+    </h1>
+    <p class="mb-7 text-[14.5px] leading-relaxed text-ink-500">
+      Create a team to compete in the Teams category. You'll become the captain and can add
+      4–7 already-registered players. A team needs 5–8 players to be eligible for draws.
+    </p>
+
+    <PlayerComponents.card class="text-left">
+      <.form for={@form} phx-submit="save">
+        <PlayerComponents.input field={@form[:name]} label="Team name" placeholder="The Sharks" />
+        <PlayerComponents.button type="submit" variant="primary" full_width>
+          Create a team
+        </PlayerComponents.button>
+      </.form>
+    </PlayerComponents.card>
+  </div>
+</PlayerComponents.app_shell>

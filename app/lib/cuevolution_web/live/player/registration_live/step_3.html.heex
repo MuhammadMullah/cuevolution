@@ -1,0 +1,49 @@
+<h1 class="mb-1 text-xl font-bold tracking-tight text-ink-950">Region &amp; venue</h1>
+<p class="mb-5 text-sm text-ink-500">
+  You compete within one region. This can only change before your first match.
+</p>
+
+<div class="mb-1.5 text-sm font-semibold text-ink-700">Your region</div>
+<div class="mb-1 flex flex-wrap gap-2">
+  <PlayerComponents.option_pill
+    :for={region <- @regions}
+    selected={@attrs["region_id"] == region.id}
+    phx-click="choose_region"
+    phx-value-id={region.id}
+  >
+    {region.name}
+  </PlayerComponents.option_pill>
+</div>
+<.field_error field={@form[:region_id]} />
+
+<div :if={@attrs["region_id"]} class="mt-6">
+  <div class="mb-1.5 text-sm font-semibold text-ink-700">
+    Preferred venue in {region_name(assigns, @attrs["region_id"])}
+  </div>
+  <div class="mb-1 flex flex-wrap gap-2">
+    <PlayerComponents.option_pill
+      :for={venue <- @venues}
+      selected={@attrs["preferred_venue_id"] == venue.id}
+      phx-click="choose"
+      phx-value-field="preferred_venue_id"
+      phx-value-choice={venue.id}
+    >
+      {venue.name}
+    </PlayerComponents.option_pill>
+    <PlayerComponents.option_pill
+      selected={@attrs["venue_choice"] == "other"}
+      phx-click="choose"
+      phx-value-field="venue_choice"
+      phx-value-choice="other"
+    >
+      Other
+    </PlayerComponents.option_pill>
+  </div>
+  <PlayerComponents.input
+    :if={@attrs["venue_choice"] == "other"}
+    field={@form[:other_venue_name]}
+    placeholder="Type the venue name"
+    class="mt-2"
+  />
+  <.field_error field={@form[:preferred_venue_id]} />
+</div>

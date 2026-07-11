@@ -16,14 +16,19 @@ defmodule Cuevolution.DataCase do
 
   use ExUnit.CaseTemplate
 
+  alias Ecto.Adapters.SQL.Sandbox
+
   using do
     quote do
       alias Cuevolution.Repo
+
+      use Oban.Testing, repo: Cuevolution.Repo
 
       import Ecto
       import Ecto.Changeset
       import Ecto.Query
       import Cuevolution.DataCase
+      import Cuevolution.Factory
     end
   end
 
@@ -36,8 +41,8 @@ defmodule Cuevolution.DataCase do
   Sets up the sandbox based on the test tags.
   """
   def setup_sandbox(tags) do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Cuevolution.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    pid = Sandbox.start_owner!(Cuevolution.Repo, shared: not tags[:async])
+    on_exit(fn -> Sandbox.stop_owner(pid) end)
   end
 
   @doc """

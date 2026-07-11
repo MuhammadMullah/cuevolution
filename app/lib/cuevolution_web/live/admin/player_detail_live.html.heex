@@ -1,0 +1,20 @@
+<Layouts.app flash={@flash}>
+  <h1>{@player.first_name} {@player.last_name}</h1>
+  <.list>
+    <:item title="Username">{@player.username}</:item>
+    <:item title="Email">{@player.email}</:item>
+    <:item title="Mobile">{@player.mobile_number}</:item>
+    <:item title="Location">{@player.location}</:item>
+    <:item title="Country">{@player.country}</:item>
+    <:item title="Region">{@player.region.name}</:item>
+    <:item title="Category">{@player.gender}</:item>
+    <:item title="Notification preference">{@player.notification_preference}</:item>
+    <:item title="Registered">{@player.inserted_at}</:item>
+  </.list>
+  <p>
+    Team roster, current qualification stage, and notification delivery
+    history will appear here once the Teams, Competitions, and
+    Notifications contexts exist. The anonymize action (spec 010 FR-004)
+    is deferred until <code>Competitions.MatchResult</code> exists (task T032).
+  </p>
+</Layouts.app>

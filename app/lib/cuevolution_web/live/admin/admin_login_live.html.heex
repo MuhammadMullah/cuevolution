@@ -1,0 +1,8 @@
+<Layouts.app flash={@flash}>
+  <h1>Admin Login</h1>
+  <.form for={@form} action={~p"/admin/login"} method="post">
+    <.input field={@form[:email]} type="email" label="Email" required />
+    <.input field={@form[:password]} type="password" label="Password" required />
+    <.button type="submit">Log in</.button>
+  </.form>
+</Layouts.app>

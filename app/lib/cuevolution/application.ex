@@ -12,6 +12,7 @@ defmodule Cuevolution.Application do
       Cuevolution.Repo,
       {DNSCluster, query: Application.get_env(:cuevolution, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cuevolution.PubSub},
+      {Oban, Application.fetch_env!(:cuevolution, Oban)},
       # Start a worker by calling: Cuevolution.Worker.start_link(arg)
       # {Cuevolution.Worker, arg},
       # Start to serve requests, typically the last entry

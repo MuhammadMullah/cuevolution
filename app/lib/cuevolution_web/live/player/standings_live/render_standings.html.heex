@@ -1,0 +1,197 @@
+<PlayerComponents.app_shell current_player={@current_player} active={:standings} flash={@flash}>
+  <div
+    :if={is_nil(@current_player.team_id)}
+    class="mb-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-4"
+  >
+    <div class="mb-0.5 text-[16px] font-bold text-red-700">
+      Welcome to Cuevolution, {@current_player.first_name}
+    </div>
+    <div class="text-sm leading-relaxed text-red-800">
+      You're all set. Create or join a team, and your fixtures will appear here once the
+      admin publishes a draw. Browse the live standings below in the meantime.
+    </div>
+  </div>
+
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <PlayerComponents.eyebrow>Season 2026 · Live</PlayerComponents.eyebrow>
+      <h1 class="text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">Standings</h1>
+    </div>
+    <div class="font-mono text-[13px] text-ink-400">Updated just now</div>
+  </div>
+
+  <div class="mb-4 flex items-end justify-between gap-3 border-b border-ink-200">
+    <div class="flex gap-5 overflow-x-auto">
+      <button
+        :for={{value, label} <- @tabs}
+        type="button"
+        phx-click="switch_tab"
+        phx-value-tab={value}
+        class={[
+          "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[15px] font-semibold",
+          @tab == value && "border-red-500 text-ink-950",
+          @tab != value && "border-transparent text-ink-500 hover:text-ink-950"
+        ]}
+      >
+        {label}
+      </button>
+    </div>
+
+    <div
+      class="relative shrink-0 pb-2"
+      id="standings-filter"
+      phx-click-away={JS.hide(to: "#standings-filter-panel")}
+    >
+      <button
+        type="button"
+        phx-click={JS.toggle(to: "#standings-filter-panel")}
+        class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-ink-300 bg-white px-3.5 py-2 font-sans text-sm font-semibold text-ink-700 hover:bg-ink-100"
+      >
+        ⚑ Filter
+        <span
+          :if={@region_filter != "All" or @stage_filter != "All"}
+          class="inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 font-mono text-[11px] font-bold text-white"
+        >
+          {Enum.count([@region_filter != "All", @stage_filter != "All"], & &1)}
+        </span>
+      </button>
+      <div
+        id="standings-filter-panel"
+        class="absolute right-0 top-[46px] z-50 hidden w-64 rounded-2xl border border-ink-200 bg-white p-4 shadow-lg"
+      >
+        <div class="mb-3 flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wide text-ink-950">
+            Filter standings
+          </span>
+          <button
+            type="button"
+            phx-click="clear_filters"
+            class="cursor-pointer text-[12.5px] font-semibold text-red-600"
+          >
+            Clear all
+          </button>
+        </div>
+        <form phx-change="filter">
+          <label class="mb-1.5 block text-xs font-semibold text-ink-500">Region</label>
+          <select
+            name="region"
+            class="mb-3.5 w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+          >
+            <option :for={r <- ["All" | @regions]} value={r} selected={r == @region_filter}>
+              {if r == "All", do: "All regions", else: r}
+            </option>
+          </select>
+          <label class="mb-1.5 block text-xs font-semibold text-ink-500">Stage</label>
+          <select
+            name="stage"
+            class="mb-4 w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+          >
+            <option :for={s <- ["All" | @stages]} value={s} selected={s == @stage_filter}>
+              {if s == "All", do: "All stages", else: s}
+            </option>
+          </select>
+        </form>
+        <button
+          type="button"
+          phx-click={JS.hide(to: "#standings-filter-panel")}
+          class="w-full cursor-pointer rounded-full bg-ink-950 px-4 py-2.5 font-sans text-sm font-semibold text-ink-25 hover:bg-ink-900"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    :if={@rows != []}
+    class="overflow-auto rounded-2xl border border-ink-200 bg-white shadow-sm"
+  >
+    <table class="w-full min-w-[680px] border-collapse">
+      <thead>
+        <tr class="border-b border-ink-200 bg-ink-50">
+          <th class="sticky top-0 w-14 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            #
+          </th>
+          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            {if @tab == "team", do: "Team", else: "Player"}
+          </th>
+          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            Region
+          </th>
+          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            Played
+          </th>
+          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            W–L
+          </th>
+          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            Stage
+          </th>
+          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+            Points
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr :for={row <- @rows} class="border-b border-ink-100 last:border-b-0">
+          <td class={[
+            "border-l-4 px-4 py-3 font-mono text-[15px] font-semibold",
+            row.rank == 1 && "border-red-500 text-gold-700",
+            row.rank != 1 && "border-transparent text-ink-950"
+          ]}>
+            {row.rank}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <div
+                :if={@tab == "team"}
+                class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-red-500 text-xs font-bold text-white"
+              >
+                {row.initials}
+              </div>
+              <PlayerComponents.avatar
+                :if={@tab != "team"}
+                name={row.name}
+                size="size-[34px]"
+                class="text-xs"
+              />
+              <span class="text-[15px] font-semibold text-ink-950">{row.name}</span>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-sm text-ink-600">{row.region}</td>
+          <td class="px-4 py-3 text-right font-mono text-sm text-ink-500">{row.played}</td>
+          <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-ink-950">
+            {row.won}–{row.lost}
+          </td>
+          <td class="px-4 py-3">
+            <PlayerComponents.stage_badge stage={row.stage} />
+          </td>
+          <td class="px-4 py-3 text-right font-mono text-[15px] font-semibold text-gold-700">
+            {row.points}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p :if={@rows != []} class="mt-3.5 text-[12.5px] text-ink-400">
+    {length(@rows)} entries · points in gold are Cuevo Points, earned from the Circuit stage
+    onward. Rank #1 is marked with a red accent.
+  </p>
+
+  <PlayerComponents.empty_state
+    :if={@rows == [] and @all_rows != []}
+    icon="hero-flag"
+    title="No players match these filters"
+  >
+    Try a different region or stage combination.
+  </PlayerComponents.empty_state>
+
+  <PlayerComponents.empty_state
+    :if={@all_rows == []}
+    icon="hero-hashtag"
+    title="No standings yet"
+  >
+    Rankings appear here once the admin records the first match results of the season.
+  </PlayerComponents.empty_state>
+</PlayerComponents.app_shell>
