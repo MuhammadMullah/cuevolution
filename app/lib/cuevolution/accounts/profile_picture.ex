@@ -29,7 +29,21 @@ defmodule Cuevolution.Accounts.ProfilePicture do
     error -> {:error, error}
   end
 
+  # Defaults to the app's own priv/static (fine for dev/test, and matches
+  # where Plug.Static serves /uploads from). In production this is
+  # overridden (see config/runtime.exs) to a path outside the release —
+  # priv/static lives inside the release's versioned directory, which is
+  # replaced wholesale on every deploy, so anything written there doesn't
+  # survive a redeploy. The overridden path is on a volume Caddy serves
+  # directly, bypassing the app for reads.
   defp upload_dir do
-    Path.join([:code.priv_dir(:cuevolution), "static", "uploads", "players"])
+    base =
+      Application.get_env(
+        :cuevolution,
+        :uploads_dir,
+        Path.join([:code.priv_dir(:cuevolution), "static", "uploads"])
+      )
+
+    Path.join(base, "players")
   end
 end

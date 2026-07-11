@@ -41,6 +41,14 @@ if config_env() == :prod do
     # pool_count: 4,
     socket_options: maybe_ipv6
 
+  # Profile picture uploads (see Cuevolution.Accounts.ProfilePicture) are
+  # written outside the release's own priv/static, onto a volume mounted at
+  # this path — priv/static lives inside the release's versioned directory,
+  # which is replaced wholesale on every deploy, so anything written there
+  # doesn't survive a redeploy. Caddy serves /uploads/* directly from the
+  # same volume (see Caddyfile) rather than through the app.
+  config :cuevolution, :uploads_dir, System.get_env("UPLOADS_DIR", "/data/uploads")
+
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want
