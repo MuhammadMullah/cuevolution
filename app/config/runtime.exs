@@ -117,4 +117,51 @@ if config_env() == :prod do
   #     config :swoosh, :api_client, Swoosh.ApiClient.Req
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+
+  # ## Configuring SMS (Africa's Talking)
+  africastalking_api_key =
+    System.get_env("AFRICASTALKING_API_KEY") ||
+      raise """
+      environment variable AFRICASTALKING_API_KEY is missing.
+      Find it under Settings > API Key in your Africa's Talking dashboard.
+      """
+
+  africastalking_username =
+    System.get_env("AFRICASTALKING_USERNAME") ||
+      raise """
+      environment variable AFRICASTALKING_USERNAME is missing.
+      This is your live app's username (not "sandbox") in production.
+      """
+
+  config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter
+
+  config :cuevolution, :africastalking,
+    api_key: africastalking_api_key,
+    username: africastalking_username,
+    sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
+
+  # ## Configuring SMS (Twilio) — an alternative to Africa's Talking above.
+  # It isn't the active :sms_adapter (AT is, set above); only configured at
+  # all if TWILIO_ACCOUNT_SID is present, so a deploy that never sets these
+  # doesn't fail to boot over an adapter it isn't using. To switch to it,
+  # also set
+  # `config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.TwilioAdapter`.
+  if twilio_account_sid = System.get_env("TWILIO_ACCOUNT_SID") do
+    twilio_auth_token =
+      System.get_env("TWILIO_AUTH_TOKEN") ||
+        raise """
+        environment variable TWILIO_AUTH_TOKEN is missing (TWILIO_ACCOUNT_SID is set).
+        Find it in your Twilio Console dashboard.
+        """
+
+    twilio_from_number =
+      System.get_env("TWILIO_FROM_NUMBER") ||
+        raise """
+        environment variable TWILIO_FROM_NUMBER is missing (TWILIO_ACCOUNT_SID is set).
+        This must be a phone number you own in your Twilio account.
+        """
+
+    config :ex_twilio, account_sid: twilio_account_sid, auth_token: twilio_auth_token
+    config :cuevolution, :twilio, from: twilio_from_number
+  end
 end

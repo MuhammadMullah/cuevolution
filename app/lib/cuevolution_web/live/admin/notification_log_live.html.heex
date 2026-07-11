@@ -1,0 +1,23 @@
+<Layouts.app flash={@flash}>
+  <h1>Notification Log</h1>
+
+  <.form for={@filter_form} phx-change="filter" id="notification-filter-form">
+    <.input
+      field={@filter_form[:status]}
+      type="select"
+      label="Status"
+      prompt="All statuses"
+      options={@statuses}
+    />
+  </.form>
+
+  <.table id="notifications" rows={@streams.notifications}>
+    <:col :let={{_id, n}} label="Recipient">{n.player.username}</:col>
+    <:col :let={{_id, n}} label="Event">{n.event_type}</:col>
+    <:col :let={{_id, n}} label="Channel">{n.channel}</:col>
+    <:col :let={{_id, n}} label="Status">{n.status}</:col>
+    <:col :let={{_id, n}} label="Retries">{n.retry_count}</:col>
+    <:col :let={{_id, n}} label="Error">{n.error}</:col>
+    <:col :let={{_id, n}} label="Updated">{n.updated_at}</:col>
+  </.table>
+</Layouts.app>

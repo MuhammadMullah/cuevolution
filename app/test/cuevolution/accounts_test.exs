@@ -173,6 +173,15 @@ defmodule Cuevolution.AccountsTest do
       assert player.id
       assert player.username == attrs.username
       assert Bcrypt.verify_pass("Valid1!Pass", player.hashed_password)
+
+      notification =
+        Repo.get_by!(Cuevolution.Notifications.Notification,
+          player_id: player.id,
+          event_type: "registration_confirmation"
+        )
+
+      assert notification.channel == "email"
+      assert notification.status == "pending"
     end
 
     test "rejects invalid attrs and creates no account", %{attrs: attrs} do

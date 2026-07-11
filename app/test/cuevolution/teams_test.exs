@@ -43,10 +43,19 @@ defmodule Cuevolution.TeamsTest do
   describe "add_player_to_roster/2" do
     test "adds a registered player with no team to the roster" do
       team = insert(:team)
-      player = insert(:player, region_id: team.region_id)
+      player = insert(:player, region_id: team.region_id, notification_preference: "email")
 
       assert {:ok, updated_player} = Teams.add_player_to_roster(team, player)
       assert updated_player.team_id == team.id
+
+      notification =
+        Repo.get_by!(Cuevolution.Notifications.Notification,
+          player_id: player.id,
+          event_type: "team_assignment"
+        )
+
+      assert notification.channel == "email"
+      assert notification.payload["team_name"] == team.name
     end
 
     test "rejects a player who already belongs to another team" do

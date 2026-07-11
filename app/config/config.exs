@@ -38,6 +38,11 @@ config :cuevolution, CuevolutionWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Local
 
+# SMS provider selection is deferred (spec 002 Assumptions) — the stub
+# prints to the console instead of sending. `:test` overrides this to the
+# Mox mock (config/test.exs).
+config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.StubAdapter
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

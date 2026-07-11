@@ -5,7 +5,10 @@ defmodule Cuevolution.Teams do
 
   import Ecto.Query
 
+  require Logger
+
   alias Cuevolution.Accounts.Player
+  alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
   alias Ecto.Multi
@@ -74,10 +77,37 @@ defmodule Cuevolution.Teams do
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, _changes} -> {:ok, Repo.get!(Player, player.id)}
-      {:error, :check_capacity, :roster_full, _changes} -> {:error, :roster_full}
-      {:error, :verify_claim, :already_on_a_team, _changes} -> {:error, :already_on_a_team}
+      {:ok, _changes} ->
+        updated_player = Repo.get!(Player, player.id)
+        dispatch_team_assignment(updated_player, team)
+        {:ok, updated_player}
+
+      {:error, :check_capacity, :roster_full, _changes} ->
+        {:error, :roster_full}
+
+      {:error, :verify_claim, :already_on_a_team, _changes} ->
+        {:error, :already_on_a_team}
     end
+  end
+
+  # A notification-dispatch failure is caught and logged — it never rolls
+  # back the already-committed roster change, same policy as
+  # `Accounts.register_player/1`'s registration-confirmation dispatch.
+  defp dispatch_team_assignment(player, team) do
+    team = Repo.preload(team, :captain)
+    captain_name = "#{team.captain.first_name} #{team.captain.last_name}"
+
+    Notifications.dispatch(player, :team_assignment, %{
+      team_name: team.name,
+      captain_name: captain_name
+    })
+  rescue
+    error ->
+      Logger.error(
+        "team_assignment dispatch failed for player #{player.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   @min_roster_size 5

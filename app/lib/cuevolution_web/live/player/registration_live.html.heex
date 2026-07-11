@@ -20,6 +20,7 @@
     phx-change="validate"
     phx-submit="save"
   >
+    <div class="hidden"><.live_file_input upload={@uploads.photo} /></div>
     <div :if={@step == 1}>{step_1(assigns)}</div>
     <div :if={@step == 2}>{step_2(assigns)}</div>
     <div :if={@step == 3}>{step_3(assigns)}</div>

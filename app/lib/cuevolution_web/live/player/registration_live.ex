@@ -166,10 +166,29 @@ defmodule CuevolutionWeb.RegistrationLive do
       {:error, :upload_failed} ->
         {:noreply,
          put_flash(socket, :error, "Could not process the profile picture — try again.")}
+
+      {:error, :upload_in_progress} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Your photo is still uploading — give it a moment and try again."
+         )}
     end
   end
 
+  # `consume_uploaded_entries/3` raises if any entry isn't `done?` yet — guard
+  # explicitly instead of crashing the LiveView process out from under the
+  # user on a slow upload/connection.
   defp put_uploaded_photo(socket, attrs) do
+    if Enum.all?(socket.assigns.uploads.photo.entries, & &1.done?) do
+      consume_uploaded_photo(socket, attrs)
+    else
+      {:error, :upload_in_progress}
+    end
+  end
+
+  defp consume_uploaded_photo(socket, attrs) do
     results =
       consume_uploaded_entries(socket, :photo, fn %{path: path}, entry ->
         case ProfilePicture.store(path, entry.uuid) do

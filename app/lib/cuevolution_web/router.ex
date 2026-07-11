@@ -72,6 +72,7 @@ defmodule CuevolutionWeb.Router do
       live "/players", PlayerDirectoryLive, :index
       live "/players/:id", PlayerDetailLive, :show
       live "/venues", VenueManagementLive, :index
+      live "/notifications", NotificationLogLive, :index
     end
   end
 

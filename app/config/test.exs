@@ -27,6 +27,32 @@ config :cuevolution, CuevolutionWeb.Endpoint,
 # In test we don't send emails
 config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Test
 
+# In test we don't send SMS either — route through the Mox mock instead of
+# the console-printing stub (see test/test_helper.exs for its default stub).
+config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.SmsAdapterMock
+
+# AfricasTalkingAdapter isn't the configured :sms_adapter in test (the Mox
+# mock above is), but it still has its own direct unit tests — route its
+# Req calls through Req.Test instead of the network.
+config :cuevolution, :africastalking,
+  api_key: "test_api_key",
+  username: "sandbox",
+  sender_id: "CUEVO"
+
+config :cuevolution, :africastalking_req_options,
+  plug: {Req.Test, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter}
+
+# TwilioAdapter isn't the configured :sms_adapter in test either — it also
+# has its own direct unit tests, routed through a Mox mock of the client
+# seam (ex_twilio uses HTTPoison directly, with no pluggable test
+# transport, unlike Req/Req.Test above).
+config :ex_twilio, account_sid: "test_account_sid", auth_token: "test_auth_token"
+config :cuevolution, :twilio, from: "+15005550006"
+
+config :cuevolution,
+       :twilio_client,
+       Cuevolution.Notifications.SmsAdapter.TwilioAdapter.Client.Mock
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

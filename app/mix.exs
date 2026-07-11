@@ -69,6 +69,7 @@ defmodule Cuevolution.MixProject do
       {:bcrypt_elixir, "~> 3.2"},
       {:oban, "~> 2.19"},
       {:ex_phone_number, "~> 0.4"},
+      {:ex_twilio, "~> 0.10"},
       {:mogrify, "~> 0.9"},
       {:ex_machina, "~> 2.8", only: :test},
       {:mox, "~> 1.2", only: :test},
