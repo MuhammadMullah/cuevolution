@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#FAF9FB;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+a{color:#C81E16;text-decoration:none;}
+a:hover{color:#A81810;text-decoration:underline;}
+input::placeholder,textarea::placeholder{color:#9E9EA7;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:#DBDBDE;border-radius:9999px;}
+</style>
+</helmet>
+<div style="font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;color:#3A3546;min-height:100vh;background:#FAF9FB;">
+
+  <!-- ============================ ADMIN LOGIN ============================ -->
+  <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ true }}">
+    <div style="min-height:100vh;background:#0D0C22;display:flex;align-items:center;justify-content:center;padding:24px;">
+      <div style="width:100%;max-width:400px;">
+        <div style="text-align:center;margin-bottom:28px;">
+          <img src="assets/logo-white.png" alt="Cuevolution" style="height:28px;width:auto;display:inline-block;margin-bottom:14px;" />
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:0.12em;color:#9E9EA7;">admin.cuevolution.com</div>
+        </div>
+        <div style="background:#16152B;border:1px solid #2A2942;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.35);padding:clamp(24px,5vw,36px);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:10px;">League Admin</div>
+          <h1 style="font-size:24px;font-weight:700;letter-spacing:-0.02em;color:#FDFCFB;margin:0 0 6px;">Admin sign in</h1>
+          <p style="font-size:14px;line-height:1.5;color:#9E9EA7;margin:0 0 24px;">Restricted access. Separate from player accounts.</p>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#DBDBDE;margin-bottom:6px;">Email or username</label>
+            <input type="text" value="{{ li.email }}" onInput="{{ liH.email }}" placeholder="admin@cuevolution.ke" style="width:100%;border:1px solid #33324A;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#FDFCFB;background:#0D0C22;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.22);outline:none;" />
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#DBDBDE;margin-bottom:6px;">Password</label>
+            <input type="password" value="{{ li.pass }}" onInput="{{ liH.pass }}" placeholder="••••••••" style="width:100%;border:1px solid #33324A;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#FDFCFB;background:#0D0C22;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.22);outline:none;" />
+          </div>
+          <sc-if value="{{ liError }}" hint-placeholder-val="">
+            <div style="background:rgba(227,34,25,0.14);border:1px solid rgba(227,34,25,0.3);color:#F09B92;font-size:13px;font-weight:500;border-radius:10px;padding:10px 12px;margin:14px 0;">{{ liError }}</div>
+          </sc-if>
+          <button onClick="{{ login }}" style="width:100%;background:#E32219;color:#fff;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px;" style-hover="background:#C81E16;">Sign in</button>
+          <p style="text-align:center;font-size:12.5px;color:#6E6D7A;margin:18px 0 0;">Forgot your password? Contact the platform operator directly.</p>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================ ADMIN APP SHELL ============================ -->
+  <sc-if value="{{ showApp }}" hint-placeholder-val="">
+    <div style="display:flex;min-height:100vh;">
+
+      <!-- mobile topbar -->
+      <div style="display:{{ mobileBarDisplay }};position:sticky;top:0;z-index:30;background:#0D0C22;align-items:center;justify-content:space-between;padding:0 16px;height:56px;width:100%;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div onClick="{{ toggleDrawer }}" style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,0.08);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;">☰</div>
+          <img src="assets/logo-white.png" alt="Cuevolution" style="height:18px;width:auto;" />
+        </div>
+        <div onClick="{{ toggleMenu }}" style="width:32px;height:32px;border-radius:9999px;background:#E32219;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;cursor:pointer;">{{ adminInitials }}</div>
+      </div>
+
+      <!-- sidebar / drawer -->
+      <sc-if value="{{ drawerOpen }}" hint-placeholder-val="">
+        <div onClick="{{ closeDrawer }}" style="position:fixed;inset:0;background:rgba(13,12,34,0.5);z-index:39;"></div>
+      </sc-if>
+      <aside style="{{ sidebarStyle }}">
+        <div style="display:{{ sidebarLogoDisplay }};align-items:center;gap:10px;padding:22px 22px 26px;">
+          <img src="assets/logo-white.png" alt="Cuevolution" style="height:22px;width:auto;" />
+        </div>
+        <div style="padding:0 14px 14px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:#6E6D7A;">Admin console</div>
+        <nav style="display:flex;flex-direction:column;gap:2px;padding:0 10px;flex:1;">
+          <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5">
+            <div onClick="{{ n.onClick }}" style="{{ n.style }}"><span style="width:18px;text-align:center;flex:none;">{{ n.icon }}</span>{{ n.label }}</div>
+          </sc-for>
+        </nav>
+        <div style="padding:14px;border-top:1px solid #221F3B;">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;">
+            <div style="width:32px;height:32px;border-radius:9999px;background:#E32219;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;">{{ adminInitials }}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13.5px;font-weight:600;color:#FDFCFB;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ adminName }}</div>
+              <div style="font-size:12px;color:#6E6D7A;">League Admin</div>
+            </div>
+          </div>
+          <div onClick="{{ logout }}" style="display:flex;align-items:center;gap:8px;padding:9px 10px;font-size:13.5px;font-weight:600;color:#F09B92;cursor:pointer;border-radius:9px;" style-hover="background:rgba(227,34,25,0.14);"><span>⏻</span>Log out</div>
+        </div>
+      </aside>
+
+      <!-- main content -->
+      <main style="flex:1;min-width:0;padding:clamp(18px,3vw,36px);">
+
+        <!-- ===== DASHBOARD ===== -->
+        <sc-if value="{{ rIsDash }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Season 2026</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 22px;">Dashboard</h1>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:28px;">
+            <sc-for list="{{ statTiles }}" as="s" hint-placeholder-count="6">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:18px 20px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                <div style="font-size:12.5px;color:#6E6D7A;margin-bottom:8px;">{{ s.label }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:#0D0C22;">{{ s.value }}</div>
+                <div style="font-size:12.5px;margin-top:4px;color:{{ s.deltaColor }};">{{ s.delta }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0;letter-spacing:-0.01em;">Needs attention</h2>
+              </div>
+              <sc-for list="{{ attentionItems }}" as="a" hint-placeholder-count="3">
+                <div onClick="{{ a.onClick }}" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F3F3F4;cursor:pointer;">
+                  <div style="{{ a.iconStyle }}">{{ a.icon }}</div>
+                  <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ a.title }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ a.sub }}</div></div>
+                  <span style="color:#9E9EA7;font-size:16px;">›</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noAttention }}" hint-placeholder-val=""><div style="padding:18px 0;text-align:center;color:#9E9EA7;font-size:13.5px;">All caught up — nothing needs review.</div></sc-if>
+            </div>
+
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 14px;letter-spacing:-0.01em;">Pipeline by stage</h2>
+              <sc-for list="{{ pipelineBars }}" as="p" hint-placeholder-count="4">
+                <div style="margin-bottom:13px;">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#3A3546;"><span style="width:8px;height:8px;border-radius:50%;background:{{ p.color }};"></span>{{ p.label }}</span><span style="font-family:'IBM Plex Mono',monospace;color:#6E6D7A;">{{ p.count }}</span></div>
+                  <div style="height:8px;background:#F3F3F4;border-radius:9999px;overflow:hidden;"><div style="height:100%;width:{{ p.pct }};background:{{ p.color }};border-radius:9999px;"></div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== DRAWS ===== -->
+        <sc-if value="{{ rIsDraws }}" hint-placeholder-val="">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:20px;">
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Draws</div>
+              <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0;">Fixture entry</h1>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <select value="{{ drawRound }}" onChange="{{ onDrawRound }}" style="border:1px solid #DBDBDE;border-radius:10px;padding:9px 14px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                <sc-for list="{{ roundOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+            </div>
+          </div>
+
+          <sc-if value="{{ drawSavedMsg }}" hint-placeholder-val="">
+            <div style="display:flex;align-items:center;gap:10px;background:#DCF3E4;border:1px solid #b9e6c9;color:#0E6A30;border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:14px;font-weight:600;">✓ {{ drawSavedMsg }}</div>
+          </sc-if>
+
+          <div style="overflow-x:auto;border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:16px;">
+            <table style="width:100%;border-collapse:collapse;min-width:820px;">
+              <thead>
+                <tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Category</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Participant A</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Participant B</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Venue</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Date</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Time</th>
+                  <th style="padding:11px 14px;width:40px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ drawRows }}" as="row" hint-placeholder-count="4">
+                  <tr style="border-bottom:1px solid #F3F3F4;">
+                    <td style="padding:8px 10px;"><select value="{{ row.cat }}" onChange="{{ row.setCat }}" style="width:100%;border:1px solid #DBDBDE;border-radius:8px;padding:8px 9px;font-family:inherit;font-size:13.5px;background:#fff;"><sc-for list="{{ catOpts }}" as="c" hint-placeholder-count="3"><option value="{{ c.value }}">{{ c.label }}</option></sc-for></select></td>
+                    <td style="padding:8px 10px;"><input type="text" value="{{ row.a }}" onInput="{{ row.setA }}" placeholder="Search name…" style="width:100%;border:1px solid #DBDBDE;border-radius:8px;padding:8px 9px;font-family:inherit;font-size:13.5px;" style-focus="border-color:#E32219;outline:none;" /></td>
+                    <td style="padding:8px 10px;"><input type="text" value="{{ row.b }}" onInput="{{ row.setB }}" placeholder="Search name…" style="width:100%;border:1px solid #DBDBDE;border-radius:8px;padding:8px 9px;font-family:inherit;font-size:13.5px;" style-focus="border-color:#E32219;outline:none;" /></td>
+                    <td style="padding:8px 10px;"><select value="{{ row.venue }}" onChange="{{ row.setVenue }}" style="width:100%;border:1px solid #DBDBDE;border-radius:8px;padding:8px 9px;font-family:inherit;font-size:13.5px;background:#fff;"><sc-for list="{{ venueOpts }}" as="v" hint-placeholder-count="4"><option value="{{ v.value }}">{{ v.label }}</option></sc-for></select></td>
+                    <td style="padding:8px 10px;"><input type="date" value="{{ row.date }}" onInput="{{ row.setDate }}" style="width:100%;border:1px solid #DBDBDE;border-radius:8px;padding:8px 9px;font-family:inherit;font-size:13px;" /></td>
+                    <td style="padding:8px 10px;"><input type="time" value="{{ row.time }}" onInput="{{ row.setTime }}" style="width:100%;border:1px solid #DBDBDE;border-radius:8px;padding:8px 9px;font-family:inherit;font-size:13px;" /></td>
+                    <td style="padding:8px 10px;text-align:center;"><button onClick="{{ row.remove }}" style="background:none;border:none;color:#9E9EA7;font-size:15px;cursor:pointer;padding:6px;border-radius:6px;" style-hover="color:#A81810;background:#FDECEA;">✕</button></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:36px;">
+            <button onClick="{{ addDrawRow }}" style="background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:10px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">+ Add row</button>
+            <button onClick="{{ saveDraws }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 26px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Save round &amp; notify players</button>
+          </div>
+
+          <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 12px;letter-spacing:-0.01em;">Already entered — {{ drawRoundLabel }}</h2>
+          <sc-if value="{{ hasEnteredFixtures }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ enteredFixtures }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid #F3F3F4;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;"><div style="font-size:14.5px;font-weight:600;color:#0D0C22;">{{ f.a }} vs {{ f.b }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ f.venue }} · {{ f.date }} · {{ f.time }}</div></div>
+                <span style="{{ f.lockStyle }}">{{ f.lockLabel }}</span>
+                <sc-if value="{{ f.canEdit }}" hint-placeholder-val=""><button onClick="{{ f.edit }}" style="background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Edit</button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noEnteredFixtures }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:30px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No fixtures entered for this round yet — add rows above and save.</div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== RESULTS & POINTS ===== -->
+        <sc-if value="{{ rIsResults }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Results &amp; Points</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 20px;">Match results</h1>
+
+          <div style="display:flex;gap:8px;border-bottom:1px solid #E7E7E9;margin-bottom:16px;">
+            <sc-for list="{{ resTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+
+          <sc-if value="{{ hasFixtureList }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <sc-for list="{{ fixtureList }}" as="f" hint-placeholder-count="4">
+              <div onClick="{{ f.onClick }}" style="{{ f.rowStyle }}">
+                <div style="flex:1;min-width:180px;"><div style="font-size:15px;font-weight:600;color:#0D0C22;">{{ f.a }} vs {{ f.b }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ f.round }} · {{ f.venue }} · {{ f.date }}</div></div>
+                <sc-if value="{{ f.played }}" hint-placeholder-val=""><span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ f.scoreLabel }}</span></sc-if>
+                <span style="{{ f.badgeStyle }}">{{ f.badgeLabel }}</span>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noFixtureList }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:36px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No fixtures in this list.</div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== DIRECTORY ===== -->
+        <sc-if value="{{ rIsDirectory }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Directory</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 18px;">Players &amp; teams</h1>
+
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+            <input type="text" value="{{ dirSearch }}" onInput="{{ onDirSearch }}" placeholder="Search name or @username…" style="flex:1;min-width:220px;border:1px solid #DBDBDE;border-radius:9999px;padding:10px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+            <select value="{{ dirKind }}" onChange="{{ onDirKind }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:9px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+              <sc-for list="{{ dirKindOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+            </select>
+            <select value="{{ dirRegion }}" onChange="{{ onDirRegion }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:9px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+              <sc-for list="{{ dirRegionOpts }}" as="o" hint-placeholder-count="9"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+            </select>
+            <select value="{{ dirStage }}" onChange="{{ onDirStage }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:9px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+              <sc-for list="{{ dirStageOpts }}" as="o" hint-placeholder-count="5"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+            </select>
+          </div>
+
+          <div style="font-size:13px;color:#6E6D7A;margin-bottom:10px;font-family:'IBM Plex Mono',monospace;">{{ dirCountLabel }}</div>
+
+          <sc-if value="{{ hasDirRows }}" hint-placeholder-val="{{ true }}">
+          <div id="dir-scroll" style="max-height:60vh;overflow:auto;border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ dirRows }}" as="d" hint-placeholder-count="10">
+              <div onClick="{{ d.onClick }}" style="display:flex;align-items:center;gap:13px;padding:12px 16px;border-bottom:1px solid #F3F3F4;cursor:pointer;" style-hover="background:#FAF9FB;">
+                {{ d.avatarEl }}
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:14.5px;font-weight:600;color:#0D0C22;">{{ d.name }}<sc-if value="{{ d.isAnon }}" hint-placeholder-val=""><span style="font-size:11.5px;font-weight:600;color:#9E9EA7;margin-left:7px;">ANONYMIZED</span></sc-if></div>
+                  <div style="font-size:12.5px;color:#9E9EA7;">{{ d.sub }}</div>
+                </div>
+                <span style="{{ d.badgeStyle }}">{{ d.stage }}</span>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noDirRows }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:40px 22px;text-align:center;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h3 style="font-size:17px;font-weight:700;color:#0D0C22;margin:0 0 6px;">No matches for these filters</h3>
+              <p style="font-size:13.5px;color:#6E6D7A;margin:0;">Try a broader search or clear a filter.</p>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== VENUES ===== -->
+        <sc-if value="{{ rIsVenues }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Venues</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 18px;">Venue management</h1>
+
+          <div style="display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid #E7E7E9;margin-bottom:18px;">
+            <sc-for list="{{ venueRegionTabs }}" as="t" hint-placeholder-count="8"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+            <input type="text" value="{{ newVenueName }}" onInput="{{ onNewVenueName }}" placeholder="New venue name in {{ venueRegion }}…" style="flex:1;min-width:220px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+            <button onClick="{{ addVenue }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 22px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Add venue</button>
+          </div>
+          <sc-if value="{{ venueMsg }}" hint-placeholder-val=""><div style="{{ venueMsgStyle }}">{{ venueMsg }}</div></sc-if>
+
+          <sc-if value="{{ hasVenues }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:28px;">
+            <sc-for list="{{ venueRows }}" as="v" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid #F3F3F4;flex-wrap:wrap;">
+                <sc-if value="{{ v.editing }}" hint-placeholder-val="">
+                  <input type="text" value="{{ v.editValue }}" onInput="{{ v.onEditInput }}" style="flex:1;min-width:180px;border:1px solid #E32219;border-radius:8px;padding:8px 11px;font-family:inherit;font-size:14px;" />
+                  <button onClick="{{ v.saveEdit }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:8px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Save</button>
+                </sc-if>
+                <sc-if value="{{ v.notEditing }}" hint-placeholder-val="{{ true }}">
+                  <div style="flex:1;min-width:180px;font-size:14.5px;font-weight:600;color:{{ v.textColor }};">{{ v.name }}</div>
+                  <span style="{{ v.statusStyle }}">{{ v.statusLabel }}</span>
+                  <button onClick="{{ v.startEdit }}" style="background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Rename</button>
+                  <button onClick="{{ v.toggleActive }}" style="{{ v.toggleBtnStyle }}">{{ v.toggleBtnLabel }}</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noVenues }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:36px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:28px;">No venues yet for {{ venueRegion }} — visitors registering here will only see "Other".</div>
+          </sc-if>
+
+          <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 12px;letter-spacing:-0.01em;">Custom "Other" entries from players</h2>
+          <sc-if value="{{ hasCustomVenues }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ customVenueRows }}" as="c" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid #F3F3F4;">
+                <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ c.venueText }}</div><div style="font-size:12.5px;color:#9E9EA7;">Entered by {{ c.player }} · {{ c.region }}</div></div>
+                <button onClick="{{ c.promote }}" style="background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Add to list</button>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noCustomVenues }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;text-align:center;color:#9E9EA7;font-size:13.5px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No custom venue submissions yet.</div>
+          </sc-if>
+        </sc-if>
+
+      </main>
+    </div>
+  </sc-if>
+
+  <!-- ============================ ACCOUNT MENU (mobile) ============================ -->
+  <sc-if value="{{ menuOpen }}" hint-placeholder-val="">
+    <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:60;background:rgba(13,12,34,0.4);display:flex;align-items:flex-start;justify-content:flex-end;padding:64px 16px;">
+      <div onClick="{{ stopClick }}" style="width:220px;background:#fff;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.2);overflow:hidden;">
+        <div style="padding:13px 15px;border-bottom:1px solid #F3F3F4;"><div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ adminName }}</div><div style="font-size:12px;color:#9E9EA7;">League Admin</div></div>
+        <div onClick="{{ logout }}" style="display:flex;align-items:center;gap:9px;padding:11px 15px;font-size:14px;font-weight:600;color:#A81810;cursor:pointer;" style-hover="background:#FDECEA;"><span>⏻</span>Log out</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================ RESULT / POINTS ENTRY MODAL ============================ -->
+  <sc-if value="{{ resultModal }}" hint-placeholder-val="">
+    <div onClick="{{ closeResultModal }}" style="position:fixed;inset:0;z-index:90;background:rgba(13,12,34,0.5);display:flex;align-items:flex-start;justify-content:center;padding:clamp(16px,5vh,56px) 16px;overflow-y:auto;">
+      <div onClick="{{ stopClick }}" style="width:100%;max-width:520px;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(13,12,34,0.3);overflow:hidden;">
+        <div style="background:#0D0C22;color:#fff;padding:22px 24px;position:relative;">
+          <button onClick="{{ closeResultModal }}" style="position:absolute;top:16px;right:16px;width:30px;height:30px;border-radius:9999px;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:15px;cursor:pointer;" style-hover="background:rgba(255,255,255,0.22);">✕</button>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#F09B92;margin-bottom:6px;">{{ resultModal.round }}</div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-0.01em;">{{ resultModal.a }} vs {{ resultModal.b }}</div>
+          <div style="font-size:13px;color:#9E9EA7;margin-top:3px;">{{ resultModal.venue }} · {{ resultModal.date }}</div>
+        </div>
+        <div style="padding:22px 24px 24px;">
+          <sc-if value="{{ resultModal.isCorrection }}" hint-placeholder-val="">
+            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;font-weight:500;border-radius:10px;padding:10px 13px;margin-bottom:18px;">This fixture already has a result. Saving will log a correction with both the prior and new value.</div>
+          </sc-if>
+          <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:9px;">Winner</label>
+          <div style="display:flex;gap:10px;margin-bottom:18px;">
+            <button onClick="{{ resultModal.pickA }}" style="{{ resultModal.aBtnStyle }}">{{ resultModal.a }}</button>
+            <button onClick="{{ resultModal.pickB }}" style="{{ resultModal.bBtnStyle }}">{{ resultModal.b }}</button>
+          </div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Score (optional)</label>
+          <input type="text" value="{{ resultModal.score }}" onInput="{{ resultModal.setScore }}" placeholder="e.g. 5–3" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 13px;font-family:inherit;font-size:14.5px;margin-bottom:18px;" style-focus="border-color:#E32219;outline:none;" />
+          <sc-if value="{{ resultModal.showPoints }}" hint-placeholder-val="">
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:9px;">Cuevo Points <span style="color:#9E9EA7;font-weight:500;">— Circuit stage and onward</span></label>
+            <div style="display:flex;gap:12px;margin-bottom:18px;">
+              <div style="flex:1;"><div style="font-size:12.5px;color:#9E9EA7;margin-bottom:5px;">{{ resultModal.a }}</div><input type="number" value="{{ resultModal.pointsA }}" onInput="{{ resultModal.setPointsA }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:14.5px;" style-focus="border-color:#E32219;outline:none;" /></div>
+              <div style="flex:1;"><div style="font-size:12.5px;color:#9E9EA7;margin-bottom:5px;">{{ resultModal.b }}</div><input type="number" value="{{ resultModal.pointsB }}" onInput="{{ resultModal.setPointsB }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:14.5px;" style-focus="border-color:#E32219;outline:none;" /></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ resultModal.error }}" hint-placeholder-val=""><div style="color:#A81810;font-size:13px;font-weight:500;margin-bottom:14px;">{{ resultModal.error }}</div></sc-if>
+          <button onClick="{{ resultModal.save }}" style="width:100%;background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">{{ resultModal.saveLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================ DIRECTORY DETAIL MODAL ============================ -->
+  <sc-if value="{{ dirDetail }}" hint-placeholder-val="">
+    <div onClick="{{ closeDirDetail }}" style="position:fixed;inset:0;z-index:90;background:rgba(13,12,34,0.5);display:flex;align-items:flex-start;justify-content:center;padding:clamp(16px,5vh,56px) 16px;overflow-y:auto;">
+      <div onClick="{{ stopClick }}" style="width:100%;max-width:560px;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(13,12,34,0.3);overflow:hidden;">
+        <div style="background:#0D0C22;color:#fff;padding:22px 24px;position:relative;">
+          <button onClick="{{ closeDirDetail }}" style="position:absolute;top:16px;right:16px;width:30px;height:30px;border-radius:9999px;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:15px;cursor:pointer;" style-hover="background:rgba(255,255,255,0.22);">✕</button>
+          <div style="display:flex;align-items:center;gap:15px;">
+            {{ dirDetail.avatarEl }}
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:20px;font-weight:700;letter-spacing:-0.01em;">{{ dirDetail.name }}</div>
+              <div style="font-size:13px;color:#9E9EA7;">{{ dirDetail.sub }}</div>
+            </div>
+            <span style="{{ dirDetail.badgeStyle }}">{{ dirDetail.stage }}</span>
+          </div>
+        </div>
+        <div style="padding:20px 24px 24px;">
+          <sc-if value="{{ dirDetail.isAnon }}" hint-placeholder-val="">
+            <div style="background:#F3F3F4;border:1px solid #E7E7E9;color:#524B63;font-size:13.5px;border-radius:10px;padding:12px 14px;margin-bottom:18px;">This record has been anonymized. Personal details are cleared; historical results and points remain intact.</div>
+          </sc-if>
+          <sc-if value="{{ dirDetail.notAnon }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 20px;margin-bottom:18px;">
+            <sc-for list="{{ dirDetail.fields }}" as="f" hint-placeholder-count="6">
+              <div style="padding:9px 0;border-bottom:1px solid #F3F3F4;"><div style="font-size:11.5px;color:#9E9EA7;">{{ f.label }}</div><div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ f.value }}</div></div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ dirDetail.isTeam }}" hint-placeholder-val="">
+            <h3 style="font-size:13.5px;font-weight:700;color:#0D0C22;margin:16px 0 10px;letter-spacing:-0.01em;">Roster</h3>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px;">
+              <sc-for list="{{ dirDetail.roster }}" as="r" hint-placeholder-count="6">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#FAF9FB;border-radius:9px;font-size:13.5px;">
+                  <span style="font-weight:600;color:#0D0C22;">{{ r.name }}</span>
+                  <span style="color:#9E9EA7;">{{ r.role }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <h3 style="font-size:13.5px;font-weight:700;color:#0D0C22;margin:16px 0 10px;letter-spacing:-0.01em;">Notification delivery history</h3>
+          <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:22px;">
+            <sc-for list="{{ dirDetail.notifLog }}" as="n" hint-placeholder-count="3">
+              <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:8px 0;border-bottom:1px solid #F3F3F4;"><span style="color:#3A3546;">{{ n.text }}</span><span style="color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">{{ n.when }}</span></div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ dirDetail.anonWarning }}" hint-placeholder-val="">
+            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;border-radius:10px;padding:11px 13px;margin-bottom:14px;">{{ dirDetail.anonWarning }}</div>
+          </sc-if>
+          <sc-if value="{{ dirDetail.canAnonymize }}" hint-placeholder-val="">
+            <button onClick="{{ dirDetail.anonymize }}" style="width:100%;background:#fff;color:#A81810;border:1px solid #FBD5D0;border-radius:9999px;padding:12px 22px;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer;" style-hover="background:#FDECEA;">Anonymize this record</button>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================ DEMO STATE SWITCHER ============================ -->
+  <div style="position:fixed;right:18px;bottom:18px;z-index:100;display:flex;flex-direction:column;align-items:flex-end;">
+    <sc-if value="{{ switcherOpen }}" hint-placeholder-val="">
+      <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;box-shadow:0 14px 44px rgba(13,12,34,0.18);padding:14px;width:256px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0D0C22;margin-bottom:11px;">Demo states</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <sc-for list="{{ scenarioOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <button onClick="{{ toggleSwitcher }}" style="display:flex;align-items:center;gap:8px;background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(13,12,34,0.22);" style-hover="background:#16152B;"><span style="color:#E32219;">◆</span>Demo states</button>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:760}}">
+class Component extends DCLogic {
+  state = {
+    authed:false, li:{email:'',pass:''}, liError:'',
+    route:'dashboard', drawerOpen:false, menuOpen:false,
+    drawRound:'grassroots-r3', drawRows:[], drawSavedMsg:'',
+    resTab:'unplayed', resultModal:null,
+    dirSearch:'', dirKind:'all', dirRegion:'All', dirStage:'All', dirDetail:null,
+    venueRegion:'Nairobi A', newVenueName:'', venueMsg:'', venueMsgOk:false,
+    scenario:'default', switcherOpen:false
+  };
+
+  REGIONS=['Nairobi A','Nairobi B','Central','Eastern','Coast','Rift A','Rift B','Nyanza & Western'];
+  FIRST_M=['Brian','Kevin','Samuel','Joseph','Victor','Daniel','Peter','Collins','Dennis','Michael','James','Anthony','Charles','George','Patrick','Simon'];
+  FIRST_F=['Mercy','Faith','Grace','Alice','Sharon','Cynthia','Nancy','Diana','Joan','Ruth','Esther','Lydia','Caroline','Beatrice','Winnie','Purity'];
+  SUR=['Otieno','Mwangi','Kiptoo','Kamau','Omondi','Mutua','Njoroge','Barasa','Achieng','Wanjiru','Chebet','Njeri','Auma','Mueni','Wafula','Cheruiyot'];
+  TEAM_PRE=['Westlands','Rift Valley','Coastal','Central','Lakeside','Eastlands','Highland','Eastern','Nyali','Thika'];
+  TEAM_SUF=['Cue Kings','Racks','Breakers','Cue Masters','Potters','Snipers','Hustlers','Aces'];
+  STAGES=['Grassroots','Regional','Circuit','Finals'];
+
+  VENUES_SEED={
+    'Nairobi A':['Westlands Cue Club','CBD Pool Lounge','Kilimani Rack House'],
+    'Nairobi B':['Eastlands Break Room','Buruburu Pool Bar'],
+    'Central':['Nyeri Central Club','Thika Rack & Roll'],
+    'Eastern':['Machakos Cue Arena'],
+    'Coast':['Mombasa Bahari Club','Nyali Cue Deck'],
+    'Rift A':['Nakuru Rift Club'],
+    'Rift B':['Eldoret Highland Cue','Kericho Tea Cup Pool'],
+    'Nyanza & Western':['Kisumu Lakeside Club','Kakamega Cue Centre']
+  };
+
+  _seed(n){ const x=Math.sin(n*127.1+311.7)*43758.5453; return x-Math.floor(x); }
+  stageStyle(stage){
+    const m={
+      Grassroots:['rgba(110,109,122,0.14)','#3A3546','#6E6D7A'],
+      Regional:['#DCF3E4','#0E6A30','#16A34A'],
+      Circuit:['#FDECEA','#A81810','#E32219'],
+      Finals:['#0D0C22','#FDFCFB','#0D0C22']
+    };
+    return m[stage]||m.Grassroots;
+  }
+  initialsOf(n){ return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+  pillStyle(active,tone){
+    const on = tone==='red' ? '#E32219' : '#0D0C22';
+    const onBg = tone==='red' ? '#FDECEA' : '#0D0C22';
+    const onCol = tone==='red' ? '#A81810' : '#fff';
+    return `padding:9px 16px;border-radius:9999px;border:1px solid ${active?on:'#DBDBDE'};background:${active?onBg:'#fff'};color:${active?onCol:'#3A3546'};font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap;`;
+  }
+  tabStyle(active){ return `padding:11px 4px;font-size:14.5px;font-weight:600;color:${active?'#0D0C22':'#6E6D7A'};border-bottom:2px solid ${active?'#E32219':'transparent'};cursor:pointer;white-space:nowrap;`; }
+
+  buildDirectory(){
+    if(this._dir) return this._dir;
+    const out=[];
+    const mk=(kind,count,off)=>{
+      for(let i=0;i<count;i++){
+        const region=this.REGIONS[Math.floor(this._seed(i+off+7)*8)%8];
+        const stageIdx=Math.floor(this._seed(i+off+13)*4);
+        const stage=this.STAGES[stageIdx];
+        let name, roster=null, captainIdx=0;
+        if(kind==='team'){
+          const pre=this.TEAM_PRE[Math.floor(this._seed(i+off+3)*this.TEAM_PRE.length)%this.TEAM_PRE.length];
+          const suf=this.TEAM_SUF[Math.floor(this._seed(i+off+17)*this.TEAM_SUF.length)%this.TEAM_SUF.length];
+          name=pre+' '+suf;
+          const rn=5+Math.floor(this._seed(i+off+19)*4);
+          roster=Array.from({length:rn},(_,k)=>{
+            const fn=this.FIRST_M[Math.floor(this._seed(i*7+k+off+23)*16)%16];
+            const sn=this.SUR[Math.floor(this._seed(i*7+k+off+29)*16)%16];
+            return {name:fn+' '+sn, role:k===0?'Captain':'Player'};
+          });
+        } else {
+          const fn=(kind==='male'?this.FIRST_M:this.FIRST_F)[Math.floor(this._seed(i+off+11)*16)%16];
+          const sn=this.SUR[Math.floor(this._seed(i+off+23)*16)%16];
+          name=fn+' '+sn;
+        }
+        out.push({
+          id:kind+'-'+i, kind, name, region, stage,
+          username:'@'+name.toLowerCase().replace(/[^a-z]+/g,'_'),
+          email:name.toLowerCase().replace(/[^a-z]+/g,'.')+'@example.com',
+          mobile:'+2547'+(10000000+Math.floor(this._seed(i+off+41)*89999999)),
+          town:region.split(' ')[0],
+          avatarIdx:kind==='team'?0:((Math.floor(this._seed(i+off+29)*70)%70)+1),
+          roster, isAnon:false
+        });
+      }
+    };
+    mk('male',36,1000); mk('female',30,2000); mk('team',18,3000);
+    this._dir=out;
+    return out;
+  }
+
+  buildVenues(){
+    if(this._venues) return this._venues;
+    const v={};
+    for(const r of this.REGIONS){ v[r]=(this.VENUES_SEED[r]||[]).map((n,idx)=>({id:r+'-'+idx,name:n,active:true})); }
+    this._venues=v;
+    return v;
+  }
+  buildCustomVenues(){
+    if(this._customV) return this._customV;
+    this._customV=[
+      {id:'cv1',venueText:'Karen Snooker Lounge',player:'@daniel_m',region:'Nairobi A'},
+      {id:'cv2',venueText:'Homabay Pool Corner',player:'@nancy_w',region:'Nyanza & Western'},
+    ];
+    return this._customV;
+  }
+  buildFixtures(){
+    if(this._fixtures) return this._fixtures;
+    const dir=this.buildDirectory();
+    const rounds=['Grassroots — Round 3','Regional — Round 1','Circuit — Round 2'];
+    const stageByRound=['Grassroots','Regional','Circuit'];
+    const out=[];
+    for(let r=0;r<rounds.length;r++){
+      const pool=dir.filter(d=>d.stage===stageByRound[r]);
+      const n=Math.min(6,Math.floor(pool.length/2));
+      for(let i=0;i<n;i++){
+        const a=pool[i*2%pool.length], b=pool[(i*2+1)%pool.length];
+        const played = r<2 && i<3;
+        out.push({
+          id:'fx-'+r+'-'+i, round:rounds[r], stage:stageByRound[r],
+          a:a?a.name:'TBD', b:b?b.name:'TBD',
+          venue:(this.buildVenues()[a?a.region:this.REGIONS[0]]||[])[0]?.name||'TBD',
+          date:'12 Jul 2026', time:'14:00',
+          played, winner: played?(i%2===0?'a':'b'):null, score: played?(5+'–'+(i%3+1)):'',
+          pointsA: played && stageByRound[r]!=='Grassroots' ? 40+i*3 : null,
+          pointsB: played && stageByRound[r]!=='Grassroots' ? 30+i*2 : null,
+        });
+      }
+    }
+    this._fixtures=out;
+    return out;
+  }
+
+  makeDrawRow(id){
+    return {id, cat:'male', a:'', b:'', venue:'', date:'2026-07-19', time:'14:00'};
+  }
+
+  renderVals(){
+    const S=this.state;
+    const SC={
+      default:{emptyDraws:false,emptyDirectory:false,emptyVenues:false,emptyResults:false},
+      emptyDraws:{emptyDraws:true,emptyDirectory:false,emptyVenues:false,emptyResults:false},
+      emptyDirectory:{emptyDraws:false,emptyDirectory:true,emptyVenues:false,emptyResults:false},
+      emptyVenues:{emptyDraws:false,emptyDirectory:false,emptyVenues:true,emptyResults:false},
+      emptyResults:{emptyDraws:false,emptyDirectory:false,emptyVenues:false,emptyResults:true},
+    };
+    const cfg=SC[S.scenario]||SC.default;
+    const scenarioDefs=[['default','Full data (default)'],['emptyDraws','No fixtures entered yet'],['emptyResults','No matches to enter'],['emptyDirectory','Empty directory results'],['emptyVenues','No venues in a region']];
+    const scenarioOpts=scenarioDefs.map(([k,label])=>({label,style:this.pillStyle(S.scenario===k,'red')+ 'text-align:left;',onClick:()=>this.setState({scenario:k})}));
+
+    const dir=this.buildDirectory();
+    const venues=this.buildVenues();
+    const customVenues=this.buildCustomVenues();
+    const fixtures=this.buildFixtures();
+
+    // ---- responsive shell ----
+    const isMobileLayout = typeof window!=='undefined' && window.innerWidth<900;
+    const sidebarStyle = `width:240px;background:#0D0C22;color:#fff;display:flex;flex-direction:column;position:${isMobileLayout?'fixed':'sticky'};top:0;left:0;height:100vh;z-index:40;transition:transform .25s ease;transform:${isMobileLayout ? (S.drawerOpen?'translateX(0)':'translateX(-100%)') : 'none'};`;
+    const mobileBarDisplay = isMobileLayout ? 'flex' : 'none';
+    const sidebarLogoDisplay = isMobileLayout ? 'none' : 'flex';
+
+    const navDefs=[['dashboard','▦','Dashboard'],['draws','⚏','Draws'],['results','◔','Results & Points'],['directory','☰','Directory'],['venues','⚑','Venues']];
+    const navItems=navDefs.map(([r,icon,label])=>({icon,label,onClick:()=>{this.setState({route:r,drawerOpen:false});},
+      style:`display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;color:${S.route===r?'#fff':'#9E9EA7'};background:${S.route===r?'rgba(227,34,25,0.18)':'transparent'};`}));
+
+    // ---- dashboard ----
+    const playerCount=dir.filter(d=>d.kind!=='team').length*4; // scale up for realism narrative
+    const teamCount=dir.filter(d=>d.kind==='team').length;
+    const venueCount=Object.values(venues).reduce((a,v)=>a+v.filter(x=>x.active).length,0);
+    const upcomingCount=fixtures.filter(f=>!f.played).length;
+    const statTiles=[
+      {label:'Registered players',value:String(playerCount),delta:'+38 this week',deltaColor:'#16A34A'},
+      {label:'Active teams',value:String(teamCount),delta:'+2 this week',deltaColor:'#16A34A'},
+      {label:'Venues (active)',value:String(venueCount),delta:'across 8 regions',deltaColor:'#6E6D7A'},
+      {label:'Upcoming fixtures',value:String(upcomingCount),delta:'this round',deltaColor:'#6E6D7A'},
+      {label:'Unresolved results',value:String(fixtures.filter(f=>!f.played).length),delta:'pending entry',deltaColor:'#E32219'},
+      {label:'Anonymize requests',value:'1',delta:'awaiting action',deltaColor:'#E32219'},
+    ];
+    const attentionSource=[
+      {icon:'◔',title:'3 fixtures still unplayed — Grassroots R3',sub:'Enter results to keep standings current',route:'results',iconStyle:`width:34px;height:34px;border-radius:9px;background:#FDECEA;color:#A81810;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;`},
+      {icon:'☰',title:'1 anonymize request pending',sub:'Daniel Mutua — verify request before acting',route:'directory',iconStyle:`width:34px;height:34px;border-radius:9px;background:#F3F3F4;color:#524B63;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;`},
+      {icon:'⚑',title:'2 custom venue entries to review',sub:'Submitted by players via "Other"',route:'venues',iconStyle:`width:34px;height:34px;border-radius:9px;background:#DCF3E4;color:#0E6A30;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;`},
+    ];
+    const attentionItems=attentionSource.map(a=>({...a,onClick:()=>this.setState({route:a.route})}));
+    const pipelineDefs=[['Grassroots',54],['Regional',28],['Circuit',12],['Finals',6]];
+    const pipelineBars=pipelineDefs.map(([label,count])=>{ const [,,dot]=this.stageStyle(label); return {label,count:String(count),pct:count+'%',color:dot}; });
+
+    // ---- draws ----
+    if(S.drawRows.length===0 && !this._drawInit){ this._drawInit=true; this.state.drawRows=[this.makeDrawRow('r1'),this.makeDrawRow('r2')]; }
+    const roundOpts=[['grassroots-r3','Grassroots — Round 3'],['regional-r1','Regional — Round 1'],['circuit-r2','Circuit — Round 2']].map(([v,l])=>({value:v,label:l}));
+    const drawRoundLabel=(roundOpts.find(r=>r.value===S.drawRound)||{}).label||'';
+    const catOpts=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
+    const allVenueNames=Object.values(venues).flat().filter(v=>v.active).map(v=>v.name);
+    const venueOpts=[{value:'',label:'Select venue…'}].concat(allVenueNames.map(v=>({value:v,label:v})));
+    const drawRows=S.drawRows.map(row=>({
+      ...row,
+      setCat:(e)=>this.updateDrawRow(row.id,{cat:e.target.value}),
+      setA:(e)=>this.updateDrawRow(row.id,{a:e.target.value}),
+      setB:(e)=>this.updateDrawRow(row.id,{b:e.target.value}),
+      setVenue:(e)=>this.updateDrawRow(row.id,{venue:e.target.value}),
+      setDate:(e)=>this.updateDrawRow(row.id,{date:e.target.value}),
+      setTime:(e)=>this.updateDrawRow(row.id,{time:e.target.value}),
+      remove:()=>this.setState(s=>({drawRows:s.drawRows.filter(r=>r.id!==row.id)}))
+    }));
+    const roundFixtures = cfg.emptyDraws ? [] : fixtures.filter(f=>f.round===drawRoundLabel);
+    const enteredFixtures=roundFixtures.map(f=>({
+      a:f.a,b:f.b,venue:f.venue,date:f.date,time:f.time,
+      canEdit:!f.played,
+      lockLabel: f.played?'Played · locked':'Not yet played',
+      lockStyle: f.played
+        ? 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;color:#9E9EA7;background:#F3F3F4;padding:4px 10px;border-radius:9999px;'
+        : 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;color:#0E6A30;background:#DCF3E4;padding:4px 10px;border-radius:9999px;',
+      edit:()=>{}
+    }));
+
+    // ---- results & points ----
+    const resTabs=[['unplayed','Unplayed'],['played','Played / Correct']].map(([k,label])=>({label,onClick:()=>this.setState({resTab:k}),style:this.tabStyle(S.resTab===k)}));
+    const fxSource = cfg.emptyResults ? [] : fixtures.filter(f=>S.resTab==='unplayed'? !f.played : f.played);
+    const fixtureList=fxSource.map(f=>({
+      ...f, scoreLabel:f.score,
+      badgeLabel: f.played?'Played':'Needs result',
+      badgeStyle: f.played
+        ? 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;color:#0E6A30;background:#DCF3E4;padding:4px 10px;border-radius:9999px;flex:none;'
+        : 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;color:#A81810;background:#FDECEA;padding:4px 10px;border-radius:9999px;flex:none;',
+      rowStyle:'display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #E7E7E9;border-radius:14px;padding:14px 18px;cursor:pointer;box-shadow:0 1px 2px rgba(13,12,34,0.05);',
+      onClick:()=>this.openResultModal(f)
+    }));
+
+    // ---- directory ----
+    const dirKindOpts=[['all','All'],['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
+    const dirRegionOpts=['All',...this.REGIONS].map(r=>({value:r,label:r==='All'?'All regions':r}));
+    const dirStageOpts=['All',...this.STAGES].map(s=>({value:s,label:s==='All'?'All stages':s}));
+    const q=S.dirSearch.trim().toLowerCase();
+    let dirFiltered = cfg.emptyDirectory ? [] : dir.filter(d=>
+      (S.dirKind==='all'||d.kind===S.dirKind) &&
+      (S.dirRegion==='All'||d.region===S.dirRegion) &&
+      (S.dirStage==='All'||d.stage===S.dirStage) &&
+      (!q || d.name.toLowerCase().includes(q) || d.username.toLowerCase().includes(q))
+    );
+    const dirRows=dirFiltered.slice(0,80).map(d=>{
+      const [bg,col]=this.stageStyle(d.stage);
+      return {
+        ...d, sub:(d.kind==='team'?'Team':'Player')+' · '+d.region+' · '+d.username,
+        badgeStyle:`display:inline-flex;align-items:center;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600;background:${bg};color:${col};flex:none;`,
+        avatarEl: d.kind==='team'
+          ? React.createElement('div',{style:{width:36,height:36,borderRadius:9,background:'#0D0C22',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flex:'none'}}, this.initialsOf(d.name))
+          : React.createElement('img',{src:'https://i.pravatar.cc/72?img='+d.avatarIdx,alt:'',style:{width:36,height:36,borderRadius:9999,objectFit:'cover',flex:'none',background:'#F3F3F4'}}),
+        onClick:()=>this.openDirDetail(d)
+      };
+    });
+    const dirCountLabel=dirFiltered.length+' result'+(dirFiltered.length===1?'':'s')+(dirFiltered.length>80?' (showing first 80 — refine filters)':'');
+
+    // ---- venues ----
+    const venueRegionTabs=this.REGIONS.map(r=>({label:r,onClick:()=>this.setState({venueRegion:r,newVenueName:'',venueMsg:''}),style:this.tabStyle(S.venueRegion===r)}));
+    const regionVenues = cfg.emptyVenues ? [] : (venues[S.venueRegion]||[]);
+    const venueRows=regionVenues.map(v=>({
+      id:v.id, editing:this._editingVenue===v.id, notEditing:this._editingVenue!==v.id,
+      name:v.name, editValue: this._editingVenue===v.id ? (this._editingVenueVal ?? v.name) : v.name,
+      textColor: v.active?'#0D0C22':'#9E9EA7',
+      statusLabel: v.active?'Active':'Deactivated',
+      statusStyle: v.active
+        ? 'font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;color:#0E6A30;background:#DCF3E4;padding:3px 10px;border-radius:9999px;'
+        : 'font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;color:#9E9EA7;background:#F3F3F4;padding:3px 10px;border-radius:9999px;',
+      toggleBtnLabel: v.active?'Deactivate':'Reactivate',
+      toggleBtnStyle: v.active
+        ? 'background:none;border:1px solid #FBD5D0;color:#A81810;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;'
+        : 'background:none;border:1px solid #DCF3E4;color:#0E6A30;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;',
+      onEditInput:(e)=>{ this._editingVenueVal=e.target.value; this.forceUpdate(); },
+      startEdit:()=>{ this._editingVenue=v.id; this._editingVenueVal=v.name; this.forceUpdate(); },
+      saveEdit:()=>{ v.name=(this._editingVenueVal||v.name).trim()||v.name; this._editingVenue=null; this.forceUpdate(); },
+      toggleActive:()=>{ v.active=!v.active; this.forceUpdate(); },
+    }));
+    const customVenueRows=customVenues.filter(c=>c.region===S.venueRegion).map(c=>({
+      ...c, promote:()=>{
+        const list=venues[c.region]||(venues[c.region]=[]);
+        list.push({id:c.id+'-p',name:c.venueText,active:true});
+        this._customV=this._customV.filter(x=>x.id!==c.id);
+        this.setState({venueMsg:'"'+c.venueText+'" added to '+c.region+'.',venueMsgOk:true});
+      }
+    }));
+
+    return {
+      // auth
+      showLogin:!S.authed, showApp:S.authed,
+      li:S.li, liError:S.liError,
+      liH:{email:(e)=>this.setState(s=>({li:{...s.li,email:e.target.value},liError:''})), pass:(e)=>this.setState(s=>({li:{...s.li,pass:e.target.value},liError:''}))},
+      login:()=>{ if(!S.li.email.trim()||!S.li.pass){ this.setState({liError:'Enter your admin email/username and password.'}); return; } this.setState({authed:true,liError:''}); },
+      logout:()=>this.setState({authed:false,menuOpen:false,li:{email:'',pass:''},route:'dashboard'}),
+      adminName:'Amina Yusuf', adminInitials:'AY',
+      // shell
+      sidebarStyle, mobileBarDisplay, sidebarLogoDisplay, navItems,
+      drawerOpen:S.drawerOpen, toggleDrawer:()=>this.setState(s=>({drawerOpen:!s.drawerOpen})), closeDrawer:()=>this.setState({drawerOpen:false}),
+      menuOpen:S.menuOpen, toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})), closeMenu:()=>this.setState({menuOpen:false}),
+      stopClick:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); },
+      rIsDash:S.route==='dashboard', rIsDraws:S.route==='draws', rIsResults:S.route==='results', rIsDirectory:S.route==='directory', rIsVenues:S.route==='venues',
+      // dashboard
+      statTiles, attentionItems, noAttention:attentionItems.length===0, pipelineBars,
+      // draws
+      roundOpts, drawRound:S.drawRound, onDrawRound:(e)=>this.setState({drawRound:e.target.value}),
+      catOpts, venueOpts, drawRows,
+      addDrawRow:()=>this.setState(s=>({drawRows:[...s.drawRows,this.makeDrawRow('r'+Date.now())]})),
+      saveDraws:()=>{ this.setState({drawSavedMsg:'Round saved — notifications sent to all paired participants.',drawRows:[this.makeDrawRow('r'+Date.now())]}); },
+      drawSavedMsg:S.drawSavedMsg, drawRoundLabel,
+      enteredFixtures, hasEnteredFixtures:enteredFixtures.length>0, noEnteredFixtures:enteredFixtures.length===0,
+      // results
+      resTabs, fixtureList, hasFixtureList:fixtureList.length>0, noFixtureList:fixtureList.length===0,
+      resultModal: S.resultModal,
+      closeResultModal:()=>this.setState({resultModal:null}),
+      // directory
+      dirKindOpts, dirRegionOpts, dirStageOpts,
+      dirSearch:S.dirSearch, onDirSearch:(e)=>this.setState({dirSearch:e.target.value}),
+      dirKind:S.dirKind, onDirKind:(e)=>this.setState({dirKind:e.target.value}),
+      dirRegion:S.dirRegion, onDirRegion:(e)=>this.setState({dirRegion:e.target.value}),
+      dirStage:S.dirStage, onDirStage:(e)=>this.setState({dirStage:e.target.value}),
+      dirRows, hasDirRows:dirRows.length>0, noDirRows:dirRows.length===0, dirCountLabel,
+      dirDetail:S.dirDetail, closeDirDetail:()=>this.setState({dirDetail:null}),
+      // venues
+      venueRegionTabs, venueRegion:S.venueRegion,
+      newVenueName:S.newVenueName, onNewVenueName:(e)=>this.setState({newVenueName:e.target.value}),
+      addVenue:()=>{
+        const name=S.newVenueName.trim();
+        if(!name){ this.setState({venueMsg:'Type a venue name first.',venueMsgOk:false}); return; }
+        const list=venues[S.venueRegion]||(venues[S.venueRegion]=[]);
+        if(list.some(v=>v.name.toLowerCase()===name.toLowerCase())){ this.setState({venueMsg:'A venue with that name already exists in '+S.venueRegion+'.',venueMsgOk:false}); return; }
+        list.push({id:S.venueRegion+'-'+Date.now(),name,active:true});
+        this.setState({newVenueName:'',venueMsg:'"'+name+'" added to '+S.venueRegion+'.',venueMsgOk:true});
+      },
+      venueMsg:S.venueMsg, venueMsgStyle: S.venueMsgOk?'color:#0E6A30;font-size:13px;font-weight:600;margin-bottom:16px;':'color:#A81810;font-size:13px;font-weight:600;margin-bottom:16px;',
+      venueRows, hasVenues:venueRows.length>0, noVenues:venueRows.length===0,
+      customVenueRows, hasCustomVenues:customVenueRows.length>0, noCustomVenues:customVenueRows.length===0,
+      // demo switcher
+      scenario:S.scenario, scenarioOpts, switcherOpen:S.switcherOpen,
+      toggleSwitcher:()=>this.setState(s=>({switcherOpen:!s.switcherOpen}))
+    };
+  }
+
+  updateDrawRow(id,patch){ this.setState(s=>({drawRows:s.drawRows.map(r=>r.id===id?{...r,...patch}:r)})); }
+
+  openResultModal(f){
+    const isCorrection=!!f.played;
+    const modal={
+      round:f.round, a:f.a, b:f.b, venue:f.venue, date:f.date,
+      isCorrection,
+      winner: f.winner||null, score: f.score||'', pointsA: f.pointsA ?? '', pointsB: f.pointsB ?? '',
+      showPoints: f.stage!=='Grassroots',
+      error:'',
+      saveLabel: isCorrection?'Save correction':'Save result',
+      setScore:(e)=>{ this.state.resultModal={...this.state.resultModal, score:e.target.value}; this.forceUpdate(); },
+      setPointsA:(e)=>{ this.state.resultModal={...this.state.resultModal, pointsA:e.target.value}; this.forceUpdate(); },
+      setPointsB:(e)=>{ this.state.resultModal={...this.state.resultModal, pointsB:e.target.value}; this.forceUpdate(); },
+      pickA:()=>{ this.state.resultModal={...this.state.resultModal, winner:'a'}; this.forceUpdate(); },
+      pickB:()=>{ this.state.resultModal={...this.state.resultModal, winner:'b'}; this.forceUpdate(); },
+      save:()=>{
+        const m=this.state.resultModal;
+        if(!m.winner){ this.state.resultModal={...m,error:'Select a winner before saving.'}; this.forceUpdate(); return; }
+        f.played=true; f.winner=m.winner; f.score=m.score; f.pointsA=m.pointsA===''?null:Number(m.pointsA); f.pointsB=m.pointsB===''?null:Number(m.pointsB);
+        this.setState({resultModal:null});
+      }
+    };
+    modal.aBtnStyle=`flex:1;padding:11px;border-radius:10px;border:1px solid ${modal.winner==='a'?'#E32219':'#DBDBDE'};background:${modal.winner==='a'?'#FDECEA':'#fff'};color:${modal.winner==='a'?'#A81810':'#3A3546'};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;`;
+    modal.bBtnStyle=`flex:1;padding:11px;border-radius:10px;border:1px solid ${modal.winner==='b'?'#E32219':'#DBDBDE'};background:${modal.winner==='b'?'#FDECEA':'#fff'};color:${modal.winner==='b'?'#A81810':'#3A3546'};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;`;
+    // re-derive button styles whenever winner changes
+    const origPickA=modal.pickA, origPickB=modal.pickB;
+    modal.pickA=()=>{ origPickA(); this.refreshResultModalStyles(); };
+    modal.pickB=()=>{ origPickB(); this.refreshResultModalStyles(); };
+    this.setState({resultModal:modal});
+  }
+  refreshResultModalStyles(){
+    const m=this.state.resultModal; if(!m) return;
+    m.aBtnStyle=`flex:1;padding:11px;border-radius:10px;border:1px solid ${m.winner==='a'?'#E32219':'#DBDBDE'};background:${m.winner==='a'?'#FDECEA':'#fff'};color:${m.winner==='a'?'#A81810':'#3A3546'};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;`;
+    m.bBtnStyle=`flex:1;padding:11px;border-radius:10px;border:1px solid ${m.winner==='b'?'#E32219':'#DBDBDE'};background:${m.winner==='b'?'#FDECEA':'#fff'};color:${m.winner==='b'?'#A81810':'#3A3546'};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;`;
+    this.forceUpdate();
+  }
+
+  openDirDetail(d){
+    const [bg,col]=this.stageStyle(d.stage);
+    const isTeam=d.kind==='team';
+    const fields = d.isAnon ? [] : [
+      {label:'Username',value:d.username},
+      {label:'Region',value:d.region},
+      {label:'Town',value:d.town},
+      {label:'Email',value:d.email},
+      {label:'Mobile',value:d.mobile},
+      {label:'Stage',value:d.stage},
+    ];
+    const hasCaptaincyRisk = isTeam===false && this._seed(d.id.length+7)>0.85;
+    const hasUpcoming = this._seed(d.id.length+3)>0.5;
+    const detail={
+      name:d.name, isAnon:d.isAnon, notAnon:!d.isAnon, stage:d.stage, isTeam,
+      sub:(isTeam?'Team':'Player')+' · '+d.region,
+      badgeStyle:`display:inline-flex;align-items:center;padding:4px 11px;border-radius:9999px;font-size:12.5px;font-weight:600;background:${bg};color:${col};flex:none;`,
+      avatarEl: isTeam
+        ? React.createElement('div',{style:{width:56,height:56,borderRadius:14,background:'#E32219',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,fontWeight:700,flex:'none'}}, this.initialsOf(d.name))
+        : React.createElement('img',{src:'https://i.pravatar.cc/112?img='+d.avatarIdx,alt:'',style:{width:56,height:56,borderRadius:9999,objectFit:'cover',flex:'none',background:'#524B63'}}),
+      fields, roster:d.roster||[],
+      notifLog:[
+        {text:'Draw published — Round 3',when:'2 days ago'},
+        {text:'Registration confirmed',when:'6 weeks ago'},
+      ],
+      anonWarning: d.isAnon ? '' : (hasCaptaincyRisk ? 'This player is a team captain — reassign captaincy before anonymizing.' : (hasUpcoming ? 'This player has upcoming unplayed fixtures — anonymizing will require reviewing those fixtures.' : '')),
+      canAnonymize: !d.isAnon,
+      anonymize:()=>{
+        d.isAnon=true; d.name='Former Player #'+(100+Math.floor(this._seed(d.id.length)*900));
+        this.setState({dirDetail:null});
+      }
+    };
+    this.setState({dirDetail:detail});
+  }
+}
+</script>
+</body>
+</html>

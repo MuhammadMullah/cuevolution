@@ -1,0 +1,95 @@
+/*
+  Cuevolution Design Tokens — Tailwind CSS v4 (@theme)
+  See design-system.md for rationale on every value below.
+
+  Usage: merge this @theme block into assets/css/app.css, directly below
+  `@import "tailwindcss";`. Every token below becomes a Tailwind utility,
+  e.g. --color-ink-950 -> bg-ink-950 / text-ink-950 / border-ink-950.
+*/
+
+@theme {
+  /* ---- Fonts ---- */
+  --font-sans: "Mona Sans", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* ---- Ink / neutral scale (warm near-black, not cold gray) ---- */
+  --color-ink-25: #fdfcfb;
+  --color-ink-50: #faf9fb;
+  --color-ink-100: #f3f3f4;
+  --color-ink-200: #e7e7e9;
+  --color-ink-300: #dbdbde;
+  --color-ink-400: #9e9ea7; /* ~2.66:1 on white — decorative/large-scale only on light bg; safe as text on ink-950/ink-900 (~7.23:1). See design-system.md §2.2. */
+  --color-ink-500: #6e6d7a;
+  --color-ink-600: #524b63;
+  --color-ink-700: #3a3546;
+  --color-ink-900: #16152b;
+  --color-ink-950: #0d0c22; /* primary brand black — every button, nav bar and hero band anchors here */
+
+  /* ---- Kenya Red (secondary accent — links, active states, highlights) ---- */
+  --color-red-50: #fdecea;
+  --color-red-100: #fbd5d0;
+  --color-red-300: #f09b92;
+  --color-red-500: #e32219;
+  --color-red-600: #c81e16;
+  --color-red-700: #a81810;
+  --color-red-900: #5e0d08;
+
+  /* ---- Kenya Green (tertiary accent — success, "eligible", Regional stage) ---- */
+  --color-green-50: #f0faf3;
+  --color-green-100: #dcf3e4;
+  --color-green-300: #7fd6a0;
+  --color-green-500: #16a34a;
+  --color-green-600: #128f40;
+  --color-green-700: #0e6a30;
+  --color-green-900: #093e1c;
+
+  /* ---- Cuevo Gold (points / rank / achievement accent only) ---- */
+  --color-gold-100: #fcefcb;
+  --color-gold-500: #d9a02b;
+  --color-gold-700: #9c7318;
+
+  /* ---- Semantic ---- */
+  --color-success: #16a34a; /* green-500 */
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #6e6d7a; /* ink-500 — kept in the black/red/green/gray family, no separate hue */
+
+  /* ---- Stage badge colors (Qualification Pipeline) ---- */
+  --color-stage-grassroots: #6e6d7a; /* ink-500 — entry point */
+  --color-stage-regional: #16a34a; /* green-500 — qualifiers open */
+  --color-stage-circuit: #e32219; /* red-500 — points now matter */
+  --color-stage-finals: #0d0c22; /* ink-950 — the top */
+
+  /* ---- Radius ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px; /* every button is a full pill — see design-system.md §6.1 */
+
+  /* ---- Shadows (warm, ink-tinted rather than pure black) ---- */
+  --shadow-sm: 0 1px 2px rgba(13, 12, 34, 0.06);
+  --shadow-md: 0 4px 12px rgba(13, 12, 34, 0.08);
+  --shadow-lg: 0 12px 32px rgba(13, 12, 34, 0.12);
+}
+
+/*
+  Self-hosted variable fonts (Mona Sans, IBM Plex Mono) — neither is on
+  Google Fonts; both are open-license (SIL OFL). Place woff2 files under
+  priv/static/fonts/ and uncomment/adjust below once added.
+
+@font-face {
+  font-family: "Mona Sans";
+  src: url("/fonts/Mona-Sans.woff2") format("woff2-variations");
+  font-weight: 200 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+*/

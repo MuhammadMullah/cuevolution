@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<meta name="ext-resource-dependency" content="https://flagcdn.com/40x30/ke.png" data-resource-id="flagKe" />
+
+<template id="__bundler_thumbnail" data-bg-color="#0D0C22">
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="60" fill="#E32219"/>
+  <circle cx="100" cy="100" r="60" fill="none" stroke="#FDFCFB" stroke-width="4"/>
+  <text x="100" y="112" font-family="monospace" font-size="46" font-weight="700" fill="#FDFCFB" text-anchor="middle">8</text>
+</svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#FDFCFB;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+a{color:#C81E16;text-decoration:none;}
+a:hover{color:#A81810;text-decoration:underline;}
+input::placeholder{color:#9E9EA7;}
+</style>
+</helmet>
+<div style="font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;color:#3A3546;min-height:100vh;background:#FDFCFB;">
+
+  <!-- ============================ AUTH SHELL ============================ -->
+  <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ true }}">
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:clamp(24px,6vw,72px) 20px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:28px;">
+        <img src="assets/logo-black.png" alt="Cuevolution" style="height:30px;width:auto;display:block;" />
+      </div>
+
+      <!-- ---- SIGN IN ---- -->
+      <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+        <div style="width:100%;max-width:420px;background:#fff;border:1px solid #E7E7E9;border-radius:20px;box-shadow:0 8px 30px rgba(13,12,34,0.06);padding:clamp(24px,5vw,36px);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Player Sign In</div>
+          <h1 style="font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 6px;">Welcome back</h1>
+          <p style="font-size:15px;line-height:1.5;color:#6E6D7A;margin:0 0 24px;">Sign in to check standings, your team and fixtures.</p>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Email or username</label>
+            <input type="text" value="{{ si.email }}" onInput="{{ siH.email }}" placeholder="you@example.com" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Password</label>
+            <input type="password" value="{{ si.pass }}" onInput="{{ siH.pass }}" placeholder="••••••••" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+          </div>
+          <div style="text-align:right;margin-bottom:18px;"><a href="#" onClick="{{ noop }}" style="font-size:13px;font-weight:600;">Forgot password?</a></div>
+          <sc-if value="{{ siError }}" hint-placeholder-val="">
+            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;font-weight:500;border-radius:10px;padding:10px 12px;margin-bottom:16px;">{{ siError }}</div>
+          </sc-if>
+          <button onClick="{{ signIn }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Sign in</button>
+          <p style="text-align:center;font-size:14px;color:#6E6D7A;margin:20px 0 0;">New to Cuevolution? <a href="#" onClick="{{ go.register }}" style="font-weight:600;">Create an account</a></p>
+        </div>
+      </sc-if>
+
+      <!-- ---- REGISTRATION ---- -->
+      <sc-if value="{{ isRegister }}" hint-placeholder-val="">
+        <div style="width:100%;max-width:600px;background:#fff;border:1px solid #E7E7E9;border-radius:20px;box-shadow:0 8px 30px rgba(13,12,34,0.06);padding:clamp(22px,5vw,40px);">
+
+          <!-- progress (hidden on success) -->
+          <sc-if value="{{ regInProgress }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-bottom:26px;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;">Create Account</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9E9EA7;">Step {{ regStep }} of 4</div>
+              </div>
+              <div style="height:6px;background:#F3F3F4;border-radius:9999px;overflow:hidden;">
+                <div style="height:100%;background:#E32219;border-radius:9999px;width:{{ regProgress }};transition:width .3s ease;"></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- STEP 1 · Personal -->
+          <sc-if value="{{ rs1 }}" hint-placeholder-val="">
+            <h1 style="font-size:23px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 4px;">Your details</h1>
+            <p style="font-size:14px;color:#6E6D7A;margin:0 0 22px;">Players must be 18 or older to register.</p>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+              <div onClick="{{ togglePhoto }}" style="{{ photoStyle }}" style-hover="border-color:#E32219;">{{ photoText }}</div>
+              <div><div style="font-size:14px;font-weight:600;color:#3A3546;">Profile picture</div><div style="font-size:13px;color:#9E9EA7;">Tap the circle to add a photo</div></div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Full name</label>
+              <input type="text" value="{{ reg.name }}" onInput="{{ h.name }}" placeholder="e.g. Brian Otieno" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+              <sc-if value="{{ err.name }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.name }}</div></sc-if>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px;">
+              <div style="flex:1;min-width:180px;">
+                <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Date of birth</label>
+                <input type="date" value="{{ reg.dob }}" onInput="{{ h.dob }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+                <sc-if value="{{ ageHint }}" hint-placeholder-val=""><div style="color:#6E6D7A;font-size:12.5px;margin-top:5px;">{{ ageHint }}</div></sc-if>
+                <sc-if value="{{ err.dob }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.dob }}</div></sc-if>
+              </div>
+              <div style="flex:1;min-width:180px;">
+                <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Town / location</label>
+                <input type="text" value="{{ reg.town }}" onInput="{{ h.town }}" placeholder="e.g. Nairobi" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+                <sc-if value="{{ err.town }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.town }}</div></sc-if>
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Category</label>
+              <div style="display:flex;gap:10px;">
+                <sc-for list="{{ genderOpts }}" as="o" hint-placeholder-count="2"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+              </div>
+              <sc-if value="{{ err.gender }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:7px;">{{ err.gender }}</div></sc-if>
+            </div>
+          </sc-if>
+
+          <!-- STEP 2 · Account -->
+          <sc-if value="{{ rs2 }}" hint-placeholder-val="">
+            <h1 style="font-size:23px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 4px;">Contact &amp; login</h1>
+            <p style="font-size:14px;color:#6E6D7A;margin:0 0 22px;">We use these to send fixture and confirmation notifications.</p>
+            <div style="margin-bottom:16px;">
+              <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Email</label>
+              <input type="email" value="{{ reg.email }}" onInput="{{ h.email }}" placeholder="you@example.com" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+              <sc-if value="{{ err.email }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.email }}</div></sc-if>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Mobile number</label>
+              <input type="tel" value="{{ reg.mobile }}" onInput="{{ h.mobile }}" placeholder="0712 345 678" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+              <sc-if value="{{ mobileHint }}" hint-placeholder-val=""><div style="color:#6E6D7A;font-size:12.5px;margin-top:5px;font-family:'IBM Plex Mono',monospace;">Will be saved as {{ mobileHint }}</div></sc-if>
+              <sc-if value="{{ err.mobile }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.mobile }}</div></sc-if>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Username</label>
+              <input type="text" value="{{ reg.username }}" onInput="{{ h.username }}" placeholder="unique handle" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+              <sc-if value="{{ usernameOk }}" hint-placeholder-val=""><div style="color:#16A34A;font-size:12.5px;font-weight:500;margin-top:5px;">✓ {{ reg.username }} is available</div></sc-if>
+              <sc-if value="{{ err.username }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.username }}</div></sc-if>
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Password</label>
+              <input type="password" value="{{ reg.pass }}" onInput="{{ h.pass }}" placeholder="At least 6 characters" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+              <sc-if value="{{ err.pass }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:5px;">{{ err.pass }}</div></sc-if>
+            </div>
+          </sc-if>
+
+          <!-- STEP 3 · Region & Venue -->
+          <sc-if value="{{ rs3 }}" hint-placeholder-val="">
+            <h1 style="font-size:23px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 4px;">Region &amp; venue</h1>
+            <p style="font-size:14px;color:#6E6D7A;margin:0 0 20px;">You compete within one region. This can only change before your first match.</p>
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:10px;">Your region</label>
+            <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:6px;">
+              <sc-for list="{{ regionOpts }}" as="o" hint-placeholder-count="8"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+            </div>
+            <sc-if value="{{ err.region }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:4px;">{{ err.region }}</div></sc-if>
+
+            <sc-if value="{{ hasRegion }}" hint-placeholder-val="">
+              <div style="margin-top:24px;">
+                <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:10px;">Preferred venue in {{ reg.region }}</label>
+                <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:6px;">
+                  <sc-for list="{{ venueOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+                </div>
+                <sc-if value="{{ venueIsOther }}" hint-placeholder-val="">
+                  <input type="text" value="{{ reg.venueOther }}" onInput="{{ h.venueOther }}" placeholder="Type the venue name" style="width:100%;margin-top:8px;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+                </sc-if>
+                <sc-if value="{{ err.venue }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:6px;">{{ err.venue }}</div></sc-if>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <!-- STEP 4 · Notifications -->
+          <sc-if value="{{ rs4 }}" hint-placeholder-val="">
+            <h1 style="font-size:23px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 4px;">How should we reach you?</h1>
+            <p style="font-size:14px;color:#6E6D7A;margin:0 0 22px;">Choose how you receive registration and draw notifications.</p>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:6px;">
+              <sc-for list="{{ notifyOpts }}" as="o" hint-placeholder-count="3">
+                <button onClick="{{ o.onClick }}" style="{{ o.style }}">
+                  <div style="font-size:15px;font-weight:600;color:#0D0C22;">{{ o.label }}</div>
+                  <div style="font-size:13px;color:#6E6D7A;margin-top:2px;">{{ o.desc }}</div>
+                </button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ err.notify }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:8px;">{{ err.notify }}</div></sc-if>
+          </sc-if>
+
+          <!-- STEP 5 · Success -->
+          <sc-if value="{{ rs5 }}" hint-placeholder-val="">
+            <div style="text-align:center;padding:16px 0 8px;">
+              <div style="width:64px;height:64px;border-radius:9999px;background:#FDECEA;color:#E32219;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 20px;">✓</div>
+              <h1 style="font-size:25px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 8px;">You're registered!</h1>
+              <p style="font-size:15px;line-height:1.55;color:#6E6D7A;margin:0 auto 24px;max-width:42ch;">Welcome to Cuevolution, {{ reg.name }}. A confirmation has been sent via {{ notifyLabel }}. You're now in the {{ reg.region }} region.</p>
+              <button onClick="{{ finishReg }}" style="background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 30px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Enter the app</button>
+            </div>
+          </sc-if>
+
+          <!-- nav buttons (steps 1-4) -->
+          <sc-if value="{{ regInProgress }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:12px;margin-top:28px;">
+              <sc-if value="{{ canBack }}" hint-placeholder-val="">
+                <button onClick="{{ regBack }}" style="background:#fff;color:#0D0C22;border:1px solid #DBDBDE;border-radius:9999px;padding:12px 22px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Back</button>
+              </sc-if>
+              <button onClick="{{ regNext }}" style="flex:1;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:12px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">{{ nextLabel }}</button>
+            </div>
+            <p style="text-align:center;font-size:13.5px;color:#6E6D7A;margin:18px 0 0;">Already have an account? <a href="#" onClick="{{ go.signin }}" style="font-weight:600;">Sign in</a></p>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- ============================ APP SHELL ============================ -->
+  <sc-if value="{{ showApp }}" hint-placeholder-val="">
+    <div style="min-height:100vh;display:flex;flex-direction:column;">
+      <!-- top nav -->
+      <header style="position:sticky;top:0;z-index:20;background:rgba(253,252,251,0.9);backdrop-filter:blur(10px);border-bottom:1px solid #E7E7E9;">
+        <div style="max-width:1080px;margin:0 auto;padding:0 clamp(16px,4vw,28px);display:flex;align-items:center;gap:20px;height:62px;">
+          <img src="assets/logo-black.png" alt="Cuevolution" style="height:24px;width:auto;display:block;flex:none;" />
+          <nav style="display:flex;align-items:stretch;gap:clamp(14px,3vw,28px);margin-left:8px;overflow-x:auto;flex:1;">
+            <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4"><div onClick="{{ n.onClick }}" style="{{ n.style }}">{{ n.label }}</div></sc-for>
+          </nav>
+          <div style="position:relative;flex:none;">
+            <div onClick="{{ toggleMenu }}" style="width:36px;height:36px;border-radius:9999px;background:#0D0C22;color:#FDFCFB;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:0.02em;" title="Account">{{ userInitials }}</div>
+            <sc-if value="{{ menuOpen }}" hint-placeholder-val="">
+              <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:40;"></div>
+              <div style="position:absolute;right:0;top:46px;z-index:50;width:216px;background:#fff;border:1px solid #E7E7E9;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.18);overflow:hidden;">
+                <div style="padding:13px 15px;border-bottom:1px solid #F3F3F4;">
+                  <div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ userName }}</div>
+                  <div style="font-size:12.5px;color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">{{ userHandle }}</div>
+                </div>
+                <div onClick="{{ menuProfile }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:500;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;"><span style="color:#9E9EA7;">◔</span>Profile</div>
+                <div onClick="{{ menuSettings }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:500;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;"><span style="color:#9E9EA7;">⚙</span>Settings</div>
+                <div onClick="{{ menuLogout }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:600;color:#C81E16;cursor:pointer;border-top:1px solid #F3F3F4;" style-hover="background:#FDECEA;"><span>⏻</span>Log out</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </header>
+
+      <main style="flex:1;width:100%;max-width:1080px;margin:0 auto;padding:clamp(22px,4vw,40px) clamp(16px,4vw,28px) 64px;">
+
+        <!-- ===== STANDINGS ===== -->
+        <sc-if value="{{ rIsStandings }}" hint-placeholder-val="">
+          <sc-if value="{{ freshAccount }}" hint-placeholder-val="">
+            <div style="background:#FDECEA;border:1px solid #FBD5D0;border-radius:16px;padding:18px 22px;margin-bottom:24px;">
+              <div style="font-size:16px;font-weight:700;color:#A81810;margin-bottom:3px;letter-spacing:-0.01em;">Welcome to Cuevolution, Brian</div>
+              <div style="font-size:14px;line-height:1.55;color:#7A120C;">You're all set. Create or join a team, and your fixtures will appear here once the admin publishes a draw. Browse the live standings below in the meantime.</div>
+            </div>
+          </sc-if>
+          <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:20px;">
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Season 2026 · Live</div>
+              <h1 style="font-size:clamp(26px,4vw,32px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0;">Standings</h1>
+            </div>
+            <div style="font-size:13px;color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">Updated just now</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid #E7E7E9;margin-bottom:16px;">
+            <div style="display:flex;gap:20px;overflow-x:auto;">
+              <sc-for list="{{ stTabs }}" as="t" hint-placeholder-count="3"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+            </div>
+            <div style="position:relative;padding-bottom:8px;flex:none;">
+              <button onClick="{{ toggleFilter }}" style="display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #DBDBDE;border-radius:10px;padding:8px 14px;font-family:inherit;font-size:14px;font-weight:600;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;">
+                <span style="font-size:14px;line-height:1;">⚑</span>Filter<sc-if value="{{ hasActiveFilters }}" hint-placeholder-val=""><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9999px;background:#E32219;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;">{{ activeFilterCount }}</span></sc-if>
+              </button>
+              <sc-if value="{{ filterOpen }}" hint-placeholder-val="">
+                <div onClick="{{ closeFilter }}" style="position:fixed;inset:0;z-index:40;"></div>
+                <div style="position:absolute;right:0;top:46px;z-index:50;width:262px;background:#fff;border:1px solid #E7E7E9;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.16);padding:16px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;">
+                    <span style="font-size:12px;font-weight:700;color:#0D0C22;text-transform:uppercase;letter-spacing:0.07em;">Filter standings</span>
+                    <span onClick="{{ clearFilters }}" style="font-size:12.5px;font-weight:600;color:#C81E16;cursor:pointer;">Clear all</span>
+                  </div>
+                  <label style="display:block;font-size:12px;font-weight:600;color:#6E6D7A;margin-bottom:6px;">Region</label>
+                  <select value="{{ stRegion }}" onChange="{{ onStRegion }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:9px 12px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;margin-bottom:14px;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;">
+                    <sc-for list="{{ stRegionOpts }}" as="o" hint-placeholder-count="9"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                  </select>
+                  <label style="display:block;font-size:12px;font-weight:600;color:#6E6D7A;margin-bottom:6px;">Stage</label>
+                  <select value="{{ stStage }}" onChange="{{ onStStage }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:9px 12px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;margin-bottom:16px;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;">
+                    <sc-for list="{{ stStageOpts }}" as="o" hint-placeholder-count="5"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                  </select>
+                  <button onClick="{{ closeFilter }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Done</button>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <sc-if value="{{ hasStandings }}" hint-placeholder-val="{{ true }}">
+
+          <sc-if value="{{ hasResultsRows }}" hint-placeholder-val="{{ true }}">
+          <div id="st-scroll" style="max-height:62vh;overflow:auto;border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <table style="width:100%;border-collapse:collapse;min-width:680px;">
+              <thead>
+                <tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;width:56px;">#</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;">{{ nameColLabel }}</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;">Region</th>
+                  <th style="text-align:right;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;">Played</th>
+                  <th style="text-align:right;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;">W–L</th>
+                  <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;">Stage</th>
+                  <th style="text-align:right;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;background:#FAF9FB;position:sticky;top:0;z-index:1;">Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ stRows }}" as="r" hint-placeholder-count="12">
+                  <tr style="{{ r.rowStyle }}" style-hover="background:#F3F3F4;" onClick="{{ r.onClick }}">
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:{{ r.rankColor }};">{{ r.rankLabel }}</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;">
+                      <div style="display:flex;align-items:center;gap:11px;">
+                        {{ r.avatarEl }}
+                        <span style="font-size:15px;font-weight:600;color:#0D0C22;">{{ r.name }}</span>
+                        {{ r.flagEl }}
+                      </div>
+                    </td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;font-size:14px;color:#524B63;">{{ r.region }}</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#6E6D7A;">{{ r.playedStr }}</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#0D0C22;">{{ r.record }}</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;">
+                      <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600;background:{{ r.badgeBg }};color:{{ r.badgeColor }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.dotColor }};"></span>{{ r.stage }}</span>
+                    </td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #F3F3F4;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#9C7318;">{{ r.points }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;">
+            <div style="font-size:13px;color:#6E6D7A;font-family:'IBM Plex Mono',monospace;">{{ totalCount }} entries · tap a row for match history</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button onClick="{{ jumpTop }}" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #DBDBDE;border-radius:9999px;padding:7px 15px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;">↑ Top</button>
+              <button onClick="{{ jumpBottom }}" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #DBDBDE;border-radius:9999px;padding:7px 15px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;">↓ Bottom</button>
+            </div>
+          </div>
+          <p style="font-size:12.5px;color:#9E9EA7;margin:14px 2px 0;">Points in gold are Cuevo Points, earned from the Circuit stage onward. Rank #1 is marked with a red accent.</p>
+          </sc-if>
+          <sc-if value="{{ noFilterResults }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:clamp(36px,7vw,56px) 24px;text-align:center;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 6px;">No players match these filters</h3>
+              <p style="font-size:14px;line-height:1.55;color:#6E6D7A;margin:0 auto;max-width:40ch;">Try a different region or stage combination.</p>
+            </div>
+          </sc-if>
+          </sc-if>
+          <sc-if value="{{ noStandings }}" hint-placeholder-val="">
+            <div style="margin-top:16px;background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:clamp(40px,8vw,64px) 24px;text-align:center;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="width:54px;height:54px;border-radius:14px;background:#F3F3F4;color:#9E9EA7;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;">#</div>
+              <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 6px;">No standings yet</h3>
+              <p style="font-size:14px;line-height:1.55;color:#6E6D7A;margin:0 auto;max-width:40ch;">Rankings appear here once the admin records the first match results of the season.</p>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== MY TEAM ===== -->
+        <sc-if value="{{ rIsTeam }}" hint-placeholder-val="">
+          <sc-if value="{{ hasTeam }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Your Team</div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:24px;">
+            <div style="width:56px;height:56px;border-radius:14px;background:#0D0C22;color:#FDFCFB;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex:none;">WK</div>
+            <div style="flex:1;min-width:200px;">
+              <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 2px;">{{ teamName }}</h1>
+              <div style="font-size:14px;color:#6E6D7A;">{{ teamRegion }} · <sc-if value="{{ teamCaptainMode }}" hint-placeholder-val="{{ true }}"><span style="color:#A81810;font-weight:600;">You are the Captain</span></sc-if><sc-if value="{{ teamMemberMode }}" hint-placeholder-val="">You're a player · Captain is <span style="color:#0D0C22;font-weight:600;">{{ captainName }}</span></sc-if></div>
+            </div>
+            <span style="{{ eligBadgeStyle }}">{{ eligBadge }}</span>
+          </div>
+
+          <!-- eligibility card -->
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
+              <div style="font-size:14px;font-weight:600;color:#3A3546;">Roster size</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#6E6D7A;"><span style="color:#0D0C22;font-weight:600;font-size:18px;">{{ rosterCount }}</span> / 8</div>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <sc-for list="{{ rosterSlots }}" as="s" hint-placeholder-count="8"><div style="{{ s.style }}"></div></sc-for>
+            </div>
+            <div style="font-size:13px;color:#6E6D7A;margin-top:12px;">{{ eligMessage }}</div>
+          </div>
+
+          <!-- add player (captain) -->
+          <sc-if value="{{ teamCaptainMode }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:20px;">
+            <div style="font-size:14px;font-weight:600;color:#3A3546;margin-bottom:4px;">Add a player</div>
+            <div style="font-size:13px;color:#9E9EA7;margin-bottom:12px;">Captains add already-registered players directly — no invite needed.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+              <input type="text" value="{{ addQuery }}" onInput="{{ addH }}" placeholder="Search player name or @username" style="flex:1;min-width:200px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+              <button onClick="{{ addPlayer }}" style="background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:11px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Add</button>
+            </div>
+            <sc-if value="{{ addMsg }}" hint-placeholder-val=""><div style="{{ addMsgStyle }}">{{ addMsg }}</div></sc-if>
+          </div>
+
+          </sc-if>
+
+          <!-- roster -->
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ rosterRows }}" as="p" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #F3F3F4;" style-hover="background:#FAF9FB;">
+                <div style="{{ p.avatarStyle }}">{{ p.initials }}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:15px;font-weight:600;color:#0D0C22;">{{ p.name }}</div>
+                  <div style="font-size:13px;color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">{{ p.user }}</div>
+                </div>
+                <sc-if value="{{ p.isCaptain }}" hint-placeholder-val="">
+                  <span style="padding:3px 11px;border-radius:9999px;font-size:12px;font-weight:600;background:#FBD5D0;color:#A81810;">Captain</span>
+                </sc-if>
+                <sc-if value="{{ p.canRemove }}" hint-placeholder-val="">
+                  <button onClick="{{ p.remove }}" style="background:none;border:none;color:#9E9EA7;font-size:13px;font-weight:600;cursor:pointer;padding:6px 8px;border-radius:8px;" style-hover="color:#A81810;background:#FDECEA;">Remove</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ teamNone }}" hint-placeholder-val="">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Your Team</div>
+            <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 20px;">My team</h1>
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:clamp(36px,7vw,60px) 24px;text-align:center;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="width:60px;height:60px;border-radius:16px;background:#0D0C22;color:#FDFCFB;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:22px;font-weight:700;">+</div>
+              <h3 style="font-size:20px;font-weight:700;color:#0D0C22;margin:0 0 8px;letter-spacing:-0.01em;">You're not on a team yet</h3>
+              <p style="font-size:14.5px;line-height:1.6;color:#6E6D7A;margin:0 auto 22px;max-width:44ch;">Create a team to compete in the Teams category. You'll become the captain and can add 4–7 already-registered players. A team needs 5–8 players to be eligible for draws.</p>
+              <button onClick="{{ createTeam }}" style="background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:12px 28px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Create a team</button>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== FIXTURES ===== -->
+        <sc-if value="{{ rIsFixtures }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Draws &amp; Fixtures</div>
+          <h1 style="font-size:clamp(26px,4vw,32px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 18px;">My fixtures</h1>
+
+          <sc-if value="{{ hasUpcoming }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;gap:12px;align-items:flex-start;background:#0D0C22;color:#FDFCFB;border-radius:16px;padding:16px 20px;margin-bottom:26px;">
+            <div style="width:34px;height:34px;border-radius:9999px;background:#E32219;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none;">◆</div>
+            <div><div style="font-size:15px;font-weight:600;margin-bottom:2px;">A new draw has been published</div><div style="font-size:13.5px;color:#DBDBDE;">You have 2 upcoming fixtures. Notifications were sent to your email and SMS.</div></div>
+          </div>
+          </sc-if>
+
+          <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 12px;letter-spacing:-0.01em;">Upcoming</h2>
+          <sc-if value="{{ noUpcoming }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:clamp(36px,7vw,56px) 24px;text-align:center;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:32px;">
+              <div style="width:54px;height:54px;border-radius:14px;background:#F3F3F4;color:#9E9EA7;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:22px;">◇</div>
+              <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 6px;">No upcoming fixtures</h3>
+              <p style="font-size:14px;line-height:1.55;color:#6E6D7A;margin:0 auto;max-width:42ch;">When the admin publishes a draw, your matches — with opponent, venue and time — will show up here and we'll notify you.</p>
+            </div>
+          </sc-if>
+          <sc-if value="{{ hasUpcoming }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:32px;">
+            <sc-for list="{{ upFixtures }}" as="f" hint-placeholder-count="3">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:18px 20px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                  <span style="font-size:12px;font-weight:600;color:#6E6D7A;text-transform:uppercase;letter-spacing:0.06em;">{{ f.type }}</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600;background:{{ f.badgeBg }};color:{{ f.badgeColor }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ f.dotColor }};"></span>{{ f.stage }}</span>
+                </div>
+                <div style="font-size:13px;color:#9E9EA7;margin-bottom:3px;">vs</div>
+                <div style="font-size:19px;font-weight:700;color:#0D0C22;letter-spacing:-0.01em;margin-bottom:14px;">{{ f.opp }}</div>
+                <div style="display:flex;flex-direction:column;gap:7px;font-size:14px;color:#3A3546;">
+                  <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">When</span><span style="font-weight:600;color:#0D0C22;">{{ f.date }} · {{ f.time }}</span></div>
+                  <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">Where</span><span>{{ f.venue }}</span></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 12px;letter-spacing:-0.01em;">Recent results</h2>
+          <sc-if value="{{ noResults }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:28px 24px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No matches have been played yet.</div>
+          </sc-if>
+          <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ resFixtures }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #F3F3F4;">
+                <div style="{{ f.resIcon }}">{{ f.resGlyph }}</div>
+                <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;color:#0D0C22;">vs {{ f.opp }}</div><div style="font-size:13px;color:#9E9EA7;">{{ f.date }} · {{ f.stage }}</div></div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:{{ f.resColor }};">{{ f.result }}</div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== PROFILE ===== -->
+        <sc-if value="{{ rIsProfile }}" hint-placeholder-val="">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:28px;">
+            <div style="width:66px;height:66px;border-radius:9999px;background:#0D0C22;color:#FDFCFB;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex:none;">{{ userInitials }}</div>
+            <div style="flex:1;min-width:200px;">
+              <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 2px;">{{ userName }}</h1>
+              <div style="font-size:14px;color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">{{ userHandle }} · {{ profileTeamLabel }}</div>
+            </div>
+            <button onClick="{{ signOut }}" style="background:#fff;color:#0D0C22;border:1px solid #DBDBDE;border-radius:9999px;padding:10px 20px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Sign out</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;">
+            <!-- personal -->
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 16px;letter-spacing:-0.01em;">Personal details</h2>
+              <sc-for list="{{ profileRows }}" as="r" hint-placeholder-count="6">
+                <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #F3F3F4;">
+                  <span style="font-size:14px;color:#6E6D7A;">{{ r.label }}</span>
+                  <span style="font-size:14px;font-weight:600;color:#0D0C22;text-align:right;">{{ r.value }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ regionLocked }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:center;gap:9px;padding:14px 0 2px;font-size:13px;color:#6E6D7A;">
+                  <span style="flex:none;padding:2px 9px;border-radius:9999px;background:#F3F3F4;color:#524B63;font-size:11px;font-weight:600;letter-spacing:0.04em;">LOCKED</span>
+                  <span>Region can't be changed — you've played matches this season.</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ regionUnlocked }}" hint-placeholder-val="">
+                <div style="display:flex;align-items:center;gap:9px;padding:14px 0 2px;font-size:13px;color:#6E6D7A;">
+                  <span style="flex:none;padding:2px 9px;border-radius:9999px;background:#FDECEA;color:#A81810;font-size:11px;font-weight:600;letter-spacing:0.04em;">EDITABLE</span>
+                  <span>You can still change your region — you haven't played a match yet.</span>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- notifications -->
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 6px;letter-spacing:-0.01em;">Notifications</h2>
+              <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 16px;">How you receive confirmations and draw alerts.</p>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <sc-for list="{{ notifyProfileOpts }}" as="o" hint-placeholder-count="3">
+                  <button onClick="{{ o.onClick }}" style="{{ o.style }}">
+                    <div style="font-size:15px;font-weight:600;color:#0D0C22;">{{ o.label }}</div>
+                    <div style="font-size:13px;color:#6E6D7A;margin-top:2px;">{{ o.desc }}</div>
+                  </button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ savedMsg }}" hint-placeholder-val=""><div style="color:#16A34A;font-size:13px;font-weight:600;margin-top:14px;">✓ {{ savedMsg }}</div></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </sc-if>
+
+  <!-- ============================ PLAYER DETAIL MODAL ============================ -->
+  <sc-if value="{{ playerDetail }}" hint-placeholder-val="">
+    <div onClick="{{ closePlayer }}" style="position:fixed;inset:0;z-index:90;background:rgba(13,12,34,0.5);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:clamp(16px,5vh,64px) 16px;overflow-y:auto;">
+      <div onClick="{{ playerDetail.stop }}" style="width:100%;max-width:520px;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(13,12,34,0.3);overflow:hidden;">
+        <div style="background:#0D0C22;color:#FDFCFB;padding:24px 24px 22px;position:relative;">
+          <button onClick="{{ closePlayer }}" style="position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:9999px;border:none;background:rgba(255,255,255,0.12);color:#FDFCFB;font-size:16px;cursor:pointer;" style-hover="background:rgba(255,255,255,0.22);">✕</button>
+          <div style="display:flex;align-items:center;gap:16px;">
+            {{ playerDetail.avatarEl }}
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px;">
+                <span style="font-size:21px;font-weight:700;letter-spacing:-0.02em;">{{ playerDetail.name }}</span>
+                {{ playerDetail.flagEl }}
+              </div>
+              <div style="font-size:13.5px;color:#DBDBDE;">{{ playerDetail.region }} · Rank {{ playerDetail.rank }}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:22px;margin-top:20px;font-family:'IBM Plex Mono',monospace;">
+            <div><div style="font-size:20px;font-weight:600;">{{ playerDetail.played }}</div><div style="font-size:11px;color:#9E9EA7;letter-spacing:0.04em;">PLAYED</div></div>
+            <div><div style="font-size:20px;font-weight:600;">{{ playerDetail.record }}</div><div style="font-size:11px;color:#9E9EA7;letter-spacing:0.04em;">W–L</div></div>
+            <div><div style="font-size:20px;font-weight:600;color:#F09B92;">{{ playerDetail.points }}</div><div style="font-size:11px;color:#9E9EA7;letter-spacing:0.04em;">POINTS</div></div>
+            <div style="margin-left:auto;align-self:center;"><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:9999px;font-size:12px;font-weight:600;background:{{ playerDetail.badgeBg }};color:{{ playerDetail.badgeColor }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ playerDetail.dotColor }};"></span>{{ playerDetail.stage }}</span></div>
+          </div>
+        </div>
+        <div style="padding:20px 24px 24px;">
+          <div style="font-size:13px;font-weight:700;color:#0D0C22;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;">Match history</div>
+          <sc-for list="{{ playerDetail.history }}" as="m" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:13px;padding:11px 0;border-bottom:1px solid #F3F3F4;">
+              <div style="{{ m.resIcon }}">{{ m.resGlyph }}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14.5px;font-weight:600;color:#0D0C22;">vs {{ m.opp }}</div>
+                <div style="font-size:12.5px;color:#9E9EA7;">{{ m.date }} · {{ m.oppRegion }}</div>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:{{ m.resColor }};">{{ m.result }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================ DEMO STATE SWITCHER ============================ -->
+  <div style="position:fixed;right:18px;bottom:18px;z-index:100;display:flex;flex-direction:column;align-items:flex-end;">
+    <sc-if value="{{ switcherOpen }}" hint-placeholder-val="">
+      <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;box-shadow:0 14px 44px rgba(13,12,34,0.18);padding:14px;width:256px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0D0C22;margin-bottom:11px;">Demo states</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <sc-for list="{{ scenarioOpts }}" as="o" hint-placeholder-count="6"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
+        </div>
+        <div style="font-size:11.5px;color:#9E9EA7;margin-top:11px;line-height:1.45;">Preview empty and alternate states across Standings, Team, Fixtures and Profile.</div>
+      </div>
+    </sc-if>
+    <button onClick="{{ toggleSwitcher }}" style="display:flex;align-items:center;gap:8px;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:11px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(13,12,34,0.22);" style-hover="background:#16152B;"><span style="color:#E32219;">◆</span> Demo states</button>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:720}}">
+class Component extends DCLogic {
+  state = {
+    authed:false, route:'signin', 
+    si:{email:'',pass:''}, siError:'',
+    regStep:1,
+    reg:{name:'',dob:'',gender:'',town:'',photo:false,email:'',mobile:'',username:'',pass:'',region:'',venue:'',venueOther:'',notify:''},
+    regErrors:{},
+    stTab:'male', stRegion:'All', stStage:'All', selectedPlayer:null, filterOpen:false, menuOpen:false,
+    roster:[
+      {name:'Brian Otieno',user:'@brian_o',role:'Captain'},
+      {name:'Kevin Mwangi',user:'@kev_m',role:'Player'},
+      {name:'Joseph Kamau',user:'@joe_k',role:'Player'},
+      {name:'Victor Omondi',user:'@vic_o',role:'Player'},
+      {name:'Peter Njoroge',user:'@pete_n',role:'Player'},
+      {name:'Daniel Mutua',user:'@dan_m',role:'Player'},
+    ],
+    addQuery:'', addMsg:'', addOk:false,
+    notifyPref:'both', savedMsg:'',
+    scenario:'default', switcherOpen:false
+  };
+
+  REGIONS = ['Nairobi A','Nairobi B','Central','Eastern','Coast','Rift A','Rift B','Nyanza & Western'];
+  VENUES = {
+    'Nairobi A':['Westlands Cue Club','CBD Pool Lounge','Kilimani Rack House'],
+    'Nairobi B':['Eastlands Break Room','Buruburu Pool Bar','Donholm Cue Spot'],
+    'Central':['Nyeri Central Club','Thika Rack & Roll','Muranga Pool Hall'],
+    'Eastern':['Machakos Cue Arena','Embu Pool Lounge'],
+    'Coast':['Mombasa Bahari Club','Nyali Cue Deck','Diani Break Point'],
+    'Rift A':['Nakuru Rift Club','Naivasha Pool House'],
+    'Rift B':['Eldoret Highland Cue','Kericho Tea Cup Pool'],
+    'Nyanza & Western':['Kisumu Lakeside Club','Kakamega Cue Centre','Kisii Pool Arena']
+  };
+  TAKEN = ['brian_o','admin','cuevo','mercy','kev_m'];
+  STANDINGS = {
+    male:[
+      {name:'Brian Otieno',region:'Nairobi A',played:14,stage:'Circuit',points:320},
+      {name:'Kevin Mwangi',region:'Rift A',played:14,stage:'Circuit',points:305},
+      {name:'Samuel Kiptoo',region:'Rift B',played:13,stage:'Circuit',points:288},
+      {name:'Joseph Kamau',region:'Central',played:14,stage:'Circuit',points:271},
+      {name:'Victor Omondi',region:'Coast',played:12,stage:'Regional',points:210},
+      {name:'Daniel Mutua',region:'Eastern',played:12,stage:'Regional',points:198},
+      {name:'Peter Njoroge',region:'Nairobi B',played:11,stage:'Regional',points:176},
+      {name:'Collins Barasa',region:'Nyanza & Western',played:10,stage:'Grassroots',points:96},
+    ],
+    female:[
+      {name:'Mercy Wanjiru',region:'Nairobi A',played:13,stage:'Circuit',points:298},
+      {name:'Faith Chebet',region:'Rift B',played:13,stage:'Circuit',points:276},
+      {name:'Grace Achieng',region:'Nyanza & Western',played:12,stage:'Circuit',points:254},
+      {name:'Alice Njeri',region:'Central',played:12,stage:'Regional',points:205},
+      {name:'Sharon Auma',region:'Coast',played:11,stage:'Regional',points:188},
+      {name:'Cynthia Mueni',region:'Eastern',played:11,stage:'Regional',points:170},
+      {name:'Nancy Wafula',region:'Nairobi B',played:10,stage:'Grassroots',points:88},
+      {name:'Diana Cheruiyot',region:'Rift A',played:9,stage:'Grassroots',points:72},
+    ],
+    team:[
+      {name:'Westlands Cue Kings',region:'Nairobi A',record:'12–2',stage:'Circuit',points:340},
+      {name:'Rift Valley Racks',region:'Rift A',record:'11–3',stage:'Circuit',points:312},
+      {name:'Coastal Breakers',region:'Coast',record:'10–3',stage:'Circuit',points:285},
+      {name:'Central Cue Masters',region:'Central',record:'10–4',stage:'Regional',points:220},
+      {name:'Lakeside Potters',region:'Nyanza & Western',record:'9–4',stage:'Regional',points:198},
+      {name:'Eastlands Snipers',region:'Nairobi B',record:'8–5',stage:'Regional',points:176},
+      {name:'Highland Hustlers',region:'Rift B',record:'7–6',stage:'Grassroots',points:92},
+      {name:'Eastern Aces',region:'Eastern',record:'6–6',stage:'Grassroots',points:80},
+    ]
+  };
+  UP=[
+    {type:'Team match',opp:'Rift Valley Racks',stage:'Circuit',date:'Sat 12 Jul',time:'3:00 PM',venue:'Westlands Cue Club'},
+    {type:'Individual',opp:'Kevin Mwangi',stage:'Circuit',date:'Sun 13 Jul',time:'11:00 AM',venue:'Kilimani Rack House'},
+    {type:'Team match',opp:'Coastal Breakers',stage:'Circuit',date:'Sat 19 Jul',time:'1:00 PM',venue:'CBD Pool Lounge'},
+  ];
+  RES=[
+    {opp:'Central Cue Masters',stage:'Circuit',date:'Sat 5 Jul',result:'Won 5–3',won:true},
+    {opp:'Daniel Mutua',stage:'Circuit',date:'Sun 29 Jun',result:'Won 4–2',won:true},
+    {opp:'Eastlands Snipers',stage:'Regional',date:'Sat 21 Jun',result:'Lost 2–5',won:false},
+  ];
+  MEMBER_ROSTER=[
+    {name:'Kevin Mwangi',user:'@kev_m',role:'Captain'},
+    {name:'Brian Otieno',user:'@brian_o',role:'Player'},
+    {name:'Joseph Kamau',user:'@joe_k',role:'Player'},
+    {name:'Victor Omondi',user:'@vic_o',role:'Player'},
+    {name:'Peter Njoroge',user:'@pete_n',role:'Player'},
+  ];
+  SCENARIOS=[
+    ['default','Established captain'],
+    ['member','Team member (not captain)'],
+    ['noTeam','No team yet'],
+    ['noFixtures','No upcoming matches'],
+    ['emptyStandings','Empty standings'],
+    ['fresh','Fresh account']
+  ];
+  switcherOptStyle(active){ return `text-align:left;padding:9px 12px;border-radius:10px;border:1px solid ${active?'#E32219':'#E7E7E9'};background:${active?'#FDECEA':'#fff'};color:${active?'#A81810':'#3A3546'};font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;`; }
+
+  FIRST_M=['Brian','Kevin','Samuel','Joseph','Victor','Daniel','Peter','Collins','Dennis','Michael','James','Anthony','Charles','George','Patrick','Simon','Stephen','Vincent','Eric','Felix','Kelvin','Isaac','Emmanuel','Duncan','Nicholas','Robert','Fredrick','Martin','Paul','David'];
+  FIRST_F=['Mercy','Faith','Grace','Alice','Sharon','Cynthia','Nancy','Diana','Joan','Ruth','Esther','Lydia','Caroline','Beatrice','Winnie','Purity','Lucy','Anne','Janet','Rose','Irene','Susan','Christine','Damaris','Eunice','Mary','Brenda','Terry','Valentine','Nelly'];
+  SUR=['Otieno','Mwangi','Kiptoo','Kamau','Omondi','Mutua','Njoroge','Barasa','Achieng','Wanjiru','Chebet','Njeri','Auma','Mueni','Wafula','Cheruiyot','Kariuki','Onyango','Wekesa','Maina','Owino','Kimani','Mutiso','Nyongesa','Ochieng','Kibet','Gitau','Muthoni','Odhiambo','Langat'];
+  TEAM_PRE=['Westlands','Rift Valley','Coastal','Central','Lakeside','Eastlands','Highland','Eastern','Nyali','Thika','Nakuru','Kisumu','Mombasa','Eldoret','Nyeri','Kericho','Machakos','Kakamega','Embu','Naivasha'];
+  TEAM_SUF=['Cue Kings','Racks','Breakers','Cue Masters','Potters','Snipers','Hustlers','Aces','Sharks','Titans','Legends','Chasers','Stars','Cueists'];
+
+  _seed(n){ const x=Math.sin(n*127.1+311.7)*43758.5453; return x-Math.floor(x); }
+  _teamName(i){ const pre=this.TEAM_PRE[Math.floor(this._seed(i+3)*this.TEAM_PRE.length)%this.TEAM_PRE.length]; const suf=this.TEAM_SUF[Math.floor(this._seed(i+17)*this.TEAM_SUF.length)%this.TEAM_SUF.length]; return pre+' '+suf; }
+  buildCat(kind){
+    const count = kind==='team'?40:(kind==='male'?128:96);
+    const off = kind==='male'?1000:(kind==='female'?2000:3000);
+    const arr=[];
+    const used={};
+    for(let i=0;i<count;i++){
+      const region=this.REGIONS[Math.floor(this._seed(i+off+7)*8)%8];
+      let name, avatar=0;
+      if(kind==='team'){ let n=this._teamName(i+off); let g=0; while(used[n]){ n=this._teamName(i+off+ (++g)*53); } used[n]=1; name=n; }
+      else {
+        const fn=(kind==='male'?this.FIRST_M:this.FIRST_F)[Math.floor(this._seed(i+off+11)*30)%30];
+        const sn=this.SUR[Math.floor(this._seed(i+off+23)*30)%30];
+        name=fn+' '+sn; avatar=(Math.floor(this._seed(i+off+29)*70)%70)+1;
+      }
+      const won=4+Math.floor(this._seed(i+off+31)*12);
+      const lost=Math.floor(this._seed(i+off+41)*9);
+      const played=won+lost;
+      const points=Math.round(won*20 + this._seed(i+off+53)*40 - lost*4);
+      arr.push({id:kind+'-'+i,kind,name,region,won,lost,played,points,country:'ke',avatar});
+    }
+    arr.sort((a,b)=> b.points-a.points || a.name.localeCompare(b.name));
+    arr.forEach((p,idx)=>{ p.rank=idx+1; p.stage = p.points>=340?'Finals':p.points>=250?'Circuit':p.points>=150?'Regional':'Grassroots'; });
+    return arr;
+  }
+  getData(){ if(!this._data){ this._data={male:this.buildCat('male'),female:this.buildCat('female'),team:this.buildCat('team')}; } return this._data; }
+  buildHistory(p){
+    const pool=this.getData()[p.kind];
+    const dates=['Sat 5 Jul','Sun 29 Jun','Sat 21 Jun','Sun 15 Jun','Sat 7 Jun','Sun 1 Jun','Sat 24 May'];
+    const n=5+Math.floor(this._seed(p.rank+61)*3);
+    const out=[];
+    for(let k=0;k<n;k++){
+      let opp=pool[Math.floor(this._seed(p.rank*13+k+3)*pool.length)%pool.length];
+      if(opp.id===p.id) opp=pool[(pool.indexOf(opp)+1)%pool.length];
+      const won=this._seed(p.rank*7+k+5)>0.42;
+      const a=won?5:(2+Math.floor(this._seed(k+p.rank)*3));
+      const b=won?(1+Math.floor(this._seed(k+p.rank+2)*4)):5;
+      const [bg,col,dot]=this.stageStyle(p.stage);
+      out.push({opp:opp.name, oppRegion:opp.region, date:dates[k%dates.length], score:(won?a+'–'+b:a+'–'+b), result:(won?'Won':'Lost')+' '+a+'–'+b, won, stage:p.stage, badgeBg:bg,badgeColor:col,dotColor:dot,
+        resColor:won?'#16A34A':'#A81810', resGlyph:won?'W':'L',
+        resIcon:`width:30px;height:30px;border-radius:9999px;flex:none;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;background:${won?'#E7F6ED':'#FDECEA'};color:${won?'#16A34A':'#A81810'};`});
+    }
+    return out;
+  }
+
+  stageStyle(stage){
+    const m={
+      Grassroots:['rgba(110,109,122,0.14)','#3A3546','#6E6D7A'],
+      Regional:['#E7F6ED','#0E6A30','#16A34A'],
+      Circuit:['#FDECEA','#A81810','#E32219'],
+      Finals:['#0D0C22','#FDFCFB','#0D0C22']
+    };
+    return m[stage]||m.Grassroots;
+  }
+  chip(sel){ return `flex:1;min-width:0;text-align:center;padding:11px 14px;border-radius:9999px;border:1px solid ${sel?'#0D0C22':'#DBDBDE'};background:${sel?'#0D0C22':'#fff'};color:${sel?'#FDFCFB':'#3A3546'};font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;`; }
+  pill(sel){ return `padding:9px 16px;border-radius:9999px;border:1px solid ${sel?'#E32219':'#DBDBDE'};background:${sel?'#FDECEA':'#fff'};color:${sel?'#A81810':'#3A3546'};font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;`; }
+  optCard(sel){ return `text-align:left;padding:14px 16px;border-radius:14px;border:1px solid ${sel?'#E32219':'#DBDBDE'};background:${sel?'#FDECEA':'#fff'};cursor:pointer;font-family:inherit;`; }
+  navStyle(active){ return `display:flex;align-items:center;padding:0 2px;font-size:15px;font-weight:600;color:${active?'#0D0C22':'#6E6D7A'};border-bottom:2px solid ${active?'#E32219':'transparent'};cursor:pointer;white-space:nowrap;`; }
+  tabStyle(active){ return `padding:11px 4px;font-size:15px;font-weight:600;color:${active?'#0D0C22':'#6E6D7A'};border-bottom:2px solid ${active?'#E32219':'transparent'};cursor:pointer;white-space:nowrap;`; }
+  pageBtnStyle(active){ return `min-width:34px;height:34px;padding:0 8px;border-radius:9px;border:1px solid ${active?'#0D0C22':'#DBDBDE'};background:${active?'#0D0C22':'#fff'};color:${active?'#FDFCFB':'#3A3546'};font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;cursor:pointer;`; }
+  initialsOf(n){ return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+  _avatarColor(n){ const pal=[['#0D0C22','#FDFCFB'],['#E32219','#FDECEA'],['#16A34A','#DCF3E4'],['#9C7318','#FCEFCB'],['#524B63','#F3F3F4']]; return pal[n%pal.length]; }
+
+  calcAge(dob){ if(!dob) return null; const d=new Date(dob); if(isNaN(d.getTime())) return null; const t=new Date(); let a=t.getFullYear()-d.getFullYear(); const m=t.getMonth()-d.getMonth(); if(m<0||(m===0&&t.getDate()<d.getDate())) a--; return a; }
+  normMobile(v){ if(!v) return ''; let s=v.replace(/[^0-9+]/g,''); if(s.startsWith('+')) return s; if(s.startsWith('0')) return '+254'+s.slice(1); if(s.startsWith('254')) return '+'+s; if(s.length) return '+254'+s; return ''; }
+  validMobile(v){ const n=this.normMobile(v); return /^\+\d{9,15}$/.test(n); }
+
+  go(r){ this.setState({route:r}); try{window.scrollTo(0,0);}catch(e){} }
+
+  validateStep(n){
+    const r=this.state.reg, e={};
+    if(n===1){
+      if(!r.name.trim()) e.name='Please enter your full name.';
+      const age=this.calcAge(r.dob);
+      if(!r.dob) e.dob='Please enter your date of birth.';
+      else if(age===null) e.dob='That date is not valid.';
+      else if(age<18) e.dob='You must be at least 18 to register.';
+      if(!r.town.trim()) e.town='Please enter your town.';
+      if(!r.gender) e.gender='Please select a category.';
+    } else if(n===2){
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email)) e.email='Enter a valid email address.';
+      if(!this.validMobile(r.mobile)) e.mobile='Enter a valid mobile number.';
+      if(!r.username.trim()) e.username='Choose a username.';
+      else if(this.TAKEN.includes(r.username.trim().toLowerCase())) e.username='That username is already taken.';
+      if(r.pass.length<6) e.pass='Password must be at least 6 characters.';
+    } else if(n===3){
+      if(!r.region) e.region='Select your region.';
+      if(r.region){
+        if(!r.venue) e.venue='Select a preferred venue.';
+        else if(r.venue==='Other' && !r.venueOther.trim()) e.venue='Please type the venue name.';
+      }
+    } else if(n===4){
+      if(!r.notify) e.notify='Please choose a notification preference.';
+    }
+    return e;
+  }
+
+  renderVals(){
+    const S=this.state;
+    const SC={
+      default:{team:'captain',upcoming:true,results:true,standings:true,locked:true,fresh:false},
+      member:{team:'member',upcoming:true,results:true,standings:true,locked:true,fresh:false},
+      noTeam:{team:'none',upcoming:true,results:true,standings:true,locked:true,fresh:false},
+      noFixtures:{team:'captain',upcoming:false,results:false,standings:true,locked:true,fresh:false},
+      emptyStandings:{team:'captain',upcoming:true,results:true,standings:false,locked:true,fresh:false},
+      fresh:{team:'none',upcoming:false,results:false,standings:true,locked:false,fresh:true}
+    };
+    const cfg=SC[S.scenario]||SC.default;
+    const scenarioOpts=this.SCENARIOS.map(([key,label])=>({label,active:S.scenario===key,style:this.switcherOptStyle(S.scenario===key),onClick:()=>this.setState({scenario:key,savedMsg:''})}));
+    const setReg=(k)=>(e)=> this.setState(s=>({reg:{...s.reg,[k]:e.target.value}, regErrors:{...s.regErrors,[k]:''}}));
+    const chooseReg=(k,v,extra)=>()=> this.setState(s=>({reg:{...s.reg,[k]:v,...(extra||{})}, regErrors:{...s.regErrors,[k]:'',...(k==='region'?{venue:''}:{})}}));
+
+    // --- registration option arrays ---
+    const genderOpts=[
+      {label:'Male',onClick:chooseReg('gender','Male'),style:this.chip(S.reg.gender==='Male')},
+      {label:'Female',onClick:chooseReg('gender','Female'),style:this.chip(S.reg.gender==='Female')},
+    ];
+    const regionOpts=this.REGIONS.map(name=>({label:name,onClick:chooseReg('region',name,{venue:'',venueOther:''}),style:this.pill(S.reg.region===name)}));
+    const vlist=(this.VENUES[S.reg.region]||[]).concat(['Other']);
+    const venueOpts=vlist.map(v=>({label:v,onClick:chooseReg('venue',v),style:this.pill(S.reg.venue===v)}));
+    const notifyDefs=[['email','Email','Confirmations and draws by email.'],['sms','SMS','Text messages to your mobile.'],['both','Both','Email and SMS — never miss a draw.']];
+    const notifyOpts=notifyDefs.map(([val,label,desc])=>({label,desc,onClick:chooseReg('notify',val),style:this.optCard(S.reg.notify===val)}));
+
+    const age=this.calcAge(S.reg.dob);
+    const ageHint = (age!==null && age>=0) ? ('Age '+age+(age>=18?'':' — must be 18+')) : '';
+    const mobileHint = this.validMobile(S.reg.mobile) ? this.normMobile(S.reg.mobile) : '';
+    const uname=S.reg.username.trim().toLowerCase();
+    const usernameOk = uname.length>0 && !this.TAKEN.includes(uname) && !S.regErrors.username;
+
+    // --- standings ---
+    const isTeam=S.stTab==='team';
+    const full=this.getData()[S.stTab];
+    const filtered=full.filter(p=>(S.stRegion==='All'||p.region===S.stRegion)&&(S.stStage==='All'||p.stage===S.stStage));
+    const stRows=filtered.map(p=>{
+      const [bg,col,dot]=this.stageStyle(p.stage);
+      return {...p, rankLabel:String(p.rank), rankColor:p.rank===1?'#9C7318':'#0D0C22',
+        badgeBg:bg,badgeColor:col,dotColor:dot,
+        record:p.won+'–'+p.lost, playedStr:String(p.played),
+        isTeam,
+        avatarEl: isTeam
+          ? React.createElement('div',{style:{width:'34px',height:'34px',borderRadius:'9px',background:'#0D0C22',color:'#FDFCFB',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:700,flex:'none'}}, this.initialsOf(p.name))
+          : (()=>{ const [bg,fg]=this._avatarColor(p.avatar); return React.createElement('div',{style:{width:'34px',height:'34px',borderRadius:'9999px',flex:'none',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:700,background:bg,color:fg}}, this.initialsOf(p.name)); })(),
+        flagEl: React.createElement('img',{src:(window.__resources&&window.__resources.flagKe)||('https://flagcdn.com/40x30/'+p.country+'.png'),alt:'KE',style:{width:'20px',height:'15px',borderRadius:'2px',flex:'none',border:'1px solid rgba(13,12,34,0.14)'}}),
+        rowStyle: p.rank===1? 'border-left:4px solid #E32219;cursor:pointer;' : 'border-left:4px solid transparent;cursor:pointer;',
+        onClick:()=>this.setState({selectedPlayer:p})};
+    });
+    const stTabs=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([k,label])=>({label,onClick:()=>this.setState({stTab:k,stRegion:'All',stStage:'All',stPage:1}),style:this.tabStyle(S.stTab===k)}));
+    const stRegionOpts=['All',...this.REGIONS].map(r=>({value:r,label:r==='All'?'All regions':r}));
+    const stStageOpts=['All','Finals','Circuit','Regional','Grassroots'].map(s=>({value:s,label:s==='All'?'All stages':s}));
+    const activeFilterCount=(S.stRegion!=='All'?1:0)+(S.stStage!=='All'?1:0);
+    // player detail
+    const sel=S.selectedPlayer;
+    const selBadge = sel?this.stageStyle(sel.stage):['','',''];
+    const playerDetail = sel ? {
+      name:sel.name, region:sel.region, stage:sel.stage, points:String(sel.points),
+      record:sel.won+'–'+sel.lost, won:String(sel.won), lost:String(sel.lost), played:String(sel.played), rank:'#'+sel.rank,
+      isTeam:sel.kind==='team',
+      avatarEl: sel.kind==='team'
+        ? React.createElement('div',{style:{width:'60px',height:'60px',borderRadius:'14px',background:'#E32219',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'20px',fontWeight:700,flex:'none'}}, this.initialsOf(sel.name))
+        : (()=>{ const [bg,fg]=this._avatarColor(sel.avatar); return React.createElement('div',{style:{width:'60px',height:'60px',borderRadius:'9999px',flex:'none',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'20px',fontWeight:700,background:bg,color:fg}}, this.initialsOf(sel.name)); })(),
+      flagEl: React.createElement('img',{src:(window.__resources&&window.__resources.flagKe)||('https://flagcdn.com/40x30/'+sel.country+'.png'),alt:'KE',style:{width:'22px',height:'16px',borderRadius:'2px',flex:'none',border:'1px solid rgba(255,255,255,0.35)'}}),
+      badgeBg:selBadge[0], badgeColor:selBadge[1], dotColor:selBadge[2],
+      history:this.buildHistory(sel), stop:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); }
+    } : null;
+
+    // --- team ---
+    const teamMode=cfg.team;
+    const rosterSource = teamMode==='member' ? this.MEMBER_ROSTER : S.roster;
+    const captainName = (rosterSource.find(p=>p.role==='Captain')||{}).name || '';
+    const count=rosterSource.length;
+    const eligible = count>=5 && count<=8;
+    const rosterSlots=Array.from({length:8},(_,i)=>({style:`flex:1;height:8px;border-radius:9999px;background:${i<count?(eligible?'#0D0C22':'#E32219'):'#E7E7E9'};`}));
+    const rosterRows=rosterSource.map((p,i)=>({...p, initials:this.initialsOf(p.name), isCaptain:p.role==='Captain', canRemove: teamMode==='captain' && p.role!=='Captain',
+      avatarStyle:`width:38px;height:38px;border-radius:9999px;flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;background:${p.role==='Captain'?'#0D0C22':'#F3F3F4'};color:${p.role==='Captain'?'#FDFCFB':'#524B63'};`,
+      remove:()=>this.setState(s=>({roster:s.roster.filter((_,idx)=>idx!==i), addMsg:'', addOk:false}))}));
+    const eligBadgeStyle = eligible
+      ? 'padding:5px 14px;border-radius:9999px;font-size:13px;font-weight:600;background:#E7F6ED;color:#16A34A;flex:none;'
+      : 'padding:5px 14px;border-radius:9999px;font-size:13px;font-weight:600;background:#FDECEA;color:#A81810;flex:none;';
+    const eligBadge = eligible ? '● Eligible for draws' : '● Needs '+(5-count)+' more';
+    const eligMessage = eligible
+      ? 'Your team meets the 5–8 player requirement and is eligible for draws.'
+      : 'A team needs at least 5 players to be eligible for draws. Add '+(5-count)+' more.';
+    const addPlayer=()=>{
+      const q=S.addQuery.trim();
+      if(!q){ this.setState({addMsg:'Type a player name or username to add.',addOk:false}); return; }
+      if(S.roster.length>=8){ this.setState({addMsg:'Roster is full — the maximum is 8 players.',addOk:false}); return; }
+      const handle='@'+q.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,14);
+      this.setState(s=>({roster:[...s.roster,{name:q,user:handle,role:'Player'}], addQuery:'', addMsg:'“'+q+'” was added to your roster.', addOk:true}));
+    };
+    const addMsgStyle = S.addOk
+      ? 'color:#16A34A;font-size:13px;font-weight:600;margin-top:12px;'
+      : 'color:#A81810;font-size:13px;font-weight:600;margin-top:12px;';
+
+    // --- fixtures ---
+    const upSource = cfg.team==='none' ? this.UP.filter(f=>f.type==='Individual') : this.UP;
+    const upFixtures=(cfg.upcoming?upSource:[]).map(f=>{ const [bg,col,dot]=this.stageStyle(f.stage); return {...f,badgeBg:bg,badgeColor:col,dotColor:dot}; });
+    const resFixtures=(cfg.results?this.RES:[]).map(f=>({...f,
+      resColor: f.won?'#16A34A':'#A81810',
+      resGlyph: f.won?'W':'L',
+      resIcon:`width:34px;height:34px;border-radius:9999px;flex:none;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;background:${f.won?'#E7F6ED':'#FDECEA'};color:${f.won?'#16A34A':'#A81810'};`
+    }));
+
+    // --- profile ---
+    const profileRows=[
+      {label:'Username',value:'@brian_o'},
+      {label:'Category',value:'Male'},
+      {label:'Date of birth',value:'12 Mar 1994'},
+      {label:'Region',value:'Nairobi A'},
+      {label:'Preferred venue',value:'Westlands Cue Club'},
+      {label:'Email',value:'brian.otieno@example.com'},
+      {label:'Mobile',value:'+254712345678'},
+      {label:'Town',value:'Nairobi'},
+    ];
+    const setPref=(v)=>()=>this.setState({notifyPref:v,savedMsg:'Notification preference saved.'});
+    const notifyProfileOpts=notifyDefs.map(([val,label,desc])=>({label,desc,onClick:setPref(val),style:this.optCard(S.notifyPref===val)}));
+
+    // --- nav ---
+    const navDefs=[['fixtures','Fixtures'],['standings','Standings'],['team','My Team']];
+    const navItems=navDefs.map(([r,label])=>({label,onClick:()=>this.go(r),style:this.navStyle(S.route===r)}));
+
+    return {
+      // shell
+      showAuth:!S.authed, isSignin:S.route==='signin', isRegister:S.route==='register',
+      showApp:S.authed, rIsStandings:S.route==='standings', rIsTeam:S.route==='team', rIsFixtures:S.route==='fixtures', rIsProfile:S.route==='profile',
+      go:{signin:()=>this.go('signin'), register:()=>{this.setState({regStep:1});this.go('register');}, standings:()=>this.go('standings'), team:()=>this.go('team'), fixtures:()=>this.go('fixtures'), profile:()=>this.go('profile')},
+      menuOpen:S.menuOpen,
+      toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})),
+      closeMenu:()=>this.setState({menuOpen:false}),
+      menuProfile:()=>{ this.setState({menuOpen:false}); this.go('profile'); },
+      menuSettings:()=>{ this.setState({menuOpen:false}); this.go('profile'); },
+      menuLogout:()=>{ this.setState({menuOpen:false,authed:false,route:'signin',si:{email:'',pass:''}}); try{window.scrollTo(0,0);}catch(e){} },
+      noop:(e)=>{ if(e&&e.preventDefault)e.preventDefault(); },
+      navItems, userInitials:'BO', userName:'Brian Otieno', userHandle:'@brian_o', teamName:'Westlands Cue Kings', teamRegion:'Nairobi A',
+      // signin
+      si:S.si, siError:S.siError,
+      siH:{email:(e)=>this.setState(s=>({si:{...s.si,email:e.target.value},siError:''})), pass:(e)=>this.setState(s=>({si:{...s.si,pass:e.target.value},siError:''}))},
+      signIn:()=>{ if(!S.si.email.trim()||!S.si.pass){ this.setState({siError:'Enter your email/username and password to continue.'}); return; } this.setState({authed:true,route:'fixtures',siError:''}); try{window.scrollTo(0,0);}catch(e){} },
+      signOut:()=>{ this.setState({authed:false,route:'signin',si:{email:'',pass:''}}); try{window.scrollTo(0,0);}catch(e){} },
+      // register
+      regStep:S.regStep, regProgress:(Math.min(S.regStep,4)/4*100)+'%',
+      regInProgress:S.regStep<=4, rs1:S.regStep===1, rs2:S.regStep===2, rs3:S.regStep===3, rs4:S.regStep===4, rs5:S.regStep===5,
+      canBack:S.regStep>1 && S.regStep<5, nextLabel:S.regStep===4?'Create account':'Continue',
+      reg:S.reg, err:S.regErrors,
+      h:{name:setReg('name'),dob:setReg('dob'),town:setReg('town'),email:setReg('email'),mobile:setReg('mobile'),username:setReg('username'),pass:setReg('pass'),venueOther:setReg('venueOther')},
+      togglePhoto:()=>this.setState(s=>({reg:{...s.reg,photo:!s.reg.photo}})),
+      photoStyle:`width:64px;height:64px;border-radius:9999px;flex:none;display:flex;align-items:center;justify-content:center;font-size:${S.reg.photo?'20px':'12px'};font-weight:600;cursor:pointer;border:2px dashed ${S.reg.photo?'#E32219':'#DBDBDE'};background:${S.reg.photo?'#FDECEA':'#FAF9FB'};color:${S.reg.photo?'#A81810':'#9E9EA7'};text-align:center;line-height:1.1;`,
+      photoText: S.reg.photo ? (S.reg.name?this.initialsOf(S.reg.name):'✓') : 'Add photo',
+      genderOpts, regionOpts, venueOpts, notifyOpts,
+      hasRegion:!!S.reg.region, venueIsOther:S.reg.venue==='Other',
+      ageHint, mobileHint, usernameOk,
+      notifyLabel: S.reg.notify==='both'?'email and SMS':(S.reg.notify==='sms'?'SMS':'email'),
+      regNext:()=>{ const e=this.validateStep(S.regStep); if(Object.keys(e).length){ this.setState({regErrors:e}); return; } this.setState({regStep:S.regStep+1,regErrors:{}}); try{window.scrollTo(0,0);}catch(err){} },
+      regBack:()=>{ this.setState({regStep:Math.max(1,S.regStep-1),regErrors:{}}); },
+      finishReg:()=>{ this.setState({authed:true,route:'fixtures'}); try{window.scrollTo(0,0);}catch(e){} },
+      // standings
+      stTabs, stRows, nameColLabel:isTeam?'Team':'Player', isTeamTab:isTeam,
+      stRegion:S.stRegion, stStage:S.stStage, stRegionOpts, stStageOpts,
+      onStRegion:(e)=>this.setState({stRegion:e.target.value}),
+      onStStage:(e)=>this.setState({stStage:e.target.value}),
+      totalCount:String(filtered.length),
+      hasResultsRows:filtered.length>0, noFilterResults:filtered.length===0,
+      filterOpen:S.filterOpen, activeFilterCount:String(activeFilterCount), hasActiveFilters:activeFilterCount>0,
+      toggleFilter:()=>this.setState(s=>({filterOpen:!s.filterOpen})),
+      closeFilter:()=>this.setState({filterOpen:false}),
+      clearFilters:()=>this.setState({stRegion:'All',stStage:'All'}),
+      jumpTop:()=>{const el=document.getElementById('st-scroll'); if(el)el.scrollTo({top:0,behavior:'smooth'});},
+      jumpBottom:()=>{const el=document.getElementById('st-scroll'); if(el)el.scrollTo({top:el.scrollHeight,behavior:'smooth'});},
+      playerDetail, closePlayer:()=>this.setState({selectedPlayer:null}),
+      // team
+      rosterRows, rosterSlots, rosterCount:count, eligBadge, eligBadgeStyle, eligMessage,
+      addQuery:S.addQuery, addH:(e)=>this.setState({addQuery:e.target.value,addMsg:'',addOk:false}), addPlayer, addMsg:S.addMsg, addMsgStyle,
+      // fixtures
+      upFixtures, resFixtures,
+      // profile
+      profileRows, notifyProfileOpts, savedMsg:S.savedMsg,
+      profileTeamLabel: cfg.team==='none' ? 'No team yet' : 'Westlands Cue Kings',
+      regionLocked: cfg.locked, regionUnlocked: !cfg.locked,
+      // demo states
+      hasStandings: cfg.standings, noStandings: !cfg.standings,
+      hasUpcoming: cfg.upcoming, noUpcoming: !cfg.upcoming, hasResults: cfg.results, noResults: !cfg.results,
+      hasTeam: cfg.team!=='none', teamNone: cfg.team==='none',
+      teamCaptainMode: cfg.team==='captain', teamMemberMode: cfg.team==='member', captainName,
+      freshAccount: cfg.fresh,
+      scenario:S.scenario, scenarioOpts, switcherOpen:S.switcherOpen,
+      toggleSwitcher:()=>this.setState(s=>({switcherOpen:!s.switcherOpen})),
+      createTeam:()=>{ this.setState({roster:[{name:'Brian Otieno',user:'@brian_o',role:'Captain'}], scenario:'default'}); try{window.scrollTo(0,0);}catch(e){} }
+    };
+  }
+}
+</script>
+</body>
+</html>
