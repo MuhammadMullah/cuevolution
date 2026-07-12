@@ -71,6 +71,8 @@ defmodule Cuevolution.MixProject do
       {:ex_phone_number, "~> 0.4"},
       {:ex_twilio, "~> 0.10"},
       {:mogrify, "~> 0.9"},
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
       {:ex_machina, "~> 2.8", only: :test},
       {:mox, "~> 1.2", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

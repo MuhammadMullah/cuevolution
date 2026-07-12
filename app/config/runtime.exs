@@ -41,13 +41,57 @@ if config_env() == :prod do
     # pool_count: 4,
     socket_options: maybe_ipv6
 
-  # Profile picture uploads (see Cuevolution.Accounts.ProfilePicture) are
-  # written outside the release's own priv/static, onto a volume mounted at
-  # this path — priv/static lives inside the release's versioned directory,
-  # which is replaced wholesale on every deploy, so anything written there
-  # doesn't survive a redeploy. Caddy serves /uploads/* directly from the
-  # same volume (see Caddyfile) rather than through the app.
-  config :cuevolution, :uploads_dir, System.get_env("UPLOADS_DIR", "/data/uploads")
+  # ## Configuring profile picture storage (Backblaze B2)
+  #
+  # A Mix release's own priv/static lives inside the release's versioned
+  # directory, replaced wholesale on every deploy — anything written there
+  # (Storage.Local, the dev/test default) doesn't survive a redeploy. B2 is
+  # a real object store instead — see Cuevolution.Accounts.ProfilePicture.Storage.Backblaze.
+  backblaze_key_id =
+    System.get_env("BACKBLAZE_KEY_ID") ||
+      raise """
+      environment variable BACKBLAZE_KEY_ID is missing.
+      Application Key ID from your B2 bucket's application key.
+      """
+
+  backblaze_application_key =
+    System.get_env("BACKBLAZE_APPLICATION_KEY") ||
+      raise """
+      environment variable BACKBLAZE_APPLICATION_KEY is missing.
+      The application key itself, shown once when you create it.
+      """
+
+  backblaze_bucket =
+    System.get_env("BACKBLAZE_BUCKET") ||
+      raise """
+      environment variable BACKBLAZE_BUCKET is missing.
+      The bucket name (must be public — see deploy/README.md).
+      """
+
+  # B2's S3-compatible endpoint always has the shape
+  # "s3.<region>.backblazeb2.com" (shown as "Endpoint" on the bucket's
+  # details page) — the region segment is required for SigV4 request
+  # signing, so it's parsed out here instead of asking for it twice.
+  backblaze_endpoint =
+    System.get_env("BACKBLAZE_ENDPOINT") ||
+      raise """
+      environment variable BACKBLAZE_ENDPOINT is missing.
+      E.g. "s3.us-west-004.backblazeb2.com" — shown as "Endpoint" on the
+      bucket's details page in the B2 dashboard.
+      """
+
+  backblaze_region = backblaze_endpoint |> String.split(".") |> Enum.at(1)
+
+  config :cuevolution,
+         :profile_picture_storage,
+         Cuevolution.Accounts.ProfilePicture.Storage.Backblaze
+
+  config :cuevolution, :backblaze, bucket: backblaze_bucket, host: backblaze_endpoint
+
+  config :ex_aws,
+    access_key_id: backblaze_key_id,
+    secret_access_key: backblaze_application_key,
+    s3: [scheme: "https://", host: backblaze_endpoint, region: backblaze_region]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

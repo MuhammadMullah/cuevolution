@@ -53,6 +53,17 @@ config :cuevolution,
        :twilio_client,
        Cuevolution.Notifications.SmsAdapter.TwilioAdapter.Client.Mock
 
+# :profile_picture_storage isn't set here — it stays the Storage.Local
+# default (writes under this app's own priv/static), so registration_live's
+# upload test doesn't need any network mocking. Storage.Backblaze has its
+# own direct unit tests, routed through a Mox mock of the request seam
+# (ex_aws uses hackney directly, with no pluggable test transport).
+config :cuevolution, :backblaze, bucket: "test-bucket", host: "s3.us-west-004.backblazeb2.com"
+
+config :cuevolution,
+       :backblaze_requester,
+       Cuevolution.Accounts.ProfilePicture.Storage.Backblaze.Requester.Mock
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

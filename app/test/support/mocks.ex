@@ -5,3 +5,7 @@ Mox.defmock(Cuevolution.Notifications.SmsAdapter.SmsAdapterMock,
 Mox.defmock(Cuevolution.Notifications.SmsAdapter.TwilioAdapter.Client.Mock,
   for: Cuevolution.Notifications.SmsAdapter.TwilioAdapter.Client
 )
+
+Mox.defmock(Cuevolution.Accounts.ProfilePicture.Storage.Backblaze.Requester.Mock,
+  for: Cuevolution.Accounts.ProfilePicture.Storage.Backblaze.Requester
+)

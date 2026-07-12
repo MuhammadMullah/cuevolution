@@ -31,15 +31,16 @@ services:
       PHX_SERVER: "true"
       PORT: "4000"
       POOL_SIZE: ${POOL_SIZE:-10}
-      UPLOADS_DIR: /data/uploads
+      BACKBLAZE_KEY_ID: ${BACKBLAZE_KEY_ID}
+      BACKBLAZE_APPLICATION_KEY: ${BACKBLAZE_APPLICATION_KEY}
+      BACKBLAZE_BUCKET: ${BACKBLAZE_BUCKET}
+      BACKBLAZE_ENDPOINT: ${BACKBLAZE_ENDPOINT}
       AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-}
       AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME:-}
       AFRICASTALKING_SENDER_ID: ${AFRICASTALKING_SENDER_ID:-}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
-    volumes:
-      - uploads_data:/data/uploads
 
   caddy:
     image: caddy:2-alpine
@@ -54,12 +55,10 @@ services:
       CADDY_EMAIL: ${CADDY_EMAIL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - uploads_data:/srv/uploads:ro
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
   postgres_data:
-  uploads_data:
   caddy_data:
   caddy_config:

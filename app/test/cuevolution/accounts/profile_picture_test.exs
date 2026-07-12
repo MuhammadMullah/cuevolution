@@ -1,36 +1,56 @@
+defmodule Cuevolution.Accounts.ProfilePictureTest.FakeStorage do
+  @moduledoc false
+  @behaviour Cuevolution.Accounts.ProfilePicture.Storage
+  @impl true
+  def put(key, _body, _content_type), do: {:ok, "https://fake.example/#{key}"}
+end
+
+defmodule Cuevolution.Accounts.ProfilePictureTest.FailingStorage do
+  @moduledoc false
+  @behaviour Cuevolution.Accounts.ProfilePicture.Storage
+  @impl true
+  def put(_key, _body, _content_type), do: {:error, :some_failure}
+end
+
 defmodule Cuevolution.Accounts.ProfilePictureTest do
+  # async: false — mutates the global :profile_picture_storage Application
+  # env that every test in this file reads.
   use ExUnit.Case, async: false
 
   alias Cuevolution.Accounts.ProfilePicture
+  alias Cuevolution.Accounts.ProfilePictureTest.FailingStorage
+  alias Cuevolution.Accounts.ProfilePictureTest.FakeStorage
 
-  @moduletag :tmp_dir
+  @fixture Path.join(:code.priv_dir(:cuevolution), "static/favicon.ico")
 
   setup do
-    on_exit(fn -> Application.delete_env(:cuevolution, :uploads_dir) end)
+    on_exit(fn -> Application.delete_env(:cuevolution, :profile_picture_storage) end)
   end
 
-  test "stores under the default priv/static/uploads/players dir when :uploads_dir isn't configured" do
-    fixture = Path.join(:code.priv_dir(:cuevolution), "static/favicon.ico")
-    assert {:ok, public_path} = ProfilePicture.store(fixture, "default-dir-test")
-    assert public_path == "/uploads/players/default-dir-test.jpg"
+  test "resizes and stores under the default (Local) backend, returning its public URL" do
+    assert {:ok, "/uploads/players/default-backend-test.jpg"} =
+             ProfilePicture.store(@fixture, "default-backend-test")
 
-    dest = Path.join([:code.priv_dir(:cuevolution), "static", "uploads", "players"])
-    assert File.exists?(Path.join(dest, "default-dir-test.jpg"))
+    dest =
+      Path.join([:code.priv_dir(:cuevolution), "static/uploads/players/default-backend-test.jpg"])
+
+    assert File.exists?(dest)
   after
     File.rm(
-      Path.join([:code.priv_dir(:cuevolution), "static/uploads/players/default-dir-test.jpg"])
+      Path.join([:code.priv_dir(:cuevolution), "static/uploads/players/default-backend-test.jpg"])
     )
   end
 
-  test "stores under a configured :uploads_dir instead — the volume-mounted path used in production",
-       %{tmp_dir: tmp_dir} do
-    Application.put_env(:cuevolution, :uploads_dir, tmp_dir)
+  test "delegates to whatever storage backend is configured" do
+    Application.put_env(:cuevolution, :profile_picture_storage, FakeStorage)
 
-    fixture = Path.join(:code.priv_dir(:cuevolution), "static/favicon.ico")
+    assert {:ok, "https://fake.example/players/fake-backend-test.jpg"} =
+             ProfilePicture.store(@fixture, "fake-backend-test")
+  end
 
-    assert {:ok, "/uploads/players/configured-dir-test.jpg"} =
-             ProfilePicture.store(fixture, "configured-dir-test")
+  test "returns {:error, reason} instead of raising when the storage backend fails" do
+    Application.put_env(:cuevolution, :profile_picture_storage, FailingStorage)
 
-    assert File.exists?(Path.join([tmp_dir, "players", "configured-dir-test.jpg"]))
+    assert {:error, :some_failure} = ProfilePicture.store(@fixture, "failing-backend-test")
   end
 end

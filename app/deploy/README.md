@@ -43,7 +43,15 @@ Do this once for staging, once for production (different host, same steps).
    server. `deploy_key` (the private half) becomes the `SSH_PRIVATE_KEY`
    secret below — never commit it.
 
-3. **Create the app directory and env file:**
+3. **Create a Backblaze B2 bucket for this environment** (a separate
+   bucket per environment — don't share one between staging and
+   production). It must be **public** — profile pictures aren't sensitive,
+   and the app returns a plain public URL rather than a signed one (see
+   `lib/cuevolution/accounts/profile_picture/storage/backblaze.ex`).
+   Create an Application Key scoped to that bucket, and note the bucket's
+   "Endpoint" (e.g. `s3.us-west-004.backblazeb2.com`) from its details page.
+
+4. **Create the app directory and env file:**
 
    ```
    sudo mkdir -p /opt/cuevolution
@@ -52,21 +60,22 @@ Do this once for staging, once for production (different host, same steps).
 
    Copy `app/deploy/.env.example` from this repo to `/opt/cuevolution/.env`
    on the server and fill in real values (`POSTGRES_PASSWORD`, `SECRET_KEY_BASE`
-   — generate with `mix phx.gen.secret` — `DOMAIN`, `CADDY_EMAIL`, and
-   whichever SMS provider you're using). This file is **never** touched by
-   CI except for its `IMAGE=` line, and never leaves the server.
+   — generate with `mix phx.gen.secret` — `DOMAIN`, `CADDY_EMAIL`, the
+   `BACKBLAZE_*` values from step 3, and whichever SMS provider you're
+   using). This file is **never** touched by CI except for its `IMAGE=`
+   line, and never leaves the server.
 
-4. **Point DNS** for the environment's domain at the server's IP —
+5. **Point DNS** for the environment's domain at the server's IP —
    required before Caddy can obtain a Let's Encrypt certificate.
 
-5. **Make the GHCR package pullable from the server.** Images push to
+6. **Make the GHCR package pullable from the server.** Images push to
    `ghcr.io/<owner>/cuevolution` as *private* by default. Either:
    - Make the package public (Package settings on GitHub → Change visibility) — simplest, fine if the source isn't sensitive, or
    - `docker login ghcr.io` on the server with a [PAT](https://github.com/settings/tokens)
      that has `read:packages` scope.
 
-6. **First deploy is manual**, since `docker-compose.yml`/`.env` don't
-   exist on the server until step 3 and the app needs *a* image reference
+7. **First deploy is manual**, since `docker-compose.yml`/`.env` don't
+   exist on the server until step 4 and the app needs *a* image reference
    before the workflow's `sed` can update it:
 
    ```

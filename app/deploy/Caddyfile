@@ -3,13 +3,5 @@
 }
 
 {$DOMAIN} {
-	# Player-uploaded profile pictures live on a volume shared with the app
-	# container (see docker-compose.yml, config/runtime.exs UPLOADS_DIR) —
-	# served directly here instead of round-tripping through the app.
-	handle_path /uploads/* {
-		root * /srv/uploads
-		file_server
-	}
-
 	reverse_proxy app:4000
 }
