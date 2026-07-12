@@ -5,6 +5,6 @@ defmodule CuevolutionWeb.AdminLoginLiveTest do
 
   test "renders the admin login form", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/admin/login")
-    assert html =~ "Admin Login"
+    assert html =~ "Admin sign in"
   end
 end

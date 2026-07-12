@@ -2,6 +2,7 @@
    https://tailwindcss.com/docs/configuration */
 
 @import "tailwindcss" source(none);
+@import "../vendor/cropper.min.css";
 @source "../css";
 @source "../js";
 @source "../../lib/cuevolution_web";
@@ -187,5 +188,13 @@
 
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* Round the profile-picture crop box (see .PhotoCropper in
+   registration_live.html.heex) to match the circular avatar it produces —
+   Cropper.js's documented recipe for a circular crop UI. */
+.cropper-view-box,
+.cropper-face {
+  border-radius: 50%;
+}
 
 /* This file is for your main application CSS */

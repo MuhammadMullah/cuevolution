@@ -1,5 +1,56 @@
-<Layouts.app flash={@flash}>
-  <h1>Admin Dashboard</h1>
-  <p>Welcome, {@current_admin.email}</p>
-  <.button href={~p"/admin/logout"} method="delete">Log out</.button>
-</Layouts.app>
+<AdminComponents.app_shell current_admin={@current_admin} active={:dashboard} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Season 2026</AdminComponents.eyebrow>
+  <h1 class="mb-[22px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Dashboard
+  </h1>
+
+  <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3.5">
+    <AdminComponents.stat_tile
+      :for={tile <- @stat_tiles}
+      label={tile.label}
+      value={tile.value}
+      delta={tile.delta}
+      delta_class={tile.delta_class}
+    />
+  </div>
+
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
+    <AdminComponents.card>
+      <h2 class="mb-3.5 text-[15px] font-bold tracking-tight text-ink-950">Needs attention</h2>
+      <div
+        :for={item <- @attention_items}
+        class="flex items-center gap-3 border-b border-ink-100 py-[11px] last:border-0"
+      >
+        <div class="text-lg">{item.icon}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-ink-950">{item.title}</div>
+          <div class="text-[12.5px] text-ink-400">{item.sub}</div>
+        </div>
+        <span class="text-ink-400">›</span>
+      </div>
+      <div :if={@attention_items == []} class="py-[18px] text-center text-[13.5px] text-ink-400">
+        All caught up — nothing needs review.
+      </div>
+    </AdminComponents.card>
+
+    <AdminComponents.card>
+      <h2 class="mb-3.5 text-[15px] font-bold tracking-tight text-ink-950">Pipeline by stage</h2>
+      <div :for={stage <- @pipeline_bars} class="mb-3.5 last:mb-0">
+        <div class="mb-1.5 flex justify-between text-[13px]">
+          <span class="inline-flex items-center gap-1.5 font-semibold text-ink-700">
+            <span class="size-2 rounded-full" style={"background:#{stage.color}"}></span>
+            {stage.label}
+          </span>
+          <span class="font-mono text-ink-500">{stage.count}</span>
+        </div>
+        <div class="h-2 overflow-hidden rounded-full bg-ink-100">
+          <div
+            class="h-full rounded-full"
+            style={"width:#{stage.pct};background:#{stage.color}"}
+          >
+          </div>
+        </div>
+      </div>
+    </AdminComponents.card>
+  </div>
+</AdminComponents.app_shell>

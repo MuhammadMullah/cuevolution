@@ -1,8 +1,56 @@
-<Layouts.app flash={@flash}>
-  <h1>Admin Login</h1>
+<AdminComponents.guest_shell flash={@flash}>
+  <div class="mb-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-red-300">
+    League Admin
+  </div>
+  <h1 class="mb-1.5 text-2xl font-bold tracking-tight text-ink-25">Admin sign in</h1>
+  <p class="mb-6 text-sm leading-relaxed text-ink-400">
+    Restricted access. Separate from player accounts.
+  </p>
+
   <.form for={@form} action={~p"/admin/login"} method="post">
-    <.input field={@form[:email]} type="email" label="Email" required />
-    <.input field={@form[:password]} type="password" label="Password" required />
-    <.button type="submit">Log in</.button>
+    <div class="mb-4">
+      <label for={@form[:email].id} class="mb-1.5 block text-[13px] font-semibold text-ink-300">
+        Email or username
+      </label>
+      <input
+        type="email"
+        name={@form[:email].name}
+        id={@form[:email].id}
+        placeholder="admin@cuevolution.ke"
+        required
+        class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
+      />
+    </div>
+    <div class="mb-2">
+      <label for={@form[:password].id} class="mb-1.5 block text-[13px] font-semibold text-ink-300">
+        Password
+      </label>
+      <input
+        type="password"
+        name={@form[:password].name}
+        id={@form[:password].id}
+        placeholder="••••••••"
+        required
+        class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
+      />
+    </div>
+
+    <div
+      :if={msg = Phoenix.Flash.get(@flash, :error)}
+      class="my-3.5 rounded-[10px] border border-red-500/30 bg-red-500/15 px-3 py-2.5 text-[13px] font-medium text-red-300"
+    >
+      {msg}
+    </div>
+
+    <button
+      type="submit"
+      class="mt-2 w-full cursor-pointer rounded-full bg-red-500 px-6 py-[13px] text-[15px] font-semibold text-white hover:bg-red-600"
+    >
+      Sign in
+    </button>
   </.form>
-</Layouts.app>
+
+  <p class="mt-4.5 text-center text-[12.5px] text-ink-500">
+    Forgot your password? Contact the platform operator directly.
+  </p>
+</AdminComponents.guest_shell>

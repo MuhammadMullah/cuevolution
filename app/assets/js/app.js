@@ -24,6 +24,13 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/cuevolution"
 import topbar from "../vendor/topbar"
+import Cropper from "../vendor/cropper.min.js"
+
+// Exposed globally rather than imported directly in the .PhotoCropper
+// colocated hook (lib/cuevolution_web/live/player/registration_live.html.heex)
+// — colocated hooks are extracted into their own compiled module, with no
+// stable relative import path back to assets/vendor/.
+window.Cropper = Cropper
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

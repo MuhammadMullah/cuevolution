@@ -21,6 +21,130 @@
     phx-submit="save"
   >
     <div class="hidden"><.live_file_input upload={@uploads.photo} /></div>
+
+    <div
+      id="photo-cropper"
+      phx-hook=".PhotoCropper"
+      phx-update="ignore"
+      data-input-id={@uploads.photo.ref}
+    >
+      <dialog
+        id="photo-crop-modal"
+        class="w-[min(90vw,360px)] rounded-2xl border border-ink-200 bg-white p-5 shadow-xl"
+      >
+        <p class="mb-3 text-center text-sm font-semibold text-ink-700">
+          Drag to position your photo
+        </p>
+        <div class="mx-auto mb-4 size-64 overflow-hidden">
+          <img id="photo-crop-image" class="block max-w-full" alt="" />
+        </div>
+        <div class="flex gap-3">
+          <PlayerComponents.button
+            type="button"
+            variant="secondary"
+            id="photo-crop-cancel"
+            full_width
+          >
+            Cancel
+          </PlayerComponents.button>
+          <PlayerComponents.button
+            type="button"
+            variant="primary"
+            id="photo-crop-confirm"
+            full_width
+          >
+            Use photo
+          </PlayerComponents.button>
+        </div>
+      </dialog>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".PhotoCropper">
+        export default {
+          mounted() {
+            const input = document.getElementById(this.el.dataset.inputId)
+            const modal = this.el.querySelector("#photo-crop-modal")
+            const img = this.el.querySelector("#photo-crop-image")
+            let cropper = null
+            let objectUrl = null
+
+            const cleanup = () => {
+              if (cropper) {
+                cropper.destroy()
+                cropper = null
+              }
+              if (objectUrl) {
+                URL.revokeObjectURL(objectUrl)
+                objectUrl = null
+              }
+            }
+
+            // Fires both for the user's raw pick and for our own synthetic
+            // re-dispatch below (after cropping) — the skipCrop flag tells
+            // those two cases apart so confirming a crop doesn't loop back
+            // into showing the crop modal on its own output.
+            this.onChange = () => {
+              if (input.dataset.skipCrop) {
+                delete input.dataset.skipCrop
+                return
+              }
+              const file = input.files && input.files[0]
+              if (!file || !file.type.startsWith("image/")) return
+
+              cleanup()
+              objectUrl = URL.createObjectURL(file)
+              img.src = objectUrl
+              modal.showModal()
+
+              img.onload = () => {
+                cropper = new window.Cropper(img, {
+                  aspectRatio: 1,
+                  viewMode: 1,
+                  dragMode: "move",
+                  cropBoxMovable: false,
+                  cropBoxResizable: false,
+                  zoomable: false,
+                  autoCropArea: 1,
+                  background: false
+                })
+              }
+            }
+            input.addEventListener("change", this.onChange)
+
+            this.onCancel = () => {
+              cleanup()
+              input.value = ""
+              modal.close()
+            }
+            modal.querySelector("#photo-crop-cancel").addEventListener("click", this.onCancel)
+
+            // Re-encodes the selected crop region as a fixed 512x512 JPEG
+            // and swaps it into the file input via DataTransfer, then
+            // dispatches "change" so LiveView's own upload tracking (bound
+            // to the same input) picks up the cropped file instead of the
+            // original — no server-side change needed for this to work.
+            this.onConfirm = () => {
+              if (!cropper) return
+              cropper.getCroppedCanvas({ width: 512, height: 512 }).toBlob(blob => {
+                const croppedFile = new File([blob], "avatar.jpg", { type: "image/jpeg" })
+                const transfer = new DataTransfer()
+                transfer.items.add(croppedFile)
+                input.dataset.skipCrop = "true"
+                input.files = transfer.files
+                input.dispatchEvent(new Event("change", { bubbles: true }))
+                cleanup()
+                modal.close()
+              }, "image/jpeg", 0.92)
+            }
+            modal.querySelector("#photo-crop-confirm").addEventListener("click", this.onConfirm)
+          },
+          destroyed() {
+            const input = document.getElementById(this.el.dataset.inputId)
+            if (input) input.removeEventListener("change", this.onChange)
+          }
+        }
+      </script>
+    </div>
+
     <div :if={@step == 1}>{step_1(assigns)}</div>
     <div :if={@step == 2}>{step_2(assigns)}</div>
     <div :if={@step == 3}>{step_3(assigns)}</div>
