@@ -1,34 +1,49 @@
 # Deployment
 
-Two long-lived branches, two servers, two environments:
+One Debian server hosting both environments, one shared reverse proxy in
+front of two independent app+database stacks:
 
-| Branch    | Workflow                                            | Environment  |
-| --------- | ---------------------------------------------------- | ------------ |
-| `develop` | `.github/workflows/deploy-staging.yml`               | `staging`    |
-| `main`    | `.github/workflows/deploy-production.yml`            | `production` |
+| Branch    | Workflow                                   | Environment  | Domain                       |
+| --------- | ------------------------------------------- | ------------ | ------------------------------ |
+| `develop` | `.github/workflows/deploy-staging.yml`      | `staging`    | `staging.cuevolutionke.com`  |
+| `main`    | `.github/workflows/deploy-production.yml`   | `production` | `app.cuevolutionke.com`      |
 
 Every pull request (regardless of target branch) also runs `.github/workflows/ci.yml`
 — format check, `mix compile --warnings-as-errors`, `mix credo --strict`,
 `mix test`. Both deploy workflows run the same checks (via the shared
 `.github/workflows/test.yml`) before building or deploying anything, so a
-broken `develop`/`main` push never reaches a server even if branch
+broken `develop`/`main` push never reaches the server even if branch
 protection isn't configured.
 
 On push, the deploy workflow builds the Docker image from `app/Dockerfile`,
-pushes it to GHCR, copies `app/deploy/docker-compose.yml` and
-`app/deploy/Caddyfile` to the server, then SSHes in to pull the new image,
-run migrations, and restart the stack.
+pushes it to GHCR, copies `app/deploy/app/docker-compose.yml` to that
+environment's own directory on the server, then SSHes in to pull the new
+image, run migrations, and restart just that stack. It never touches the
+shared Caddy stack (`app/deploy/caddy/`) — that's server-level infra,
+deployed once during setup, not per-deploy.
 
 Note: `.github/workflows/` lives at the repo root, one level up from this
 `app/` directory, even though everything else deploy-related is in here —
 GitHub only ever looks for workflows at the repository root.
 
-## One-time setup per server
+## Why one shared Caddy instead of one per environment
 
-Do this once for staging, once for production (different host, same steps).
+Two Caddy containers can't both bind ports 80/443 on the same host. So the
+topology is: one Caddy stack (`deploy/caddy/`) doing TLS termination and
+routing by domain, and two independent app+db stacks (`deploy/app/`,
+deployed twice under different directories/`.env`s) that Caddy reverse-proxies
+to by container name over a shared Docker network called `web`. The two
+app stacks never talk to each other or share a database — only Caddy
+bridges them.
+
+## One-time server setup
+
+All of this happens once, on the single server, in this order (Caddy needs
+the app containers' network to exist, and needs DNS pointed at it before
+it can request certificates).
 
 1. **Install Docker.** Follow [Docker's install guide](https://docs.docker.com/engine/install/)
-   for your distro; the `docker compose` plugin (v2, not the standalone
+   for Debian; the `docker compose` plugin (v2, not the standalone
    `docker-compose` binary) needs to be present — check with
    `docker compose version`.
 
@@ -41,66 +56,98 @@ Do this once for staging, once for production (different host, same steps).
 
    Add `deploy_key.pub` to that user's `~/.ssh/authorized_keys` on the
    server. `deploy_key` (the private half) becomes the `SSH_PRIVATE_KEY`
-   secret below — never commit it.
+   secret below — never commit it. The same key/user is used for both
+   environments, since it's the same server.
 
-3. **Create a Backblaze B2 bucket for this environment** (a separate
-   bucket per environment — don't share one between staging and
-   production). It must be **public** — profile pictures aren't sensitive,
-   and the app returns a plain public URL rather than a signed one (see
-   `lib/cuevolution/accounts/profile_picture/storage/backblaze.ex`).
-   Create an Application Key scoped to that bucket, and note the bucket's
-   "Endpoint" (e.g. `s3.us-west-004.backblazeb2.com`) from its details page.
-
-4. **Create the app directory and env file:**
+3. **Create the shared Docker network** the reverse proxy and both app
+   stacks all join:
 
    ```
-   sudo mkdir -p /opt/cuevolution
-   sudo chown $(whoami) /opt/cuevolution
+   docker network create web
    ```
 
-   Copy `app/deploy/.env.example` from this repo to `/opt/cuevolution/.env`
-   on the server and fill in real values (`POSTGRES_PASSWORD`, `SECRET_KEY_BASE`
-   — generate with `mix phx.gen.secret` — `DOMAIN`, `CADDY_EMAIL`, the
-   `BACKBLAZE_*` values from step 3, and whichever SMS provider you're
-   using). This file is **never** touched by CI except for its `IMAGE=`
-   line, and never leaves the server.
+4. **Point DNS** for both `staging.cuevolutionke.com` and
+   `app.cuevolutionke.com` at the server's IP — required before Caddy can
+   obtain Let's Encrypt certificates for either.
 
-5. **Point DNS** for the environment's domain at the server's IP —
-   required before Caddy can obtain a Let's Encrypt certificate.
+5. **Deploy the shared Caddy stack** (once — not part of either app's CI/CD):
 
-6. **Make the GHCR package pullable from the server.** Images push to
+   ```
+   sudo mkdir -p /opt/caddy && sudo chown $(whoami) /opt/caddy
+   ```
+
+   Copy `app/deploy/caddy/docker-compose.yml`, `app/deploy/caddy/Caddyfile`,
+   and `app/deploy/caddy/.env.example` (as `.env`, filled in) from this
+   repo to `/opt/caddy` on the server, then:
+
+   ```
+   cd /opt/caddy
+   docker compose --env-file .env up -d
+   ```
+
+6. **For each environment** (staging, then production):
+
+   - Create a Backblaze B2 bucket for it (a **separate** bucket per
+     environment — don't share one). It must be **public** — profile
+     pictures aren't sensitive, and the app returns a plain public URL
+     rather than a signed one (see
+     `lib/cuevolution/accounts/profile_picture/storage/backblaze.ex`).
+     Create an Application Key scoped to that bucket, and note the
+     bucket's "Endpoint" (e.g. `s3.us-west-004.backblazeb2.com`) from its
+     details page.
+
+   - Create the app directory:
+
+     ```
+     sudo mkdir -p /opt/cuevolution-staging   # or -production
+     sudo chown $(whoami) /opt/cuevolution-staging
+     ```
+
+   - Copy `app/deploy/app/.env.example` from this repo to
+     `/opt/cuevolution-staging/.env` (or `-production`) and fill in real
+     values — `APP_CONTAINER_NAME` and `DOMAIN` especially need to match
+     what's in `app/deploy/caddy/Caddyfile` exactly, or Caddy won't be
+     able to reach this app. `SECRET_KEY_BASE`: generate with
+     `mix phx.gen.secret`. This file is **never** touched by CI except for
+     its `IMAGE=` line, and never leaves the server.
+
+   - **First deploy is manual**, since `docker-compose.yml`/`.env` don't
+     exist until the step above, and the app needs *a* image reference
+     before the workflow's `sed` can update it:
+
+     ```
+     cd /opt/cuevolution-staging   # or -production
+     echo "IMAGE=ghcr.io/<owner>/cuevolution:staging" >> .env   # or :production
+     docker compose --env-file .env pull
+     docker compose --env-file .env run --rm app bin/migrate
+     docker compose --env-file .env up -d
+     ```
+
+     After this, pushes to `develop`/`main` handle everything automatically.
+
+7. **Make the GHCR package pullable from the server.** Images push to
    `ghcr.io/<owner>/cuevolution` as *private* by default. Either:
    - Make the package public (Package settings on GitHub → Change visibility) — simplest, fine if the source isn't sensitive, or
    - `docker login ghcr.io` on the server with a [PAT](https://github.com/settings/tokens)
      that has `read:packages` scope.
 
-7. **First deploy is manual**, since `docker-compose.yml`/`.env` don't
-   exist on the server until step 4 and the app needs *a* image reference
-   before the workflow's `sed` can update it:
-
-   ```
-   cd /opt/cuevolution
-   echo "IMAGE=ghcr.io/<owner>/cuevolution:staging" >> .env   # or :production
-   docker compose --env-file .env pull
-   docker compose --env-file .env run --rm app bin/migrate
-   docker compose --env-file .env up -d
-   ```
-
-   After this, pushes to `develop`/`main` handle everything automatically.
-
 ## GitHub configuration
 
 Create two [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)
 named `staging` and `production` (Settings → Environments), each with its
-own value for the same four secret names — this is what lets both deploy
-workflows reference `secrets.SSH_HOST` etc. and still hit the right server:
+own value for the same four secret names:
 
-| Secret            | Value                                                        |
-| ------------------ | ------------------------------------------------------------ |
-| `SSH_HOST`         | Server IP or hostname                                        |
-| `SSH_USER`         | The deploy user created above                                |
-| `SSH_PRIVATE_KEY`  | Contents of `deploy_key` (the private key, not `.pub`)       |
-| `SSH_PORT`         | Usually `22`                                                 |
+| Secret             | Value                                                   |
+| ------------------- | -------------------------------------------------------- |
+| `SSH_HOST`          | The server's IP or hostname — **the same value in both environments**, since it's one server |
+| `SSH_USER`          | The deploy user created above — also the same in both   |
+| `SSH_PRIVATE_KEY`   | Contents of `deploy_key` (the private key, not `.pub`)  |
+| `SSH_PORT`          | Usually `22`                                             |
+
+Keeping them as two separate GitHub Environments (even though the values
+largely overlap) is still worth it — it's what lets you attach different
+protection rules later (e.g. required reviewers before a production
+deploy) without restructuring the workflows.
 
 No GHCR secret is needed — the workflows push using the automatically
 provided `GITHUB_TOKEN` (with `packages: write` permission set in the
@@ -114,10 +161,10 @@ files alone can't turn that on; it's a Settings → Branches rule.
 
 Each deploy is tagged with its commit SHA (`staging-<sha>` /
 `production-<sha>`), not just the floating `staging`/`production` tag. To
-roll back, SSH in and point `.env` at an older tag:
+roll back, SSH in and point that environment's `.env` at an older tag:
 
 ```
-cd /opt/cuevolution
+cd /opt/cuevolution-production   # or -staging
 sed -i "s|^IMAGE=.*|IMAGE=ghcr.io/<owner>/cuevolution:production-<old-sha>|" .env
 docker compose --env-file .env up -d
 ```

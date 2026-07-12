@@ -50,21 +50,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # app/deploy/docker-compose.yml and app/deploy/Caddyfile are the
-      # source of truth — re-synced on every deploy so server-side config
-      # never silently drifts from what's committed. app/deploy/.env lives
-      # only on the server (see app/deploy/README.md) and is never touched
-      # here except for the IMAGE= line, updated below.
-      - name: Copy compose files to server
+      # app/deploy/app/docker-compose.yml is the source of truth for this
+      # environment's app+db stack — re-synced on every deploy so
+      # server-side config never silently drifts from what's committed.
+      # The shared Caddy reverse proxy (app/deploy/caddy/) is server-level
+      # infra, deployed once per deploy/README.md, not touched here.
+      # /opt/cuevolution-production/.env lives only on the server and is
+      # never touched here except for the IMAGE= line, updated below.
+      - name: Copy compose file to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "app/deploy/docker-compose.yml,app/deploy/Caddyfile"
-          target: "/opt/cuevolution"
-          strip_components: 2
+          source: "app/deploy/app/docker-compose.yml"
+          target: "/opt/cuevolution-production"
+          strip_components: 3
 
       - name: Pull image, migrate, restart
         uses: appleboy/ssh-action@v1
@@ -78,7 +80,7 @@ jobs:
           envs: IMAGE_REF
           script: |
             set -euo pipefail
-            cd /opt/cuevolution
+            cd /opt/cuevolution-production
             sed -i "s|^IMAGE=.*|IMAGE=${IMAGE_REF}|" .env
             docker compose --env-file .env pull
             docker compose --env-file .env run --rm app bin/migrate

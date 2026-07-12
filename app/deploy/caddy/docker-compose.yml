@@ -1,0 +1,29 @@
+# Shared reverse proxy for every environment on this server — deployed
+# once, not per-environment (see deploy/README.md). The only stack allowed
+# to publish 80/443, since two Caddy instances can't both bind those ports
+# on one host. Joins the same external "web" network as each app stack
+# (deploy/app/docker-compose.yml) to reach them by container name.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_EMAIL: ${CADDY_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

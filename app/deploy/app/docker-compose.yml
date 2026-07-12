@@ -1,6 +1,11 @@
-# Deployed as-is on staging/production hosts — see deploy/README.md for the
-# one-time server setup and the deploy/.env.example this file reads from.
-# The same file serves both environments; only .env differs per host.
+# Per-environment app + database stack — the same file is deployed twice
+# on the shared server (once for staging, once for production), each in
+# its own directory with its own .env (see deploy/README.md). No reverse
+# proxy or published ports here — deploy/caddy/ is the single shared Caddy
+# instance in front of both, since two Caddy instances can't both bind
+# 80/443 on one host. APP_CONTAINER_NAME must be distinct per environment
+# so Caddy can address each app container unambiguously on the shared
+# "web" network.
 
 services:
   db:
@@ -20,10 +25,14 @@ services:
 
   app:
     image: ${IMAGE}
+    container_name: ${APP_CONTAINER_NAME}
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default: {}
+      web: {}
     environment:
       DATABASE_URL: ecto://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE}
@@ -42,23 +51,9 @@ services:
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN}
-      CADDY_EMAIL: ${CADDY_EMAIL}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+networks:
+  web:
+    external: true
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:

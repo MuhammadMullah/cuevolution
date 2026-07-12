@@ -1,7 +1,0 @@
-{
-	email {$CADDY_EMAIL}
-}
-
-{$DOMAIN} {
-	reverse_proxy app:4000
-}

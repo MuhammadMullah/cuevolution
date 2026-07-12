@@ -1,0 +1,15 @@
+{
+	email {$CADDY_EMAIL}
+}
+
+# Container names here must match APP_CONTAINER_NAME in each environment's
+# deploy/app/.env (see deploy/README.md) — that's what makes each app
+# reachable by name on the shared "web" network.
+
+staging.cuevolutionke.com {
+	reverse_proxy cuevolution-staging:4000
+}
+
+app.cuevolutionke.com {
+	reverse_proxy cuevolution-production:4000
+}
