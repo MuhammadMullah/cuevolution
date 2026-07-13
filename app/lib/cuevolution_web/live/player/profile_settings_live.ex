@@ -2,6 +2,7 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.ProfilePicture
   alias Cuevolution.Repo
   alias CuevolutionWeb.PlayerComponents
 

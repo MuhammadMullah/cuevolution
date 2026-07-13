@@ -55,14 +55,20 @@ config :cuevolution,
 
 # :profile_picture_storage isn't set here — it stays the Storage.Local
 # default (writes under this app's own priv/static), so registration_live's
-# upload test doesn't need any network mocking. Storage.Backblaze has its
-# own direct unit tests, routed through a Mox mock of the request seam
-# (ex_aws uses hackney directly, with no pluggable test transport).
-config :cuevolution, :backblaze, bucket: "test-bucket", host: "s3.us-west-004.backblazeb2.com"
+# upload test doesn't need any network mocking. Storage.S3 has its own
+# direct unit tests, routed through a Mox mock of the request seam
+# (ex_aws uses hackney directly, with no pluggable test transport) — its
+# url/1 needs no mocking at all, since presigning is local computation.
+config :cuevolution, :s3, bucket: "test-bucket"
+
+config :ex_aws,
+  access_key_id: "test_access_key_id",
+  secret_access_key: "test_secret",
+  region: "us-east-1"
 
 config :cuevolution,
-       :backblaze_requester,
-       Cuevolution.Accounts.ProfilePicture.Storage.Backblaze.Requester.Mock
+       :s3_requester,
+       Cuevolution.Accounts.ProfilePicture.Storage.S3.Requester.Mock
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

@@ -2,7 +2,7 @@
   <div class="mb-7 flex flex-wrap items-center gap-4">
     <PlayerComponents.avatar
       name={"#{@current_player.first_name} #{@current_player.last_name}"}
-      src={@current_player.profile_picture_path}
+      src={ProfilePicture.url(@current_player.profile_picture_path)}
       size="size-[66px]"
       class="text-2xl"
     />

@@ -192,14 +192,14 @@ defmodule CuevolutionWeb.RegistrationLive do
     results =
       consume_uploaded_entries(socket, :photo, fn %{path: path}, entry ->
         case ProfilePicture.store(path, entry.uuid) do
-          {:ok, public_path} -> {:ok, public_path}
+          {:ok, key} -> {:ok, key}
           {:error, _reason} -> {:postpone, :error}
         end
       end)
 
     case results do
-      [public_path] when is_binary(public_path) ->
-        {:ok, Map.put(attrs, "profile_picture_path", public_path)}
+      [key] when is_binary(key) ->
+        {:ok, Map.put(attrs, "profile_picture_path", key)}
 
       [] ->
         {:ok, attrs}

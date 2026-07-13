@@ -270,14 +270,10 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
 
     player = Repo.get_by(Player, first_name: "Jane", last_name: "Doe")
     assert player.profile_picture_path
-    assert String.starts_with?(player.profile_picture_path, "/uploads/players/")
+    assert String.starts_with?(player.profile_picture_path, "players/")
 
     stored_path =
-      Path.join([
-        :code.priv_dir(:cuevolution),
-        "static",
-        String.trim_leading(player.profile_picture_path, "/")
-      ])
+      Path.join([:code.priv_dir(:cuevolution), "static", "uploads", player.profile_picture_path])
 
     assert File.exists?(stored_path)
   end

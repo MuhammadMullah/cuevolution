@@ -5,11 +5,20 @@ defmodule Cuevolution.Accounts.ProfilePicture.Storage do
   unaware of the concrete backend.
 
   `Local` (dev/test default) writes under this app's own priv/static, no
-  credentials needed. `Backblaze` (production) uploads to a B2 bucket over
-  its S3-compatible API — see `Storage.Backblaze` for why a Mix release's
-  own priv/static is the wrong place for this in production.
+  credentials needed. `S3` (production) uploads to a private AWS S3
+  bucket — see `Storage.S3` for why a Mix release's own priv/static is the
+  wrong place for this in production, and why the bucket is private
+  (presigned URLs) rather than public.
+
+  `put/3` stores the bytes under `key`. `url/1` turns that same `key` back
+  into something a browser can actually load — a plain path for `Local`,
+  a short-lived presigned URL for `S3`. Never persist the result of
+  `url/1` — only the `key` (see `ProfilePicture.store/2`), since a
+  presigned URL expires and a plain path doesn't survive a redeploy.
   """
 
   @callback put(key :: String.t(), body :: binary(), content_type :: String.t()) ::
-              {:ok, public_url :: String.t()} | {:error, term()}
+              :ok | {:error, term()}
+
+  @callback url(key :: String.t()) :: String.t()
 end

@@ -87,14 +87,30 @@ it can request certificates).
 
 6. **For each environment** (staging, then production):
 
-   - Create a Backblaze B2 bucket for it (a **separate** bucket per
-     environment — don't share one). It must be **public** — profile
-     pictures aren't sensitive, and the app returns a plain public URL
-     rather than a signed one (see
-     `lib/cuevolution/accounts/profile_picture/storage/backblaze.ex`).
-     Create an Application Key scoped to that bucket, and note the
-     bucket's "Endpoint" (e.g. `s3.us-west-004.backblazeb2.com`) from its
-     details page.
+   - Create an AWS S3 bucket for it (a **separate** bucket per
+     environment — don't share one), with default settings (**Block all
+     public access** left ON — the bucket stays private; the app serves
+     photos through short-lived presigned URLs rather than a public
+     endpoint, see `lib/cuevolution/accounts/profile_picture/storage/s3.ex`).
+
+     Create an IAM user (or role, if the server itself runs on AWS) with
+     an inline policy scoped to just that bucket:
+
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": ["s3:PutObject", "s3:GetObject"],
+           "Resource": "arn:aws:s3:::<bucket-name>/*"
+         }
+       ]
+     }
+     ```
+
+     Generate an access key for that IAM user (Security credentials →
+     Access keys) and note the bucket's region — both go in `.env` below.
 
    - Create the app directory:
 

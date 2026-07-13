@@ -41,57 +41,50 @@ if config_env() == :prod do
     # pool_count: 4,
     socket_options: maybe_ipv6
 
-  # ## Configuring profile picture storage (Backblaze B2)
+  # ## Configuring profile picture storage (AWS S3)
   #
   # A Mix release's own priv/static lives inside the release's versioned
   # directory, replaced wholesale on every deploy — anything written there
-  # (Storage.Local, the dev/test default) doesn't survive a redeploy. B2 is
-  # a real object store instead — see Cuevolution.Accounts.ProfilePicture.Storage.Backblaze.
-  backblaze_key_id =
-    System.get_env("BACKBLAZE_KEY_ID") ||
+  # (Storage.Local, the dev/test default) doesn't survive a redeploy. S3 is
+  # a real object store instead — see Cuevolution.Accounts.ProfilePicture.Storage.S3.
+  # The bucket is private; reads go through presigned URLs, not a public
+  # endpoint, so there's no "Endpoint"/host to configure here — just the
+  # standard AWS credentials, region, and bucket name.
+  aws_access_key_id =
+    System.get_env("AWS_ACCESS_KEY_ID") ||
       raise """
-      environment variable BACKBLAZE_KEY_ID is missing.
-      Application Key ID from your B2 bucket's application key.
+      environment variable AWS_ACCESS_KEY_ID is missing.
+      From the IAM user/role with access to the S3 bucket.
       """
 
-  backblaze_application_key =
-    System.get_env("BACKBLAZE_APPLICATION_KEY") ||
+  aws_secret_access_key =
+    System.get_env("AWS_SECRET_ACCESS_KEY") ||
       raise """
-      environment variable BACKBLAZE_APPLICATION_KEY is missing.
-      The application key itself, shown once when you create it.
+      environment variable AWS_SECRET_ACCESS_KEY is missing.
+      From the same IAM credentials as AWS_ACCESS_KEY_ID.
       """
 
-  backblaze_bucket =
-    System.get_env("BACKBLAZE_BUCKET") ||
+  aws_region =
+    System.get_env("AWS_REGION") ||
       raise """
-      environment variable BACKBLAZE_BUCKET is missing.
-      The bucket name (must be public — see deploy/README.md).
+      environment variable AWS_REGION is missing.
+      E.g. "eu-west-1" — must match the region the bucket was created in.
       """
 
-  # B2's S3-compatible endpoint always has the shape
-  # "s3.<region>.backblazeb2.com" (shown as "Endpoint" on the bucket's
-  # details page) — the region segment is required for SigV4 request
-  # signing, so it's parsed out here instead of asking for it twice.
-  backblaze_endpoint =
-    System.get_env("BACKBLAZE_ENDPOINT") ||
+  s3_bucket =
+    System.get_env("S3_BUCKET") ||
       raise """
-      environment variable BACKBLAZE_ENDPOINT is missing.
-      E.g. "s3.us-west-004.backblazeb2.com" — shown as "Endpoint" on the
-      bucket's details page in the B2 dashboard.
+      environment variable S3_BUCKET is missing.
+      The bucket name — see deploy/README.md for the IAM policy it needs.
       """
 
-  backblaze_region = backblaze_endpoint |> String.split(".") |> Enum.at(1)
-
-  config :cuevolution,
-         :profile_picture_storage,
-         Cuevolution.Accounts.ProfilePicture.Storage.Backblaze
-
-  config :cuevolution, :backblaze, bucket: backblaze_bucket, host: backblaze_endpoint
+  config :cuevolution, :profile_picture_storage, Cuevolution.Accounts.ProfilePicture.Storage.S3
+  config :cuevolution, :s3, bucket: s3_bucket
 
   config :ex_aws,
-    access_key_id: backblaze_key_id,
-    secret_access_key: backblaze_application_key,
-    s3: [scheme: "https://", host: backblaze_endpoint, region: backblaze_region]
+    access_key_id: aws_access_key_id,
+    secret_access_key: aws_secret_access_key,
+    region: aws_region
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
