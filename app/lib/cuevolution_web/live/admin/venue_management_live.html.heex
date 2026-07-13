@@ -1,45 +1,159 @@
-<Layouts.app flash={@flash}>
-  <h1>Venue Management</h1>
+<AdminComponents.app_shell current_admin={@current_admin} active={:venues} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Venues</AdminComponents.eyebrow>
+  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Venue management
+  </h1>
 
-  <.form for={@filter_form} phx-change="filter" id="venue-filter-form">
+  <div class="mb-[18px] flex gap-2 overflow-x-auto border-b border-ink-200">
+    <button
+      :for={region <- @regions}
+      type="button"
+      phx-click="select_region"
+      phx-value-id={region.id}
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+        @region.id == region.id && "border-red-500 text-ink-950",
+        @region.id != region.id && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {region.name}
+    </button>
+  </div>
+
+  <.form
+    :if={!@editing_venue}
+    for={@form}
+    id="venue-form"
+    phx-change="validate"
+    phx-submit="save"
+    class="mb-5 flex flex-wrap items-center gap-2.5"
+  >
     <.input
-      field={@filter_form[:region_id]}
-      type="select"
-      label="Filter by region"
-      prompt="All regions"
-      options={Enum.map(@regions, &{&1.name, &1.id})}
+      field={@form[:name]}
+      placeholder={"New venue name in #{@region.name}…"}
+      class="min-w-[220px] flex-1 rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
     />
+    <button
+      type="submit"
+      class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
+    >
+      Add venue
+    </button>
   </.form>
 
-  <.table id="venues" rows={@venues}>
-    <:col :let={venue} label="Name">{venue.name}</:col>
-    <:col :let={venue} label="Region">{venue.region.name}</:col>
-    <:col :let={venue} label="Active">{venue.active}</:col>
-    <:action :let={venue}>
-      <.button phx-click="edit" phx-value-id={venue.id}>Edit</.button>
-    </:action>
-    <:action :let={venue}>
-      <.button
-        :if={venue.active}
-        phx-click="deactivate"
-        phx-value-id={venue.id}
-        data-confirm="Deactivate this venue?"
+  <div
+    :if={@venues != []}
+    class="mb-7 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <div
+      :for={venue <- @venues}
+      class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
+    >
+      <.form
+        :if={@editing_venue && @editing_venue.id == venue.id}
+        for={@form}
+        id="venue-edit-form"
+        phx-change="validate"
+        phx-submit="save"
+        class="flex flex-1 flex-wrap items-center gap-2.5"
       >
-        Deactivate
-      </.button>
-    </:action>
-  </.table>
+        <.input
+          field={@form[:name]}
+          class="min-w-[180px] flex-1 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
+        />
+        <button
+          type="submit"
+          class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          phx-click="cancel_edit"
+          class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Cancel
+        </button>
+      </.form>
+      <%= if is_nil(@editing_venue) or @editing_venue.id != venue.id do %>
+        <div class="min-w-[180px] flex-1 text-[14.5px] font-semibold text-ink-950">
+          {venue.name}
+        </div>
+        <span class={[
+          "rounded-full px-2.5 py-1 text-xs font-semibold",
+          venue.active && "bg-[#DCF3E4] text-[#0E6A30]",
+          !venue.active && "bg-ink-100 text-ink-500"
+        ]}>
+          {if venue.active, do: "Active", else: "Inactive"}
+        </span>
+        <button
+          type="button"
+          phx-click="edit"
+          phx-value-id={venue.id}
+          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Rename
+        </button>
+        <button
+          :if={venue.active}
+          type="button"
+          phx-click="deactivate"
+          phx-value-id={venue.id}
+          data-confirm="Deactivate this venue?"
+          class="rounded-full border border-red-100 bg-red-50 px-3.5 py-[7px] text-[13px] font-semibold text-red-700 hover:bg-red-100"
+        >
+          Deactivate
+        </button>
+        <button
+          :if={!venue.active}
+          type="button"
+          phx-click="activate"
+          phx-value-id={venue.id}
+          class="rounded-full border border-[#b9e6c9] bg-[#DCF3E4] px-3.5 py-[7px] text-[13px] font-semibold text-[#0E6A30] hover:bg-[#c9ecd6]"
+        >
+          Activate
+        </button>
+      <% end %>
+    </div>
+  </div>
+  <div
+    :if={@venues == []}
+    class="mb-7 rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    No venues yet for {@region.name} — visitors registering here will only see "Other".
+  </div>
 
-  <h2>{if @editing_venue, do: "Edit venue", else: "Add a venue"}</h2>
-  <.form for={@form} id="venue-form" phx-change="validate" phx-submit="save">
-    <.input field={@form[:name]} label="Name" />
-    <.input
-      field={@form[:region_id]}
-      type="select"
-      label="Region"
-      options={Enum.map(@regions, &{&1.name, &1.id})}
-    />
-    <.button type="submit">{if @editing_venue, do: "Update", else: "Create"}</.button>
-    <.button :if={@editing_venue} type="button" phx-click="cancel_edit">Cancel</.button>
-  </.form>
-</Layouts.app>
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">
+    Custom "Other" entries from players
+  </h2>
+  <div
+    :if={@custom_venue_submissions != []}
+    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <div
+      :for={player <- @custom_venue_submissions}
+      class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3 last:border-0"
+    >
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-semibold text-ink-950">{player.other_venue_name}</div>
+        <div class="text-[12.5px] text-ink-400">
+          Entered by @{player.username} · {@region.name}
+        </div>
+      </div>
+      <button
+        type="button"
+        phx-click="promote"
+        phx-value-name={player.other_venue_name}
+        class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50"
+      >
+        Add to list
+      </button>
+    </div>
+  </div>
+  <div
+    :if={@custom_venue_submissions == []}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-5 text-center text-[13.5px] text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    No custom venue submissions yet.
+  </div>
+</AdminComponents.app_shell>

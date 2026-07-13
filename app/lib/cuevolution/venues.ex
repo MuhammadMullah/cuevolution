@@ -54,4 +54,11 @@ defmodule Cuevolution.Venues do
     |> Venue.changeset(%{active: false})
     |> Repo.update()
   end
+
+  @doc "Reverses `deactivate_venue/1` — brings a venue back into active listings."
+  def activate_venue(%Venue{} = venue) do
+    venue
+    |> Venue.changeset(%{active: true})
+    |> Repo.update()
+  end
 end

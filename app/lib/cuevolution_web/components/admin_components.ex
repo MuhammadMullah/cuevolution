@@ -61,10 +61,11 @@ defmodule CuevolutionWeb.AdminComponents do
   end
 
   @nav_items [
-    {"Dashboard", "◆", "/admin/dashboard"},
-    {"Players & teams", "☰", "/admin/players"},
-    {"Venues", "⚑", "/admin/venues"},
-    {"Notifications", "✉", "/admin/notifications"}
+    {"Dashboard", "▦", "/admin/dashboard"},
+    {"Draws", "⚏", "/admin/draws"},
+    {"Results & Points", "◔", "/admin/results"},
+    {"Directory", "☰", "/admin/players"},
+    {"Venues", "⚑", "/admin/venues"}
   ]
 
   @doc """
@@ -73,7 +74,11 @@ defmodule CuevolutionWeb.AdminComponents do
   "ADMIN APP SHELL" section, including its mobile topbar + drawer.
   """
   attr :current_admin, :map, required: true
-  attr :active, :atom, required: true, doc: "one of :dashboard, :players, :venues, :notifications"
+
+  attr :active, :atom,
+    required: true,
+    doc: "one of :dashboard, :draws, :results, :directory, :venues"
+
   attr :flash, :map, required: true
   slot :inner_block, required: true
 
@@ -176,9 +181,10 @@ defmodule CuevolutionWeb.AdminComponents do
   end
 
   defp nav_active?(active, "/admin/dashboard"), do: active == :dashboard
-  defp nav_active?(active, "/admin/players"), do: active == :players
+  defp nav_active?(active, "/admin/draws"), do: active == :draws
+  defp nav_active?(active, "/admin/results"), do: active == :results
+  defp nav_active?(active, "/admin/players"), do: active == :directory
   defp nav_active?(active, "/admin/venues"), do: active == :venues
-  defp nav_active?(active, "/admin/notifications"), do: active == :notifications
 
   defp admin_initials(%{email: email}) do
     email

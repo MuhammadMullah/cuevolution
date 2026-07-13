@@ -1,20 +1,62 @@
-<Layouts.app flash={@flash}>
-  <h1>{@player.first_name} {@player.last_name}</h1>
-  <.list>
-    <:item title="Username">{@player.username}</:item>
-    <:item title="Email">{@player.email}</:item>
-    <:item title="Mobile">{@player.mobile_number}</:item>
-    <:item title="Location">{@player.location}</:item>
-    <:item title="Country">{@player.country}</:item>
-    <:item title="Region">{@player.region.name}</:item>
-    <:item title="Category">{@player.gender}</:item>
-    <:item title="Notification preference">{@player.notification_preference}</:item>
-    <:item title="Registered">{@player.inserted_at}</:item>
-  </.list>
-  <p>
-    Team roster, current qualification stage, and notification delivery
-    history will appear here once the Teams, Competitions, and
-    Notifications contexts exist. The anonymize action (spec 010 FR-004)
-    is deferred until <code>Competitions.MatchResult</code> exists (task T032).
-  </p>
-</Layouts.app>
+<AdminComponents.app_shell current_admin={@current_admin} active={:directory} flash={@flash}>
+  <.link
+    navigate={~p"/admin/players"}
+    class="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-950"
+  >
+    ← Back to directory
+  </.link>
+
+  <div class="mb-5 flex items-center gap-4 rounded-2xl bg-ink-950 px-6 py-6 text-white">
+    <PlayerComponents.avatar
+      name={"#{@player.first_name} #{@player.last_name}"}
+      src={@player.profile_picture_path}
+      size="size-14"
+      class="text-lg"
+    />
+    <div class="min-w-0 flex-1">
+      <div class="text-[20px] font-bold tracking-tight">
+        {@player.first_name} {@player.last_name}
+        <span :if={@player.anonymized_at} class="ml-1.5 text-[11.5px] font-semibold text-ink-400">
+          ANONYMIZED
+        </span>
+      </div>
+      <div class="text-sm text-ink-400">@{@player.username} · {@player.region.name}</div>
+    </div>
+  </div>
+
+  <AdminComponents.card class="mb-5">
+    <div class="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+      <div
+        :for={{label, value} <- player_fields(@player)}
+        class="border-b border-ink-100 py-2.5 last:border-0"
+      >
+        <div class="text-[11.5px] text-ink-400">{label}</div>
+        <div class="text-sm font-semibold text-ink-950">{value}</div>
+      </div>
+    </div>
+  </AdminComponents.card>
+
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">
+    Notification delivery history
+  </h2>
+  <div
+    :if={@notifications != []}
+    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <div
+      :for={n <- @notifications}
+      class="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-5 py-3 text-sm last:border-0"
+    >
+      <span class="font-semibold text-ink-950">
+        {n.event_type} <span class="font-normal text-ink-500">· {n.channel}</span>
+      </span>
+      <span class="font-mono text-xs text-ink-500">{n.status} · {n.updated_at}</span>
+    </div>
+  </div>
+  <div
+    :if={@notifications == []}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-7 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    No notifications sent yet.
+  </div>
+</AdminComponents.app_shell>

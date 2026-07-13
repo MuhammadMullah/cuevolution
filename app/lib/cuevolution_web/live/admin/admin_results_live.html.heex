@@ -1,0 +1,37 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:results} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Results &amp; Points</AdminComponents.eyebrow>
+  <h1 class="mb-5 text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Match results
+  </h1>
+
+  <div class="mb-4 flex gap-2 border-b border-ink-200">
+    <button
+      type="button"
+      phx-click="switch_tab"
+      phx-value-tab="unplayed"
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+        @tab == "unplayed" && "border-red-500 text-ink-950",
+        @tab != "unplayed" && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      Unplayed
+    </button>
+    <button
+      type="button"
+      phx-click="switch_tab"
+      phx-value-tab="played"
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+        @tab == "played" && "border-red-500 text-ink-950",
+        @tab != "played" && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      Played / Correct
+    </button>
+  </div>
+
+  <div class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
+    No fixtures in this list.
+  </div>
+</AdminComponents.app_shell>

@@ -1,23 +1,34 @@
 defmodule CuevolutionWeb.PlayerDirectoryLive do
+  @moduledoc """
+  Admin "Directory" (project-scope/Quevolution/Cuevolution Admin.dc.html) —
+  one unified, filterable list of Players and Teams. The mockup's Stage
+  filter isn't implemented: it depends on `Competitions.StageParticipation`,
+  which doesn't exist yet (same deferral as `Accounts.list_players_filtered/1`).
+  """
   use CuevolutionWeb, :live_view
 
-  import Ecto.Query
-
   alias Cuevolution.Accounts
-  alias Cuevolution.Accounts.Region
-  alias Cuevolution.Repo
+  alias Cuevolution.Teams
+  alias CuevolutionWeb.AdminComponents
+  alias CuevolutionWeb.PlayerComponents
+
+  @kinds [
+    {"All", "all"},
+    {"Individual Male", "male"},
+    {"Individual Female", "female"},
+    {"Teams", "team"}
+  ]
 
   def mount(_params, _session, socket) do
-    regions = Repo.all(from r in Region, order_by: r.name)
-
     {:ok,
      socket
      |> assign(
-       page_title: "Player Directory",
-       regions: regions,
+       page_title: "Directory",
+       regions: Accounts.list_regions(),
+       kinds: @kinds,
        filter_form: to_form(%{}, as: :filter)
      )
-     |> stream(:players, Accounts.list_players_filtered(%{}))}
+     |> assign(:rows, build_rows(%{}))}
   end
 
   def handle_event("filter", %{"filter" => params}, socket) do
@@ -26,14 +37,14 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     {:noreply,
      socket
      |> assign(:filter_form, to_form(params, as: :filter))
-     |> stream(:players, Accounts.list_players_filtered(filters), reset: true)}
+     |> assign(:rows, build_rows(filters))}
   end
 
   defp build_filters(params) do
     %{}
     |> maybe_put_filter(:region_id, blank_to_nil(params["region_id"]))
-    |> maybe_put_filter(:category, blank_to_nil(params["category"]))
-    |> maybe_put_filter(:username, blank_to_nil(params["username"]))
+    |> maybe_put_filter(:kind, blank_to_nil(params["kind"]))
+    |> maybe_put_filter(:search, blank_to_nil(params["search"]))
   end
 
   defp blank_to_nil(nil), do: nil
@@ -42,4 +53,55 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
 
   defp maybe_put_filter(filters, _key, nil), do: filters
   defp maybe_put_filter(filters, key, value), do: Map.put(filters, key, value)
+
+  defp build_rows(filters) do
+    kind = filters[:kind] || "all"
+
+    players =
+      if kind in ["all", "male", "female"] do
+        Accounts.list_players_filtered(%{
+          region_id: filters[:region_id],
+          category: (kind != "all" && kind) || nil,
+          username: filters[:search]
+        })
+      else
+        []
+      end
+
+    teams =
+      if kind in ["all", "team"] do
+        Teams.list_teams_filtered(%{region_id: filters[:region_id], name: filters[:search]})
+      else
+        []
+      end
+
+    (Enum.map(players, &player_row/1) ++ Enum.map(teams, &team_row/1))
+    |> Enum.sort_by(&String.downcase(&1.name))
+  end
+
+  defp player_row(player) do
+    %{
+      id: player.id,
+      kind: :player,
+      name: "#{player.first_name} #{player.last_name}",
+      avatar_name: "#{player.first_name} #{player.last_name}",
+      avatar_src: player.profile_picture_path,
+      sub: "Player · #{player.region.name} · @#{player.username}",
+      anonymized: !is_nil(player.anonymized_at),
+      path: ~p"/admin/players/#{player.id}"
+    }
+  end
+
+  defp team_row(team) do
+    %{
+      id: team.id,
+      kind: :team,
+      name: team.name,
+      avatar_name: team.name,
+      avatar_src: nil,
+      sub: "Team · #{team.region.name} · #{length(team.roster)} on roster",
+      anonymized: false,
+      path: ~p"/admin/teams/#{team.id}"
+    }
+  end
 end

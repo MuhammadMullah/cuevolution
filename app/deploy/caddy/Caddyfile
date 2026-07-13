@@ -10,6 +10,6 @@ staging.cuevolutionke.com {
 	reverse_proxy cuevolution-staging:4000
 }
 
-app.cuevolutionke.com {
+cuevolutionke.com {
 	reverse_proxy cuevolution-production:4000
 }

@@ -6,7 +6,7 @@ front of two independent app+database stacks:
 | Branch    | Workflow                                   | Environment  | Domain                       |
 | --------- | ------------------------------------------- | ------------ | ------------------------------ |
 | `develop` | `.github/workflows/deploy-staging.yml`      | `staging`    | `staging.cuevolutionke.com`  |
-| `main`    | `.github/workflows/deploy-production.yml`   | `production` | `app.cuevolutionke.com`      |
+| `main`    | `.github/workflows/deploy-production.yml`   | `production` | `cuevolutionke.com`          |
 
 Every pull request (regardless of target branch) also runs `.github/workflows/ci.yml`
 — format check, `mix compile --warnings-as-errors`, `mix credo --strict`,
@@ -66,9 +66,13 @@ it can request certificates).
    docker network create web
    ```
 
-4. **Point DNS** for both `staging.cuevolutionke.com` and
-   `app.cuevolutionke.com` at the server's IP — required before Caddy can
-   obtain Let's Encrypt certificates for either.
+4. **Point DNS** for both `staging.cuevolutionke.com` and the bare
+   `cuevolutionke.com` at the server's IP — required before Caddy can
+   obtain Let's Encrypt certificates for either. For the apex domain
+   specifically, make sure it has **only** that one A record — a
+   registrar's default parking/forwarding records left in place alongside
+   it will make certificate issuance (and traffic) unreliable, since
+   requests can land on any of the listed IPs.
 
 5. **Deploy the shared Caddy stack** (once — not part of either app's CI/CD):
 
