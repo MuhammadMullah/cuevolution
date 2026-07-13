@@ -251,6 +251,57 @@ defmodule CuevolutionWeb.PlayerComponents do
     """
   end
 
+  def input(%{type: "date"} = assigns) do
+    ~H"""
+    <div class="mb-4">
+      <label :if={@label} for={@id} class="mb-1.5 block text-sm font-semibold text-ink-700">
+        {@label}
+      </label>
+      <input
+        type="date"
+        name={@name}
+        id={@id}
+        value={Form.normalize_value(@type, @value)}
+        phx-hook=".DateInputPicker"
+        class={[
+          "w-full cursor-pointer rounded-md border bg-white px-3.5 py-2.5 font-sans text-[15px] text-ink-950 placeholder:text-ink-500",
+          "focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15",
+          @errors == [] && "border-ink-300",
+          @errors != [] && "border-danger",
+          @class
+        ]}
+        {@rest}
+      />
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".DateInputPicker">
+        export default {
+          mounted() {
+            this.onClick = () => {
+              if (typeof this.el.showPicker === "function") {
+                try {
+                  this.el.showPicker()
+                } catch (_error) {
+                  // no-op — e.g. picker already open, or unsupported in this state
+                }
+              }
+            }
+            this.el.addEventListener("click", this.onClick)
+          },
+          destroyed() {
+            this.el.removeEventListener("click", this.onClick)
+          }
+        }
+      </script>
+      <.field_error :for={msg <- @errors}>{msg}</.field_error>
+      <p
+        :if={@hint && @errors == []}
+        class={["mt-1.5 font-mono text-[12.5px]", hint_class(@hint_variant)]}
+      >
+        {@hint}
+      </p>
+    </div>
+    """
+  end
+
   def input(assigns) do
     ~H"""
     <div class="mb-4">
