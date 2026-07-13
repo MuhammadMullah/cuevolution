@@ -145,45 +145,31 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer (Google Workspace SMTP)
+  # ## Configuring the mailer (Amazon SES)
   #
-  # Authenticates as a real Workspace mailbox over SMTP — smtp.gmail.com
-  # accepts the same app-password auth for Workspace accounts as for
-  # personal Gmail. That mailbox needs 2-Step Verification turned on
-  # (Google Account → Security) so an app password can be generated for it
-  # (Security → 2-Step Verification → App passwords); a regular account
-  # password will not work here. `mail_from` is set to the same address —
-  # Gmail rejects/rewrites a From header that isn't the authenticated
-  # account or one of its verified "Send As" aliases.
-  smtp_username =
-    System.get_env("SMTP_USERNAME") ||
+  # Sends over the SES HTTPS API (via ExAwsAmazonSES, reusing the same
+  # :ex_aws credentials configured above for S3 — that IAM user/role needs
+  # ses:SendRawEmail added to its policy) rather than raw SMTP — some
+  # hosts block outbound SMTP ports (25/465/587) at the network level,
+  # which an HTTPS-based API sidesteps entirely.
+  #
+  # MAIL_FROM_ADDRESS must be a verified identity in SES (an individually
+  # verified address, or any address on a verified domain) — SES rejects
+  # sends from anything else. New SES accounts also start in "sandbox"
+  # mode, where *recipients* must be verified too, until you request
+  # production access in the SES console (Account dashboard → Request
+  # production access — usually approved within a day).
+  mail_from_address =
+    System.get_env("MAIL_FROM_ADDRESS") ||
       raise """
-      environment variable SMTP_USERNAME is missing.
-      The Google Workspace mailbox to send from, e.g. notifications@cuevolutionke.com.
+      environment variable MAIL_FROM_ADDRESS is missing.
+      Must be a verified identity in SES — see Cuevolution.Mailer config in
+      config/runtime.exs.
       """
 
-  smtp_password =
-    System.get_env("SMTP_PASSWORD") ||
-      raise """
-      environment variable SMTP_PASSWORD is missing.
-      An app password for SMTP_USERNAME — requires 2-Step Verification on that
-      account, then generate one under Security > 2-Step Verification > App
-      passwords. A regular account password will not work.
-      """
+  config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
 
-  config :cuevolution, :mail_from, {"Cuevolution", smtp_username}
-
-  config :cuevolution, Cuevolution.Mailer,
-    adapter: Swoosh.Adapters.SMTP,
-    relay: "smtp.gmail.com",
-    port: 587,
-    username: smtp_username,
-    password: smtp_password,
-    ssl: false,
-    tls: :always,
-    auth: :always,
-    retries: 2,
-    no_mx_lookups: true
+  config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.ExAwsAmazonSES
 
   # ## Configuring SMS (Africa's Talking)
   africastalking_api_key =

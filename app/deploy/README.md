@@ -98,7 +98,8 @@ it can request certificates).
      endpoint, see `lib/cuevolution/accounts/profile_picture/storage/s3.ex`).
 
      Create an IAM user (or role, if the server itself runs on AWS) with
-     an inline policy scoped to just that bucket:
+     an inline policy scoped to just that bucket, plus SES sending (used
+     for email below — one IAM user covers both):
 
      ```json
      {
@@ -108,6 +109,11 @@ it can request certificates).
            "Effect": "Allow",
            "Action": ["s3:PutObject", "s3:GetObject"],
            "Resource": "arn:aws:s3:::<bucket-name>/*"
+         },
+         {
+           "Effect": "Allow",
+           "Action": "ses:SendRawEmail",
+           "Resource": "*"
          }
        ]
      }
@@ -115,6 +121,22 @@ it can request certificates).
 
      Generate an access key for that IAM user (Security credentials →
      Access keys) and note the bucket's region — both go in `.env` below.
+
+   - **Set up SES** (Amazon SES console, same region as above — SES sends
+     over HTTPS rather than SMTP, since some hosts block outbound SMTP
+     ports at the network level):
+     - Verify a sending identity: either a single email address
+       (Identities → Create identity → Email address, then click the
+       confirmation link it emails you), or an entire domain (adds DNS
+       records instead — lets you send from any address `@your-domain`
+       without re-verifying each one). This becomes `MAIL_FROM_ADDRESS`
+       below.
+     - New SES accounts start in **sandbox mode** — you can only send *to*
+       addresses that are *also* verified, which is fine for your own
+       testing but blocks real signups. Request production access under
+       Account dashboard → Sending statistics → "Request production
+       access" (a short form; usually approved within a day) before this
+       matters for real users.
 
    - Create the app directory:
 
