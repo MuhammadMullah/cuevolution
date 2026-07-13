@@ -11,7 +11,9 @@
       entry={entry}
       class="size-full object-cover"
     />
-    <span :if={@uploads.photo.entries == []}>Add photo</span>
+    <span :if={@uploads.photo.entries == []} class="px-1 text-center leading-tight">
+      Add photo
+    </span>
   </label>
   <div>
     <div class="text-sm font-semibold text-ink-700">Profile picture</div>
@@ -34,6 +36,7 @@
     type="date"
     label="Date of birth"
     hint={age_hint(@attrs["date_of_birth"])}
+    max={Date.to_iso8601(Date.utc_today())}
   />
   <PlayerComponents.input
     field={@form[:location]}

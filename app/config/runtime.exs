@@ -145,23 +145,45 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer
+  # ## Configuring the mailer (Google Workspace SMTP)
   #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :cuevolution, Cuevolution.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+  # Authenticates as a real Workspace mailbox over SMTP — smtp.gmail.com
+  # accepts the same app-password auth for Workspace accounts as for
+  # personal Gmail. That mailbox needs 2-Step Verification turned on
+  # (Google Account → Security) so an app password can be generated for it
+  # (Security → 2-Step Verification → App passwords); a regular account
+  # password will not work here. `mail_from` is set to the same address —
+  # Gmail rejects/rewrites a From header that isn't the authenticated
+  # account or one of its verified "Send As" aliases.
+  smtp_username =
+    System.get_env("SMTP_USERNAME") ||
+      raise """
+      environment variable SMTP_USERNAME is missing.
+      The Google Workspace mailbox to send from, e.g. notifications@cuevolutionke.com.
+      """
+
+  smtp_password =
+    System.get_env("SMTP_PASSWORD") ||
+      raise """
+      environment variable SMTP_PASSWORD is missing.
+      An app password for SMTP_USERNAME — requires 2-Step Verification on that
+      account, then generate one under Security > 2-Step Verification > App
+      passwords. A regular account password will not work.
+      """
+
+  config :cuevolution, :mail_from, {"Cuevolution", smtp_username}
+
+  config :cuevolution, Cuevolution.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: "smtp.gmail.com",
+    port: 587,
+    username: smtp_username,
+    password: smtp_password,
+    ssl: false,
+    tls: :always,
+    auth: :always,
+    retries: 2,
+    no_mx_lookups: true
 
   # ## Configuring SMS (Africa's Talking)
   africastalking_api_key =

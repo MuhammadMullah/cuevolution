@@ -235,7 +235,7 @@ defmodule CuevolutionWeb.AdminComponents do
     """
   end
 
-  attr :id, :string, default: nil
+  attr :id, :string, doc: "the optional id of the flash container"
   attr :flash, :map, required: true
   attr :kind, :atom, values: [:info, :error], required: true
 
@@ -247,7 +247,7 @@ defmodule CuevolutionWeb.AdminComponents do
       :if={msg = Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-hook=".AdminAutoDismissFlash"
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "##{@id}")}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> fade_out("##{@id}")}
       role="alert"
       class={[
         "w-full max-w-sm rounded-2xl border px-4 py-3 text-sm font-medium shadow-md sm:w-96",
@@ -259,7 +259,7 @@ defmodule CuevolutionWeb.AdminComponents do
       <script :type={Phoenix.LiveView.ColocatedHook} name=".AdminAutoDismissFlash">
         export default {
           mounted() {
-            this.timer = setTimeout(() => this.el.click(), 5000)
+            this.timer = setTimeout(() => this.el.click(), 4000)
           },
           destroyed() {
             clearTimeout(this.timer)
@@ -268,5 +268,14 @@ defmodule CuevolutionWeb.AdminComponents do
       </script>
     </div>
     """
+  end
+
+  @doc "Fades an element out over 1s, then hides it — used to auto-dismiss flashes."
+  def fade_out(js \\ %JS{}, selector) do
+    JS.hide(js,
+      to: selector,
+      time: 1000,
+      transition: {"transition-opacity ease-out duration-1000", "opacity-100", "opacity-0"}
+    )
   end
 end

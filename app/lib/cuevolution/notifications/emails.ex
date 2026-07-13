@@ -7,8 +7,6 @@ defmodule Cuevolution.Notifications.Emails do
   """
   import Swoosh.Email
 
-  @from {"Cuevolution", "notifications@cuevolution.test"}
-
   @doc "Welcome email sent right after successful registration."
   def registration_confirmation(player) do
     base(player)
@@ -86,6 +84,6 @@ defmodule Cuevolution.Notifications.Emails do
   defp base(player) do
     new()
     |> to({"#{player.first_name} #{player.last_name}", player.email})
-    |> from(@from)
+    |> from(Application.get_env(:cuevolution, :mail_from))
   end
 end

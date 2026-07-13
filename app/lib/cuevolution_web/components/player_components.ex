@@ -14,6 +14,7 @@ defmodule CuevolutionWeb.PlayerComponents do
   use Phoenix.Component
   use CuevolutionWeb, :verified_routes
 
+  alias Cuevolution.Accounts.ProfilePicture
   alias Phoenix.HTML.Form
   alias Phoenix.HTML.FormField
   alias Phoenix.LiveView.JS
@@ -177,6 +178,68 @@ defmodule CuevolutionWeb.PlayerComponents do
         ]}
         {@rest}
       >{Form.normalize_value("textarea", @value)}</textarea>
+      <.field_error :for={msg <- @errors}>{msg}</.field_error>
+      <p
+        :if={@hint && @errors == []}
+        class={["mt-1.5 font-mono text-[12.5px]", hint_class(@hint_variant)]}
+      >
+        {@hint}
+      </p>
+    </div>
+    """
+  end
+
+  def input(%{type: "password"} = assigns) do
+    ~H"""
+    <div class="mb-4">
+      <label :if={@label} for={@id} class="mb-1.5 block text-sm font-semibold text-ink-700">
+        {@label}
+      </label>
+      <div class="relative" phx-hook=".PasswordToggle" id={"#{@id}-toggle"}>
+        <input
+          type="password"
+          name={@name}
+          id={@id}
+          value={Form.normalize_value(@type, @value)}
+          class={[
+            "w-full rounded-md border bg-white px-3.5 py-2.5 pr-11 font-sans text-[15px] text-ink-950 placeholder:text-ink-500",
+            "focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15",
+            @errors == [] && "border-ink-300",
+            @errors != [] && "border-danger",
+            @class
+          ]}
+          {@rest}
+        />
+        <button
+          type="button"
+          class="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-400 hover:text-ink-600 cursor-pointer"
+          aria-label="Show password"
+        >
+          <.icon name="hero-eye" class="password-toggle-show size-5" />
+          <.icon name="hero-eye-slash" class="password-toggle-hide hidden size-5" />
+        </button>
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".PasswordToggle">
+          export default {
+            mounted() {
+              const input = this.el.querySelector("input")
+              const button = this.el.querySelector("button")
+              const showIcon = this.el.querySelector(".password-toggle-show")
+              const hideIcon = this.el.querySelector(".password-toggle-hide")
+              this.onClick = () => {
+                const revealing = input.type === "password"
+                input.type = revealing ? "text" : "password"
+                showIcon.classList.toggle("hidden", revealing)
+                hideIcon.classList.toggle("hidden", !revealing)
+                button.setAttribute("aria-label", revealing ? "Hide password" : "Show password")
+              }
+              button.addEventListener("click", this.onClick)
+            },
+            destroyed() {
+              this.el.querySelector("button").removeEventListener("click", this.onClick)
+            }
+          }
+        </script>
+      </div>
       <.field_error :for={msg <- @errors}>{msg}</.field_error>
       <p
         :if={@hint && @errors == []}
@@ -448,10 +511,15 @@ defmodule CuevolutionWeb.PlayerComponents do
             <button
               type="button"
               phx-click={JS.toggle(to: "#account-menu-dropdown")}
-              class="flex size-9 cursor-pointer items-center justify-center rounded-full bg-ink-950 text-[13px] font-semibold text-ink-25"
+              class="cursor-pointer rounded-full"
               title="Account"
             >
-              {player_initials(@current_player)}
+              <.avatar
+                name={"#{@current_player.first_name} #{@current_player.last_name}"}
+                src={ProfilePicture.url(@current_player.profile_picture_path)}
+                size="size-9"
+                class="text-[13px]"
+              />
             </button>
             <div
               id="account-menu-dropdown"
@@ -509,10 +577,6 @@ defmodule CuevolutionWeb.PlayerComponents do
     """
   end
 
-  defp player_initials(player) do
-    initials("#{player.first_name} #{player.last_name}")
-  end
-
   @doc "The centered card shell used by sign-in/registration."
   attr :max_width, :string, default: "max-w-[420px]"
   attr :flash, :map, required: true
@@ -550,7 +614,16 @@ defmodule CuevolutionWeb.PlayerComponents do
     """
   end
 
-  attr :id, :string, default: nil
+  @doc "Fades an element out over 1s, then hides it — used to auto-dismiss flashes."
+  def fade_out(js \\ %JS{}, selector) do
+    JS.hide(js,
+      to: selector,
+      time: 1000,
+      transition: {"transition-opacity ease-out duration-1000", "opacity-100", "opacity-0"}
+    )
+  end
+
+  attr :id, :string, doc: "the optional id of the flash container"
   attr :flash, :map, required: true
   attr :kind, :atom, values: [:info, :error], required: true
 
@@ -562,7 +635,7 @@ defmodule CuevolutionWeb.PlayerComponents do
       :if={msg = Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-hook=".AutoDismissFlash"
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "##{@id}")}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> fade_out("##{@id}")}
       role="alert"
       class={[
         "w-full max-w-sm rounded-2xl border px-4 py-3 text-sm font-medium shadow-md sm:w-96",
@@ -574,7 +647,7 @@ defmodule CuevolutionWeb.PlayerComponents do
       <script :type={Phoenix.LiveView.ColocatedHook} name=".AutoDismissFlash">
         export default {
           mounted() {
-            this.timer = setTimeout(() => this.el.click(), 5000)
+            this.timer = setTimeout(() => this.el.click(), 4000)
           },
           destroyed() {
             clearTimeout(this.timer)

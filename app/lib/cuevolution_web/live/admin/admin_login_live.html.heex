@@ -25,14 +25,45 @@
       <label for={@form[:password].id} class="mb-1.5 block text-[13px] font-semibold text-ink-300">
         Password
       </label>
-      <input
-        type="password"
-        name={@form[:password].name}
-        id={@form[:password].id}
-        placeholder="••••••••"
-        required
-        class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
-      />
+      <div class="relative" phx-hook=".PasswordToggle" id={"#{@form[:password].id}-toggle"}>
+        <input
+          type="password"
+          name={@form[:password].name}
+          id={@form[:password].id}
+          placeholder="••••••••"
+          required
+          class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] pr-11 text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
+        />
+        <button
+          type="button"
+          class="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ink-400 hover:text-ink-200 cursor-pointer"
+          aria-label="Show password"
+        >
+          <.icon name="hero-eye" class="password-toggle-show size-5" />
+          <.icon name="hero-eye-slash" class="password-toggle-hide hidden size-5" />
+        </button>
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".PasswordToggle">
+          export default {
+            mounted() {
+              const input = this.el.querySelector("input")
+              const button = this.el.querySelector("button")
+              const showIcon = this.el.querySelector(".password-toggle-show")
+              const hideIcon = this.el.querySelector(".password-toggle-hide")
+              this.onClick = () => {
+                const revealing = input.type === "password"
+                input.type = revealing ? "text" : "password"
+                showIcon.classList.toggle("hidden", revealing)
+                hideIcon.classList.toggle("hidden", !revealing)
+                button.setAttribute("aria-label", revealing ? "Hide password" : "Show password")
+              }
+              button.addEventListener("click", this.onClick)
+            },
+            destroyed() {
+              this.el.querySelector("button").removeEventListener("click", this.onClick)
+            }
+          }
+        </script>
+      </div>
     </div>
 
     <div
