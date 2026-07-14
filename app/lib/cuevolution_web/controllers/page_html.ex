@@ -6,5 +6,7 @@ defmodule CuevolutionWeb.PageHTML do
   """
   use CuevolutionWeb, :html
 
+  alias CuevolutionWeb.PlayerComponents
+
   embed_templates "page_html/*"
 end

@@ -46,7 +46,7 @@ defmodule CuevolutionWeb.PlayerComponents do
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled form)
   attr :class, :any, default: nil
-  attr :variant, :string, values: ~w(primary secondary ghost), default: "primary"
+  attr :variant, :string, values: ~w(primary secondary ghost cta cta-outline), default: "primary"
   attr :full_width, :boolean, default: false
   slot :inner_block, required: true
 
@@ -54,7 +54,9 @@ defmodule CuevolutionWeb.PlayerComponents do
     variants = %{
       "primary" => "bg-ink-950 text-ink-25 hover:bg-ink-900",
       "secondary" => "bg-white text-ink-950 border border-ink-300 hover:bg-ink-100",
-      "ghost" => "bg-transparent text-ink-500 hover:text-red-700 hover:bg-red-50"
+      "ghost" => "bg-transparent text-ink-500 hover:text-red-700 hover:bg-red-50",
+      "cta" => "bg-red-500 text-white hover:bg-red-600",
+      "cta-outline" => "bg-transparent text-white border border-white/30 hover:bg-white/10"
     }
 
     assigns =

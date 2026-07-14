@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<meta name="design_doc_mode" content="canvas">
+<meta name="description" content="Cuevolution is Kenya's pool league platform — register, compete and climb from grassroots nights to the national circuit.">
+<meta property="og:title" content="Cuevolution — Kenya's Pool League">
+<meta property="og:description" content="Join the community of pool players competing from grassroots to the national stage.">
+<style>
+@font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#EDEBE4;-webkit-font-smoothing:antialiased;font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;}
+a{color:#C81E16;text-decoration:none;}
+a:hover{color:#A81810;text-decoration:underline;}
+</style>
+</helmet>
+
+<section id="t1" style="padding:36px 32px 60px;">
+  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
+    <a href="#t1" style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:3px 7px;background:#0D0C22;color:#fff;border-radius:4px;">1</a>
+    <span style="font-size:13px;font-weight:600;color:#0D0C22;">Landing page — two directions</span>
+  </div>
+  <p style="font-size:12.5px;color:#6E6D7A;margin:0 0 22px;max-width:64ch;">Both options share the same copy, mission and partners sections — they differ in hero treatment. Reference by id in chat, e.g. "make <a href="#1a" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1a</a>'s hero full-bleed".</p>
+
+  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start;">
+
+    <!-- ============================================================ -->
+    <!-- OPTION 1A — bold dark hero -->
+    <!-- ============================================================ -->
+    <div id="1a" style="flex:none;display:flex;flex-direction:column;gap:9px;">
+      <div style="display:flex;align-items:baseline;gap:8px;font-size:11px;color:rgba(13,12,34,0.55);">
+        <a href="#1a" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 7px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:5px;">1a</a>Bold — dark ink-950 hero
+      </div>
+      <div style="width:1240px;max-width:1240px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+
+        <!-- nav -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#0D0C22;">
+          <img src="assets/logo-white.png" alt="Cuevolution" style="height:24px;width:auto;" />
+          <nav style="display:flex;align-items:center;gap:28px;">
+            <a href="#mission-1a" style="color:#DBDBDE;font-size:14px;font-weight:600;">Mission</a>
+            <a href="#partners-1a" style="color:#DBDBDE;font-size:14px;font-weight:600;">Partners</a>
+            <a href="#feedback-1a" style="color:#DBDBDE;font-size:14px;font-weight:600;">Feedback</a>
+          </nav>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#fff;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+            <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+          </div>
+        </div>
+
+        <!-- hero -->
+        <div style="position:relative;background:#0D0C22;overflow:hidden;min-height:600px;display:flex;align-items:flex-end;">
+          <div style="position:absolute;left:40px;right:40px;top:36px;z-index:1;font-size:120px;font-weight:800;letter-spacing:-0.03em;color:rgba(255,255,255,0.06);line-height:1;white-space:nowrap;overflow:hidden;">CUEVOLUTION</div>
+          <img src="assets/hero-player.png" alt="Cuevolution player lining up a shot" style="position:absolute;right:0;bottom:0;z-index:1;height:130%;width:auto;max-width:66%;object-fit:contain;object-position:bottom right;" />
+          <div style="position:absolute;inset:0;z-index:1;background:linear-gradient(90deg, rgba(13,12,34,0.97) 0%, rgba(13,12,34,0.85) 38%, rgba(13,12,34,0.35) 62%, rgba(13,12,34,0.05) 85%);"></div>
+          <div style="position:relative;z-index:2;padding:0 40px 64px;max-width:600px;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:20px;">Kenya's Pool League</div>
+            <h1 style="font-size:64px;line-height:1.05;font-weight:700;letter-spacing:-0.02em;color:#FDFCFB;margin:0 0 22px;">Every rack starts somewhere.</h1>
+            <p style="font-size:20px;line-height:1.6;color:#DBDBDE;margin:0 0 34px;max-width:52ch;">Register, get drawn into fixtures, and climb from a grassroots night at your local table all the way to the national circuit.</p>
+            <a href="Cuevolution Player App.dc.html?screen=register" style="display:inline-block;color:#fff;font-size:16.5px;font-weight:600;padding:15px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+          </div>
+        </div>
+
+        <!-- mission -->
+        <div id="mission-1a" style="padding:88px 40px;background:#fff;">
+          <div style="max-width:760px;margin:0 auto;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">Why Cuevolution</div>
+            <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 18px;">One community, every level.</h2>
+            <p style="font-size:17px;line-height:1.7;color:#524B63;margin:0;">We bring Kenya's pool players together in one place to interact, compete and showcase their talent — from grassroots nights at the local table all the way to the national stage.</p>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:56px auto 0;">
+            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1a-photo1" shape="rounded" radius="14" placeholder="Community photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Interact</div><div style="font-size:13.5px;color:#6E6D7A;">Find players and teams near you</div></div>
+            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1a-photo2" shape="rounded" radius="14" placeholder="Match photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Compete</div><div style="font-size:13.5px;color:#6E6D7A;">Fixtures, standings and results in real time</div></div>
+            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1a-photo3" shape="rounded" radius="14" placeholder="Trophy / finals photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Showcase</div><div style="font-size:13.5px;color:#6E6D7A;">Climb the ranks toward the national finals</div></div>
+          </div>
+        </div>
+
+        <!-- partners -->
+        <div id="partners-1a" style="padding:64px 40px 76px;background:#FAF9FB;border-top:1px solid #E7E7E9;">
+          <div style="text-align:center;margin-bottom:36px;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Backed by</div>
+            <h2 style="font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0;">Our partners</h2>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:820px;margin:0 auto;">
+            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 01</div>
+            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 02</div>
+            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 03</div>
+            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 04</div>
+          </div>
+        </div>
+
+        <!-- feedback -->
+        <div id="feedback-1a" style="padding:76px 40px;background:#FDFCFB;border-top:1px solid #E7E7E9;">
+          <div style="max-width:560px;margin:0 auto;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:12px;">Tell us what you think</div>
+            <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0 0 10px;">Share feedback</h2>
+            <p style="font-size:14.5px;color:#6E6D7A;margin:0 0 28px;">Ideas, bugs, or anything you want to see on Cuevolution — we read every submission.</p>
+          </div>
+          <form style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px;">
+            <input type="text" placeholder="Your name" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
+            <input type="email" placeholder="Your email" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
+            <textarea placeholder="Your feedback" rows="4" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;resize:vertical;"></textarea>
+            <button type="submit" style="align-self:center;color:#fff;font-size:14.5px;font-weight:600;padding:12px 28px;border-radius:9999px;background:#E32219;border:none;cursor:pointer;">Send feedback</button>
+          </form>
+        </div>
+
+        <!-- footer -->
+        <div style="padding:28px 40px;background:#0D0C22;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;">
+          <img src="assets/logo-white.png" alt="Cuevolution" style="height:18px;width:auto;opacity:0.9;" />
+          <div style="display:flex;align-items:center;gap:20px;">
+            <a href="#feedback-1a" style="color:#DBDBDE;font-size:13px;font-weight:600;">Share feedback</a>
+            <div style="font-size:12.5px;color:#6E6D7A;">© 2026 Cuevolution. All rights reserved.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- OPTION 1B — light airy hero -->
+    <!-- ============================================================ -->
+    <div id="1b" style="flex:none;display:flex;flex-direction:column;gap:9px;">
+      <div style="display:flex;align-items:baseline;gap:8px;font-size:11px;color:rgba(13,12,34,0.55);">
+        <a href="#1b" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 7px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:5px;">1b</a>Light — airy hero with photo
+      </div>
+      <div style="width:1240px;max-width:1240px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+
+        <!-- nav -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#FDFCFB;border-bottom:1px solid #E7E7E9;">
+          <img src="assets/logo-black.png" alt="Cuevolution" style="height:22px;width:auto;" />
+          <nav style="display:flex;align-items:center;gap:28px;">
+            <a href="#mission-1b" style="color:#3A3546;font-size:14px;font-weight:600;">Mission</a>
+            <a href="#partners-1b" style="color:#3A3546;font-size:14px;font-weight:600;">Partners</a>
+            <a href="#feedback-1b" style="color:#3A3546;font-size:14px;font-weight:600;">Feedback</a>
+          </nav>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#0D0C22;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid #DBDBDE;">Sign in</a>
+            <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+          </div>
+        </div>
+
+        <!-- hero -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:80px 40px;background:#FDFCFB;">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:20px;">Kenya's Pool League</div>
+            <h1 style="font-size:56px;line-height:1.1;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 22px;">Your game. Your circuit. Your community.</h1>
+            <p style="font-size:19px;line-height:1.6;color:#524B63;margin:0 0 34px;max-width:48ch;">Cuevolution brings pool players together to register, compete and climb — from grassroots nights to the national finals.</p>
+            <div>
+              <a href="Cuevolution Player App.dc.html?screen=register" style="display:inline-block;color:#fff;font-size:16.5px;font-weight:600;padding:15px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+            </div>
+          </div>
+          <div style="width:100%;height:480px;border-radius:20px;background:linear-gradient(135deg,#0D0C22,#2A2942);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;">
+            <img src="assets/hero-player.png" alt="Cuevolution player lining up a shot" style="height:112%;width:auto;max-width:100%;object-fit:contain;object-position:bottom center;" />
+          </div>
+        </div>
+
+        <!-- mission -->
+        <div id="mission-1b" style="padding:88px 40px;background:#FAF9FB;">
+          <div style="max-width:760px;margin:0 auto;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">Why Cuevolution</div>
+            <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 18px;">One community, every level.</h2>
+            <p style="font-size:17px;line-height:1.7;color:#524B63;margin:0;">We bring Kenya's pool players together in one place to interact, compete and showcase their talent — from grassroots nights at the local table all the way to the national stage.</p>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:56px auto 0;">
+            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1b-photo1" shape="rounded" radius="14" placeholder="Community photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Interact</div><div style="font-size:13.5px;color:#6E6D7A;">Find players and teams near you</div></div>
+            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1b-photo2" shape="rounded" radius="14" placeholder="Match photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Compete</div><div style="font-size:13.5px;color:#6E6D7A;">Fixtures, standings and results in real time</div></div>
+            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1b-photo3" shape="rounded" radius="14" placeholder="Trophy / finals photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Showcase</div><div style="font-size:13.5px;color:#6E6D7A;">Climb the ranks toward the national finals</div></div>
+          </div>
+        </div>
+
+        <!-- partners -->
+        <div id="partners-1b" style="padding:64px 40px 76px;background:#fff;border-top:1px solid #E7E7E9;">
+          <div style="text-align:center;margin-bottom:36px;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Backed by</div>
+            <h2 style="font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0;">Our partners</h2>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:820px;margin:0 auto;">
+            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 01</div>
+            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 02</div>
+            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 03</div>
+            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 04</div>
+          </div>
+        </div>
+
+        <!-- feedback -->
+        <div id="feedback-1b" style="padding:76px 40px;background:#FAF9FB;border-top:1px solid #E7E7E9;">
+          <div style="max-width:560px;margin:0 auto;text-align:center;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:12px;">Tell us what you think</div>
+            <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0 0 10px;">Share feedback</h2>
+            <p style="font-size:14.5px;color:#6E6D7A;margin:0 0 28px;">Ideas, bugs, or anything you want to see on Cuevolution — we read every submission.</p>
+          </div>
+          <form style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px;">
+            <input type="text" placeholder="Your name" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
+            <input type="email" placeholder="Your email" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
+            <textarea placeholder="Your feedback" rows="4" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;resize:vertical;"></textarea>
+            <button type="submit" style="align-self:center;color:#fff;font-size:14.5px;font-weight:600;padding:12px 28px;border-radius:9999px;background:#E32219;border:none;cursor:pointer;">Send feedback</button>
+          </form>
+        </div>
+
+        <!-- footer -->
+        <div style="padding:28px 40px;background:#0D0C22;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;">
+          <img src="assets/logo-white.png" alt="Cuevolution" style="height:18px;width:auto;opacity:0.9;" />
+          <div style="display:flex;align-items:center;gap:20px;">
+            <a href="#feedback-1b" style="color:#DBDBDE;font-size:13px;font-weight:600;">Share feedback</a>
+            <div style="font-size:12.5px;color:#6E6D7A;">© 2026 Cuevolution. All rights reserved.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <p style="font-size:12.5px;color:rgba(13,12,34,0.5);margin:26px 0 0;">Try next: "combine <a href="#1a" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1a</a>'s dark hero with <a href="#1b" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1b</a>'s photo" · "make <a href="#1b" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1b</a> the final page" · "add a stats strip"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:900}}"></script>
+</body>
+</html>

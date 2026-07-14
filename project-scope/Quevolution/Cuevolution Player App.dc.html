@@ -773,6 +773,14 @@ class Component extends DCLogic {
   normMobile(v){ if(!v) return ''; let s=v.replace(/[^0-9+]/g,''); if(s.startsWith('+')) return s; if(s.startsWith('0')) return '+254'+s.slice(1); if(s.startsWith('254')) return '+'+s; if(s.length) return '+254'+s; return ''; }
   validMobile(v){ const n=this.normMobile(v); return /^\+\d{9,15}$/.test(n); }
 
+  componentDidMount(){
+    try{
+      const p=new URLSearchParams(window.location.search);
+      const screen=p.get('screen');
+      if(screen==='register'){ this.setState({regStep:1,route:'register'}); }
+      else if(screen==='signin'){ this.setState({route:'signin'}); }
+    }catch(e){}
+  }
   go(r){ this.setState({route:r}); try{window.scrollTo(0,0);}catch(e){} }
 
   validateStep(n){

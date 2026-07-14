@@ -3,17 +3,31 @@ defmodule CuevolutionWeb.PageController do
 
   alias Cuevolution.Accounts
 
-  @doc "Sends visitors straight into the player app — signed in or not."
+  @max_partners 4
+
+  @partners [
+    %{
+      name: "SportPesa",
+      logo: "partner-1.jpeg",
+      tile_class: "bg-ink-950",
+      img_class: "h-9 w-auto object-contain"
+    },
+    %{
+      name: "Kenya Pool Billiard Federation",
+      logo: "partner-2.jpeg",
+      tile_class: "bg-white",
+      img_class: "h-24 w-auto scale-150 object-contain"
+    }
+  ]
+
+  @doc "Signed-in players go straight to their fixtures; guests see the marketing landing page."
   def home(conn, _params) do
-    destination =
-      case get_session(conn, :player_token) do
-        nil ->
-          ~p"/login"
+    token = get_session(conn, :player_token)
 
-        token ->
-          if Accounts.get_player_by_session_token(token), do: ~p"/fixtures", else: ~p"/login"
-      end
-
-    redirect(conn, to: destination)
+    if token && Accounts.get_player_by_session_token(token) do
+      redirect(conn, to: ~p"/fixtures")
+    else
+      render(conn, :home, partners: Enum.take(@partners, @max_partners))
+    end
   end
 end

@@ -3,9 +3,9 @@ defmodule CuevolutionWeb.PageControllerTest do
 
   alias Cuevolution.Accounts
 
-  test "GET / redirects anonymous visitors to login", %{conn: conn} do
+  test "GET / renders the landing page for anonymous visitors", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert redirected_to(conn) == ~p"/login"
+    assert html_response(conn, 200) =~ "Register to play"
   end
 
   test "GET / redirects logged-in players to fixtures", %{conn: conn} do
