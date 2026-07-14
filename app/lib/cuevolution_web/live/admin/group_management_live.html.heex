@@ -1,0 +1,113 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:groups} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Groups</AdminComponents.eyebrow>
+  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Group management
+  </h1>
+
+  <div class="mb-3 flex gap-2 overflow-x-auto border-b border-ink-200">
+    <button
+      :for={stage <- @stages}
+      type="button"
+      phx-click="select_stage"
+      phx-value-id={stage.id}
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+        @stage.id == stage.id && "border-red-500 text-ink-950",
+        @stage.id != stage.id && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {stage.name}
+    </button>
+  </div>
+
+  <div class="mb-[18px] flex gap-2 overflow-x-auto">
+    <button
+      :for={region <- @regions}
+      type="button"
+      phx-click="select_region"
+      phx-value-id={region.id}
+      class={[
+        "whitespace-nowrap rounded-full px-3.5 py-[7px] text-[13px] font-semibold",
+        @region.id == region.id && "bg-ink-950 text-white",
+        @region.id != region.id && "border border-ink-300 text-ink-700 hover:bg-ink-50"
+      ]}
+    >
+      {region.name}
+    </button>
+  </div>
+
+  <.form for={@form} phx-submit="create_group" class="mb-5 flex flex-wrap items-center gap-2.5">
+    <.input
+      field={@form[:name]}
+      placeholder={"New group name in #{@region.name}…"}
+      class="min-w-[220px] flex-1 rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+    />
+    <button
+      type="submit"
+      class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
+    >
+      Add group
+    </button>
+  </.form>
+
+  <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+    <AdminComponents.card :for={group <- @groups}>
+      <h2 class="mb-2.5 text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
+      <div
+        :for={membership <- group.group_memberships}
+        class="border-b border-ink-100 py-2 text-[13.5px] text-ink-700 last:border-0"
+      >
+        {participant_name(membership.stage_participation)}
+      </div>
+      <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
+        No members yet.
+      </div>
+
+      <.form
+        :if={@unassigned != []}
+        for={to_form(%{}, as: :assign)}
+        phx-submit="assign_to_group"
+        phx-value-group_id={group.id}
+        class="mt-3 flex items-center gap-2"
+      >
+        <select
+          name="participation_id"
+          class="min-w-0 flex-1 rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px]"
+        >
+          <option :for={p <- @unassigned} value={p.id}>{participant_name(p)}</option>
+        </select>
+        <button
+          type="submit"
+          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Add
+        </button>
+      </.form>
+    </AdminComponents.card>
+  </div>
+  <div
+    :if={@groups == []}
+    class="mb-7 rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    No groups yet for {@stage.name} · {@region.name}.
+  </div>
+
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Unassigned</h2>
+  <div
+    :if={@unassigned != []}
+    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <div
+      :for={p <- @unassigned}
+      class="border-b border-ink-100 px-4.5 py-3 text-[14px] text-ink-950 last:border-0"
+    >
+      {participant_name(p)}
+    </div>
+  </div>
+  <div
+    :if={@unassigned == []}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-5 text-center text-[13.5px] text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    Everyone in this stage/region is already grouped.
+  </div>
+</AdminComponents.app_shell>

@@ -61,10 +61,13 @@ defmodule CuevolutionWeb.AdminComponents do
   end
 
   @nav_items [
-    {"Dashboard", "◆", "/admin/dashboard"},
-    {"Players & teams", "☰", "/admin/players"},
-    {"Venues", "⚑", "/admin/venues"},
-    {"Notifications", "✉", "/admin/notifications"}
+    {"Dashboard", "▦", "/admin/dashboard"},
+    {"Stages", "◆", "/admin/stages"},
+    {"Groups", "▤", "/admin/groups"},
+    {"Draws", "⚏", "/admin/draws"},
+    {"Results & Points", "◔", "/admin/results"},
+    {"Directory", "☰", "/admin/players"},
+    {"Venues", "⚑", "/admin/venues"}
   ]
 
   @doc """
@@ -73,7 +76,11 @@ defmodule CuevolutionWeb.AdminComponents do
   "ADMIN APP SHELL" section, including its mobile topbar + drawer.
   """
   attr :current_admin, :map, required: true
-  attr :active, :atom, required: true, doc: "one of :dashboard, :players, :venues, :notifications"
+
+  attr :active, :atom,
+    required: true,
+    doc: "one of :dashboard, :stages, :groups, :draws, :results, :directory, :venues"
+
   attr :flash, :map, required: true
   slot :inner_block, required: true
 
@@ -176,9 +183,12 @@ defmodule CuevolutionWeb.AdminComponents do
   end
 
   defp nav_active?(active, "/admin/dashboard"), do: active == :dashboard
-  defp nav_active?(active, "/admin/players"), do: active == :players
+  defp nav_active?(active, "/admin/stages"), do: active == :stages
+  defp nav_active?(active, "/admin/groups"), do: active == :groups
+  defp nav_active?(active, "/admin/draws"), do: active == :draws
+  defp nav_active?(active, "/admin/results"), do: active == :results
+  defp nav_active?(active, "/admin/players"), do: active == :directory
   defp nav_active?(active, "/admin/venues"), do: active == :venues
-  defp nav_active?(active, "/admin/notifications"), do: active == :notifications
 
   defp admin_initials(%{email: email}) do
     email
@@ -215,6 +225,66 @@ defmodule CuevolutionWeb.AdminComponents do
       @class
     ]}>
       {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  A live-search text field for the Draws page's participant/venue pickers —
+  typing filters `suggestions` (server-computed) into a dropdown; clicking
+  one fires `select_field`, pressing Enter accepts the top one. Both typing
+  and Enter go through a single `phx-keyup` binding (deliberately no
+  `phx-keydown`/`phx-key` pair here — LiveView's key-match filter and its
+  per-element debounce cycle are both scoped to the *element*, not the
+  binding, so a second keyed binding on the same input silently starves
+  whichever one fires first; see the "Enter never fired" bug this replaced).
+  Purely a UI primitive: the owning LiveView computes suggestions and
+  interprets the resulting `*_id`/`*_kind`.
+  """
+  attr :row_id, :integer, required: true
+  attr :field, :string, required: true, doc: "one of \"a\", \"b\", \"venue\""
+  attr :value, :string, required: true
+  attr :placeholder, :string, required: true
+  attr :confirmed, :boolean, default: false, doc: "true once a suggestion has been accepted"
+  attr :suggestions, :list, required: true
+
+  def field_search(assigns) do
+    ~H"""
+    <div>
+      <input
+        id={"draw-row-#{@row_id}-#{@field}"}
+        type="text"
+        value={@value}
+        placeholder={@placeholder}
+        autocomplete="off"
+        phx-keyup="field_keyup"
+        phx-value-row={@row_id}
+        phx-value-field={@field}
+        class={[
+          "w-full rounded-lg border px-2.5 py-2 text-[13.5px] focus:outline-none",
+          @confirmed && "border-green-300 focus:border-green-500",
+          !@confirmed && "border-ink-300 focus:border-red-500"
+        ]}
+      />
+      <div
+        :if={@suggestions != []}
+        class="mt-1 overflow-hidden rounded-lg border border-ink-200 bg-white shadow-sm"
+      >
+        <button
+          :for={s <- @suggestions}
+          type="button"
+          phx-click="select_field"
+          phx-value-row={@row_id}
+          phx-value-field={@field}
+          phx-value-id={s.id}
+          phx-value-name={s.name}
+          phx-value-kind={s.kind}
+          class="block w-full px-2.5 py-1.5 text-left text-[13px] hover:bg-ink-50"
+        >
+          <span class="font-medium text-ink-950">{s.name}</span>
+          <span class="ml-1 text-ink-400">{s.sub}</span>
+        </button>
+      </div>
     </div>
     """
   end

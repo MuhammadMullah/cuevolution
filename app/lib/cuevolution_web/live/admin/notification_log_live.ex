@@ -11,6 +11,7 @@ defmodule CuevolutionWeb.NotificationLogLive do
 
   alias Cuevolution.Notifications.Notification
   alias Cuevolution.Repo
+  alias CuevolutionWeb.AdminComponents
 
   @statuses ~w(pending sending sent failed)
 
@@ -19,20 +20,18 @@ defmodule CuevolutionWeb.NotificationLogLive do
      socket
      |> assign(
        page_title: "Notification Log",
-       filter_form: to_form(%{}, as: :filter),
        statuses: @statuses,
        status_filter: nil
      )
      |> stream(:notifications, list_notifications(nil))}
   end
 
-  def handle_event("filter", %{"filter" => %{"status" => status}}, socket) do
+  def handle_event("filter_status", %{"id" => status}, socket) do
     status = if status == "", do: nil, else: status
 
     {:noreply,
      socket
      |> assign(:status_filter, status)
-     |> assign(:filter_form, to_form(%{"status" => status}, as: :filter))
      |> stream(:notifications, list_notifications(status), reset: true)}
   end
 
@@ -47,4 +46,9 @@ defmodule CuevolutionWeb.NotificationLogLive do
 
   defp maybe_filter_status(query, nil), do: query
   defp maybe_filter_status(query, status), do: where(query, status: ^status)
+
+  @doc false
+  def status_badge_class("sent"), do: "bg-[#DCF3E4] text-[#0E6A30]"
+  def status_badge_class("failed"), do: "bg-red-50 text-red-700"
+  def status_badge_class(_pending_or_sending), do: "bg-ink-100 text-ink-700"
 end

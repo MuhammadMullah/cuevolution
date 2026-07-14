@@ -146,4 +146,29 @@ defmodule Cuevolution.Teams do
       update: [set: [team_id: ^team_id]]
     )
   end
+
+  @doc """
+  Filterable team directory query — the Teams-context counterpart of
+  `Accounts.list_players_filtered/1`, backing the admin Directory's "Teams"
+  kind. Supported filters: `:region_id`, `:name` (case-insensitive
+  substring search).
+  """
+  def list_teams_filtered(filters \\ %{}) do
+    Team
+    |> filter_by_region(filters[:region_id])
+    |> filter_by_name(filters[:name])
+    |> order_by(asc: :name)
+    |> preload([:region, :captain, :roster])
+    |> Repo.all()
+  end
+
+  defp filter_by_region(query, nil), do: query
+  defp filter_by_region(query, region_id), do: where(query, region_id: ^region_id)
+
+  defp filter_by_name(query, nil), do: query
+
+  defp filter_by_name(query, name) do
+    pattern = "%" <> String.replace(name, ~w(% _), fn c -> "\\" <> c end) <> "%"
+    where(query, [t], ilike(t.name, ^pattern))
+  end
 end

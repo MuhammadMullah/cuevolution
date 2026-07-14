@@ -1,23 +1,88 @@
-<Layouts.app flash={@flash}>
-  <h1>Notification Log</h1>
+<AdminComponents.app_shell current_admin={@current_admin} active={:notifications} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Notifications</AdminComponents.eyebrow>
+  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Notification log
+  </h1>
 
-  <.form for={@filter_form} phx-change="filter" id="notification-filter-form">
-    <.input
-      field={@filter_form[:status]}
-      type="select"
-      label="Status"
-      prompt="All statuses"
-      options={@statuses}
-    />
-  </.form>
+  <div class="mb-[18px] flex gap-2 overflow-x-auto border-b border-ink-200">
+    <button
+      type="button"
+      phx-click="filter_status"
+      phx-value-id=""
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold capitalize",
+        @status_filter == nil && "border-red-500 text-ink-950",
+        @status_filter != nil && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      All statuses
+    </button>
+    <button
+      :for={status <- @statuses}
+      type="button"
+      phx-click="filter_status"
+      phx-value-id={status}
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold capitalize",
+        @status_filter == status && "border-red-500 text-ink-950",
+        @status_filter != status && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {status}
+    </button>
+  </div>
 
-  <.table id="notifications" rows={@streams.notifications}>
-    <:col :let={{_id, n}} label="Recipient">{n.player.username}</:col>
-    <:col :let={{_id, n}} label="Event">{n.event_type}</:col>
-    <:col :let={{_id, n}} label="Channel">{n.channel}</:col>
-    <:col :let={{_id, n}} label="Status">{n.status}</:col>
-    <:col :let={{_id, n}} label="Retries">{n.retry_count}</:col>
-    <:col :let={{_id, n}} label="Error">{n.error}</:col>
-    <:col :let={{_id, n}} label="Updated">{n.updated_at}</:col>
-  </.table>
-</Layouts.app>
+  <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[820px] border-collapse">
+        <thead>
+          <tr class="border-b border-ink-200 bg-ink-50">
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Recipient
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Event
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Channel
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Status
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Retries
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Error
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Updated
+            </th>
+          </tr>
+        </thead>
+        <tbody id="notifications" phx-update="stream">
+          <tr
+            :for={{id, n} <- @streams.notifications}
+            id={id}
+            class="border-b border-ink-100 last:border-0 hover:bg-ink-50"
+          >
+            <td class="px-3.5 py-3 text-sm font-semibold text-ink-950">{n.player.username}</td>
+            <td class="px-3.5 py-3 text-sm text-ink-700">{n.event_type}</td>
+            <td class="px-3.5 py-3 text-sm capitalize text-ink-700">{n.channel}</td>
+            <td class="px-3.5 py-3">
+              <span class={[
+                "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
+                status_badge_class(n.status)
+              ]}>
+                {n.status}
+              </span>
+            </td>
+            <td class="px-3.5 py-3 font-mono text-sm text-ink-700">{n.retry_count}</td>
+            <td class="px-3.5 py-3 text-sm text-red-700">{n.error}</td>
+            <td class="px-3.5 py-3 font-mono text-[13px] text-ink-500">{n.updated_at}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</AdminComponents.app_shell>

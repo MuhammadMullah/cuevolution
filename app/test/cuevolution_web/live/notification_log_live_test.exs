@@ -32,8 +32,8 @@ defmodule CuevolutionWeb.NotificationLogLiveTest do
 
     html =
       view
-      |> form("#notification-filter-form", filter: %{"status" => "sent"})
-      |> render_change()
+      |> element("button[phx-click=filter_status][phx-value-id='sent']")
+      |> render_click()
 
     assert html =~ "pendingplayer"
     refute html =~ "smsplayer"

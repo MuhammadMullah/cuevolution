@@ -13,6 +13,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Accounts.PhoneNumber
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Accounts.PlayerToken
+  alias Cuevolution.Accounts.Region
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
 
@@ -216,8 +217,56 @@ defmodule Cuevolution.Accounts do
   defp filter_by_username(query, nil), do: query
 
   defp filter_by_username(query, username) do
-    pattern = "%" <> String.replace(username, ~w(% _), fn c -> "\\" <> c end) <> "%"
+    pattern = "%" <> escape_like_pattern(username) <> "%"
     where(query, [p], ilike(p.username, ^pattern))
+  end
+
+  @doc """
+  Name/username typeahead search for the admin Draws page's participant
+  picker (individual categories only — Teams go through
+  `Teams.list_teams_filtered/1`). Matches full name or username,
+  case-insensitive substring, excludes anonymized players. Capped to a
+  handful of results since it backs a live-search dropdown, not a listing.
+  """
+  def search_players(category, query) when category in ["male", "female"] do
+    pattern = "%" <> escape_like_pattern(query) <> "%"
+
+    Player
+    |> where([p], p.gender == ^category and is_nil(p.anonymized_at))
+    |> where(
+      [p],
+      ilike(fragment("? || ' ' || ?", p.first_name, p.last_name), ^pattern) or
+        ilike(p.username, ^pattern)
+    )
+    |> order_by(asc: :first_name, asc: :last_name)
+    |> limit(6)
+    |> Repo.all()
+  end
+
+  defp escape_like_pattern(value), do: String.replace(value, ~w(% _), fn c -> "\\" <> c end)
+
+  @doc """
+  All regions in seed order (`priv/repo/seeds/regions_seeds.exs`), which is
+  the fixed display order used throughout the admin console — regions have
+  no explicit ordinal column, so `inserted_at` (set once at seed time and
+  never touched again) is what preserves it.
+  """
+  def list_regions do
+    Repo.all(from r in Region, order_by: r.inserted_at)
+  end
+
+  @doc """
+  Players in `region_id` who registered with a free-text "Other" venue
+  instead of picking one off the preloaded list (spec 004) — the admin
+  Venues page surfaces these so an admin can add popular ones to the real
+  list.
+  """
+  def list_custom_venue_submissions(region_id) do
+    Player
+    |> where([p], p.region_id == ^region_id)
+    |> where([p], not is_nil(p.other_venue_name) and p.other_venue_name != "")
+    |> order_by(asc: :other_venue_name)
+    |> Repo.all()
   end
 
   defp dispatch_registration_confirmation(player) do

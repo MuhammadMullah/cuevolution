@@ -1,0 +1,61 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:directory} flash={@flash}>
+  <.link
+    navigate={~p"/admin/players"}
+    class="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-950"
+  >
+    ← Back to directory
+  </.link>
+
+  <div class="mb-5 flex items-center gap-4 rounded-2xl bg-ink-950 px-6 py-6 text-white">
+    <PlayerComponents.avatar name={@team.name} size="size-14" class="text-lg" />
+    <div class="min-w-0 flex-1">
+      <div class="text-[20px] font-bold tracking-tight">{@team.name}</div>
+      <div class="text-sm text-ink-400">{@team.region.name}</div>
+    </div>
+    <span class={[
+      "rounded-full px-2.5 py-1 text-xs font-semibold",
+      @eligible && "bg-[#DCF3E4] text-[#0E6A30]",
+      !@eligible && "bg-red-500/15 text-red-300"
+    ]}>
+      {if @eligible, do: "Eligible (5–8)", else: "Not eligible yet"}
+    </span>
+  </div>
+
+  <AdminComponents.card class="mb-5">
+    <div class="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+      <div class="border-b border-ink-100 py-2.5">
+        <div class="text-[11.5px] text-ink-400">Captain</div>
+        <div class="text-sm font-semibold text-ink-950">
+          {@team.captain.first_name} {@team.captain.last_name}
+        </div>
+      </div>
+      <div class="border-b border-ink-100 py-2.5">
+        <div class="text-[11.5px] text-ink-400">Roster size</div>
+        <div class="text-sm font-semibold text-ink-950">{length(@team.roster)} / 8</div>
+      </div>
+    </div>
+  </AdminComponents.card>
+
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Roster</h2>
+  <div
+    :if={@team.roster != []}
+    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <.link
+      :for={player <- @team.roster}
+      navigate={~p"/admin/players/#{player.id}"}
+      class="flex items-center justify-between gap-3 border-b border-ink-100 px-5 py-3 text-sm last:border-0 hover:bg-ink-50"
+    >
+      <span class="font-semibold text-ink-950">{player.first_name} {player.last_name}</span>
+      <span class="text-ink-500">
+        {if player.id == @team.captain_id, do: "Captain", else: "Player"}
+      </span>
+    </.link>
+  </div>
+  <div
+    :if={@team.roster == []}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-7 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    No players on this roster yet.
+  </div>
+</AdminComponents.app_shell>

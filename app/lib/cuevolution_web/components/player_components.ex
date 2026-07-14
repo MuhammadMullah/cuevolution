@@ -117,7 +117,14 @@ defmodule CuevolutionWeb.PlayerComponents do
                 multiple pattern placeholder readonly required rows size step)
 
   def input(%{field: %FormField{} = field} = assigns) do
-    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+    # `used_input?/1` alone is unreliable here: in real browser testing it can
+    # stay false for a field that was clearly typed into (e.g. password),
+    # silently hiding a validation error the server has already computed.
+    # Callers like RegistrationLive already scope `field.errors` down to
+    # touched fields before building the form, so trust a non-empty error
+    # list on its own rather than gating everything on `used_input?/1`.
+    errors =
+      if field.errors != [] or Phoenix.Component.used_input?(field), do: field.errors, else: []
 
     assigns
     |> assign(field: nil, id: assigns.id || field.id)

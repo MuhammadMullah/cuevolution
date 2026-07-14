@@ -25,7 +25,7 @@ input::placeholder{color:#9E9EA7;}
 
   <!-- ============================ AUTH SHELL ============================ -->
   <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ true }}">
-    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:clamp(24px,6vw,72px) 20px;">
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:clamp(24px,6vw,72px) 20px;background-color:#F3F1EC;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27180%27 height=%27180%27%3E%3Cg fill=%27none%27 stroke=%27%230D0C22%27 stroke-width=%272%27 opacity=%270.07%27%3E%3Ccircle cx=%2728%27 cy=%2728%27 r=%2715%27/%3E%3Ccircle cx=%2728%27 cy=%2728%27 r=%275%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3Cpath d=%27M95 12 L138 55%27/%3E%3Ccircle cx=%27140%27 cy=%2757%27 r=%274%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3Cpath d=%27M35 100 L58 138 L12 138 Z%27/%3E%3Ccircle cx=%27125%27 cy=%27115%27 r=%2712%27/%3E%3Cpath d=%27M118 108 L132 122 M132 108 L118 122%27/%3E%3Cpath d=%27M60 165 h28%27 stroke-width=%273%27/%3E%3Ccircle cx=%2765%27 cy=%2765%27 r=%273%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3C/g%3E%3C/svg%3E');background-repeat:repeat;background-size:180px 180px;">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:28px;">
         <img src="assets/logo-black.png" alt="Cuevolution" style="height:30px;width:auto;display:block;" />
       </div>
@@ -217,7 +217,7 @@ input::placeholder{color:#9E9EA7;}
                   <div style="font-size:12.5px;color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">{{ userHandle }}</div>
                 </div>
                 <div onClick="{{ menuProfile }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:500;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;"><span style="color:#9E9EA7;">◔</span>Profile</div>
-                <div onClick="{{ menuSettings }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:500;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;"><span style="color:#9E9EA7;">⚙</span>Settings</div>
+                <div onClick="{{ menuSettingsGo }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:500;color:#3A3546;cursor:pointer;" style-hover="background:#F3F3F4;"><span style="color:#9E9EA7;">⚙</span>Settings</div>
                 <div onClick="{{ menuLogout }}" style="display:flex;align-items:center;gap:10px;padding:11px 15px;font-size:14px;font-weight:600;color:#C81E16;cursor:pointer;border-top:1px solid #F3F3F4;" style-hover="background:#FDECEA;"><span>⏻</span>Log out</div>
               </div>
             </sc-if>
@@ -496,7 +496,40 @@ input::placeholder{color:#9E9EA7;}
               </sc-if>
             </div>
 
-            <!-- notifications -->
+            <!-- account & security -->
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 16px;letter-spacing:-0.01em;">Account &amp; security</h2>
+              <div style="margin-bottom:14px;">
+                <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Username</label>
+                <input type="text" value="{{ acct.username }}" onInput="{{ acctH.username }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+              </div>
+              <div style="height:1px;background:#F3F3F4;margin:16px 0;"></div>
+              <div style="font-size:13.5px;font-weight:600;color:#3A3546;margin-bottom:12px;">Change password</div>
+              <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Current password</label>
+                <input type="password" value="{{ acct.curPass }}" onInput="{{ acctH.curPass }}" placeholder="••••••••" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px;">
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">New password</label>
+                  <input type="password" value="{{ acct.newPass }}" onInput="{{ acctH.newPass }}" placeholder="min. 8 characters" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+                </div>
+                <div>
+                  <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Confirm new password</label>
+                  <input type="password" value="{{ acct.confirmPass }}" onInput="{{ acctH.confirmPass }}" placeholder="repeat password" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+                </div>
+              </div>
+              <sc-if value="{{ acctError }}" hint-placeholder-val=""><div style="color:#A81810;font-size:13px;font-weight:500;margin-top:10px;">{{ acctError }}</div></sc-if>
+              <button onClick="{{ saveAccount }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 22px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px;" style-hover="background:#16152B;">Save changes</button>
+              <sc-if value="{{ acctMsg }}" hint-placeholder-val=""><div style="color:#16A34A;font-size:13px;font-weight:600;margin-top:14px;">✓ {{ acctMsg }}</div></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== SETTINGS ===== -->
+        <sc-if value="{{ rIsSettings }}" hint-placeholder-val="">
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 22px;">Settings</h1>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;">
             <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
               <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 6px;letter-spacing:-0.01em;">Notifications</h2>
               <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 16px;">How you receive confirmations and draw alerts.</p>
@@ -592,6 +625,7 @@ class Component extends DCLogic {
     ],
     addQuery:'', addMsg:'', addOk:false,
     notifyPref:'both', savedMsg:'',
+    acct:{username:'brian_o',curPass:'',newPass:'',confirmPass:''}, acctError:'', acctMsg:'',
     scenario:'default', switcherOpen:false
   };
 
@@ -876,7 +910,6 @@ class Component extends DCLogic {
 
     // --- profile ---
     const profileRows=[
-      {label:'Username',value:'@brian_o'},
       {label:'Category',value:'Male'},
       {label:'Date of birth',value:'12 Mar 1994'},
       {label:'Region',value:'Nairobi A'},
@@ -887,6 +920,23 @@ class Component extends DCLogic {
     ];
     const setPref=(v)=>()=>this.setState({notifyPref:v,savedMsg:'Notification preference saved.'});
     const notifyProfileOpts=notifyDefs.map(([val,label,desc])=>({label,desc,onClick:setPref(val),style:this.optCard(S.notifyPref===val)}));
+    const acctH={
+      username:(e)=>this.setState(s=>({acct:{...s.acct,username:e.target.value},acctError:'',acctMsg:''})),
+      curPass:(e)=>this.setState(s=>({acct:{...s.acct,curPass:e.target.value},acctError:'',acctMsg:''})),
+      newPass:(e)=>this.setState(s=>({acct:{...s.acct,newPass:e.target.value},acctError:'',acctMsg:''})),
+      confirmPass:(e)=>this.setState(s=>({acct:{...s.acct,confirmPass:e.target.value},acctError:'',acctMsg:''})),
+    };
+    const saveAccount=()=>{
+      const a=S.acct;
+      if(!a.username.trim()){ this.setState({acctError:'Username can\'t be empty.',acctMsg:''}); return; }
+      const changingPass = a.curPass||a.newPass||a.confirmPass;
+      if(changingPass){
+        if(!a.curPass){ this.setState({acctError:'Enter your current password.',acctMsg:''}); return; }
+        if(a.newPass.length<8){ this.setState({acctError:'New password must be at least 8 characters.',acctMsg:''}); return; }
+        if(a.newPass!==a.confirmPass){ this.setState({acctError:'New password and confirmation don\'t match.',acctMsg:''}); return; }
+      }
+      this.setState({acct:{...a,curPass:'',newPass:'',confirmPass:''},acctError:'',acctMsg:'Account details updated.'});
+    };
 
     // --- nav ---
     const navDefs=[['fixtures','Fixtures'],['standings','Standings'],['team','My Team']];
@@ -895,13 +945,13 @@ class Component extends DCLogic {
     return {
       // shell
       showAuth:!S.authed, isSignin:S.route==='signin', isRegister:S.route==='register',
-      showApp:S.authed, rIsStandings:S.route==='standings', rIsTeam:S.route==='team', rIsFixtures:S.route==='fixtures', rIsProfile:S.route==='profile',
+      showApp:S.authed, rIsStandings:S.route==='standings', rIsTeam:S.route==='team', rIsFixtures:S.route==='fixtures', rIsProfile:S.route==='profile', rIsSettings:S.route==='settings',
       go:{signin:()=>this.go('signin'), register:()=>{this.setState({regStep:1});this.go('register');}, standings:()=>this.go('standings'), team:()=>this.go('team'), fixtures:()=>this.go('fixtures'), profile:()=>this.go('profile')},
       menuOpen:S.menuOpen,
       toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})),
       closeMenu:()=>this.setState({menuOpen:false}),
       menuProfile:()=>{ this.setState({menuOpen:false}); this.go('profile'); },
-      menuSettings:()=>{ this.setState({menuOpen:false}); this.go('profile'); },
+      menuSettingsGo:()=>{ this.setState({menuOpen:false}); this.go('settings'); },
       menuLogout:()=>{ this.setState({menuOpen:false,authed:false,route:'signin',si:{email:'',pass:''}}); try{window.scrollTo(0,0);}catch(e){} },
       noop:(e)=>{ if(e&&e.preventDefault)e.preventDefault(); },
       navItems, userInitials:'BO', userName:'Brian Otieno', userHandle:'@brian_o', teamName:'Westlands Cue Kings', teamRegion:'Nairobi A',
@@ -947,6 +997,7 @@ class Component extends DCLogic {
       upFixtures, resFixtures,
       // profile
       profileRows, notifyProfileOpts, savedMsg:S.savedMsg,
+      acct:S.acct, acctH, acctError:S.acctError, acctMsg:S.acctMsg, saveAccount,
       profileTeamLabel: cfg.team==='none' ? 'No team yet' : 'Westlands Cue Kings',
       regionLocked: cfg.locked, regionUnlocked: !cfg.locked,
       // demo states

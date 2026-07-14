@@ -1,32 +1,67 @@
-<Layouts.app flash={@flash}>
-  <h1>Player Directory</h1>
+<AdminComponents.app_shell current_admin={@current_admin} active={:directory} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Directory</AdminComponents.eyebrow>
+  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Players &amp; teams
+  </h1>
 
-  <.form for={@filter_form} phx-change="filter" id="player-filter-form">
+  <.form
+    for={@filter_form}
+    phx-change="filter"
+    id="player-filter-form"
+    class="mb-4 flex flex-wrap gap-2.5"
+  >
+    <div class="min-w-[220px] flex-1">
+      <.input
+        field={@filter_form[:search]}
+        placeholder="Search name or @username…"
+        class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+      />
+    </div>
+    <.input
+      field={@filter_form[:kind]}
+      type="select"
+      options={@kinds}
+      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+    />
     <.input
       field={@filter_form[:region_id]}
       type="select"
-      label="Region"
       prompt="All regions"
       options={Enum.map(@regions, &{&1.name, &1.id})}
+      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
     />
-    <.input
-      field={@filter_form[:category]}
-      type="select"
-      label="Category"
-      prompt="All categories"
-      options={[{"Male", "male"}, {"Female", "female"}]}
-    />
-    <.input field={@filter_form[:username]} label="Search username" />
   </.form>
 
-  <.table
-    id="players"
-    rows={@streams.players}
-    row_click={fn {_id, player} -> JS.navigate(~p"/admin/players/#{player.id}") end}
+  <div class="mb-2.5 font-mono text-[13px] text-ink-500">
+    {length(@rows)} result{if length(@rows) == 1, do: "", else: "s"}
+  </div>
+
+  <div
+    :if={@rows != []}
+    class="max-h-[60vh] overflow-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <:col :let={{_id, player}} label="Username">{player.username}</:col>
-    <:col :let={{_id, player}} label="Name">{player.first_name} {player.last_name}</:col>
-    <:col :let={{_id, player}} label="Region">{player.region.name}</:col>
-    <:col :let={{_id, player}} label="Category">{player.gender}</:col>
-  </.table>
-</Layouts.app>
+    <.link
+      :for={row <- @rows}
+      navigate={row.path}
+      class="flex items-center gap-3.5 border-b border-ink-100 px-4 py-3 last:border-0 hover:bg-ink-50"
+    >
+      <PlayerComponents.avatar name={row.avatar_name} src={row.avatar_src} size="size-9" />
+      <div class="min-w-0 flex-1">
+        <div class="text-[14.5px] font-semibold text-ink-950">
+          {row.name}
+          <span :if={row.anonymized} class="ml-1.5 text-[11.5px] font-semibold text-ink-400">
+            ANONYMIZED
+          </span>
+        </div>
+        <div class="text-[12.5px] text-ink-400">{row.sub}</div>
+      </div>
+    </.link>
+  </div>
+  <div
+    :if={@rows == []}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-10 text-center shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <h3 class="mb-1.5 text-[17px] font-bold text-ink-950">No matches for these filters</h3>
+    <p class="text-[13.5px] text-ink-500">Try a broader search or clear a filter.</p>
+  </div>
+</AdminComponents.app_shell>
