@@ -217,9 +217,33 @@ defmodule Cuevolution.Accounts do
   defp filter_by_username(query, nil), do: query
 
   defp filter_by_username(query, username) do
-    pattern = "%" <> String.replace(username, ~w(% _), fn c -> "\\" <> c end) <> "%"
+    pattern = "%" <> escape_like_pattern(username) <> "%"
     where(query, [p], ilike(p.username, ^pattern))
   end
+
+  @doc """
+  Name/username typeahead search for the admin Draws page's participant
+  picker (individual categories only — Teams go through
+  `Teams.list_teams_filtered/1`). Matches full name or username,
+  case-insensitive substring, excludes anonymized players. Capped to a
+  handful of results since it backs a live-search dropdown, not a listing.
+  """
+  def search_players(category, query) when category in ["male", "female"] do
+    pattern = "%" <> escape_like_pattern(query) <> "%"
+
+    Player
+    |> where([p], p.gender == ^category and is_nil(p.anonymized_at))
+    |> where(
+      [p],
+      ilike(fragment("? || ' ' || ?", p.first_name, p.last_name), ^pattern) or
+        ilike(p.username, ^pattern)
+    )
+    |> order_by(asc: :first_name, asc: :last_name)
+    |> limit(6)
+    |> Repo.all()
+  end
+
+  defp escape_like_pattern(value), do: String.replace(value, ~w(% _), fn c -> "\\" <> c end)
 
   @doc """
   All regions in seed order (`priv/repo/seeds/regions_seeds.exs`), which is

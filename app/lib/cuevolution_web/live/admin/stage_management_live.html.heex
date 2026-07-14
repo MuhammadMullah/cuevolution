@@ -1,0 +1,157 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:stages} flash={@flash}>
+  <AdminComponents.eyebrow class="mb-1.5">Stages</AdminComponents.eyebrow>
+  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Qualification pipeline
+  </h1>
+
+  <div class="mb-[18px] flex gap-2 overflow-x-auto border-b border-ink-200">
+    <button
+      :for={stage <- @stages}
+      type="button"
+      phx-click="select_stage"
+      phx-value-id={stage.id}
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+        @stage.id == stage.id && "border-red-500 text-ink-950",
+        @stage.id != stage.id && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {stage.name}
+    </button>
+  </div>
+
+  <div class="mb-5 flex gap-2">
+    <button
+      type="button"
+      phx-click="switch_panel"
+      phx-value-panel="participants"
+      class={[
+        "rounded-full px-4 py-2 text-[13px] font-semibold",
+        @panel == :participants && "bg-ink-950 text-white",
+        @panel != :participants && "border border-ink-300 text-ink-700 hover:bg-ink-50"
+      ]}
+    >
+      Participants
+    </button>
+    <button
+      type="button"
+      phx-click="switch_panel"
+      phx-value-panel="capacity"
+      class={[
+        "rounded-full px-4 py-2 text-[13px] font-semibold",
+        @panel == :capacity && "bg-ink-950 text-white",
+        @panel != :capacity && "border border-ink-300 text-ink-700 hover:bg-ink-50"
+      ]}
+    >
+      Capacity
+    </button>
+  </div>
+
+  <div :if={@panel == :participants}>
+    <.form for={@filter_form} phx-change="filter_participants" class="mb-4 flex flex-wrap gap-2.5">
+      <.input
+        field={@filter_form[:region_id]}
+        type="select"
+        options={Enum.map(@regions, &{&1.name, &1.id})}
+        class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      />
+      <.input
+        field={@filter_form[:category]}
+        type="select"
+        options={@categories}
+        class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      />
+    </.form>
+
+    <div
+      :if={@participations != []}
+      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div
+        :for={p <- @participations}
+        class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
+      >
+        <div class="min-w-[180px] flex-1 text-[14.5px] font-semibold text-ink-950">
+          {participant_name(p)}
+        </div>
+        <button
+          type="button"
+          phx-click="advance"
+          phx-value-id={p.id}
+          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Advance
+        </button>
+      </div>
+    </div>
+    <div
+      :if={@participations == []}
+      class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      No participants for this stage/region/category yet.
+    </div>
+  </div>
+
+  <div :if={@panel == :capacity}>
+    <div
+      :if={@configs != []}
+      class="mb-5 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div
+        :for={config <- @configs}
+        class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
+      >
+        <.form
+          :if={@editing_config && @editing_config.id == config.id}
+          for={@config_form}
+          phx-submit="save_config"
+          class="flex flex-1 flex-wrap items-center gap-2.5"
+        >
+          <span class="min-w-[140px] text-[14.5px] font-semibold text-ink-950">
+            {config.category}
+          </span>
+          <.input
+            field={@config_form[:capacity_limit]}
+            type="number"
+            class="w-24 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
+          />
+          <button
+            type="submit"
+            class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            phx-click="cancel_edit_config"
+            class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Cancel
+          </button>
+        </.form>
+        <%= if is_nil(@editing_config) or @editing_config.id != config.id do %>
+          <div class="min-w-[140px] flex-1 text-[14.5px] font-semibold text-ink-950">
+            {config.category}
+          </div>
+          <span class="font-mono text-[13.5px] text-ink-500">
+            {config.current_count} / {config.capacity_limit}
+          </span>
+          <button
+            type="button"
+            phx-click="edit_config"
+            phx-value-id={config.id}
+            class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Edit
+          </button>
+        <% end %>
+      </div>
+    </div>
+    <div
+      :if={@configs == []}
+      class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      {@stage.name} is open — no capacity limit configured.
+    </div>
+  </div>
+</AdminComponents.app_shell>

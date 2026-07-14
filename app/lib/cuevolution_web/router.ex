@@ -69,6 +69,8 @@ defmodule CuevolutionWeb.Router do
 
     live_session :admin_authenticated, on_mount: [{CuevolutionWeb.AdminAuth, :ensure_admin}] do
       live "/dashboard", AdminDashboardLive, :index
+      live "/stages", StageManagementLive, :index
+      live "/groups", GroupManagementLive, :index
       live "/draws", AdminDrawsLive, :index
       live "/results", AdminResultsLive, :index
       live "/players", PlayerDirectoryLive, :index

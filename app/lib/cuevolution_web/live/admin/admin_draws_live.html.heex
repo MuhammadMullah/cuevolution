@@ -1,20 +1,61 @@
 <AdminComponents.app_shell current_admin={@current_admin} active={:draws} flash={@flash}>
-  <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
-    <div>
-      <AdminComponents.eyebrow class="mb-1.5">Draws</AdminComponents.eyebrow>
-      <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
-        Fixture entry
-      </h1>
-    </div>
-    <select
-      disabled
-      class="cursor-not-allowed rounded-full border border-ink-300 bg-ink-50 px-[15px] py-2.5 font-sans text-sm text-ink-400"
-    >
-      <option>No rounds scheduled yet</option>
-    </select>
+  <div class="mb-4">
+    <AdminComponents.eyebrow class="mb-1.5">Draws</AdminComponents.eyebrow>
+    <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+      Fixture entry
+    </h1>
   </div>
 
-  <form phx-change="update_rows" id="draws-form">
+  <div class="mb-3 flex gap-2 overflow-x-auto border-b border-ink-200">
+    <button
+      :for={stage <- @stages}
+      type="button"
+      phx-click="select_stage"
+      phx-value-id={stage.id}
+      class={[
+        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+        @stage.id == stage.id && "border-red-500 text-ink-950",
+        @stage.id != stage.id && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {stage.name}
+    </button>
+  </div>
+
+  <div class="mb-5 flex flex-wrap items-center gap-2.5">
+    <form :if={@rounds != []} phx-change="select_round">
+      <select
+        name="id"
+        class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      >
+        <option value="" selected={is_nil(@round)}>Select a round…</option>
+        <option
+          :for={round <- @rounds}
+          value={round.id}
+          selected={@round && @round.id == round.id}
+        >
+          {round.name}
+        </option>
+      </select>
+    </form>
+    <span :if={@rounds == []} class="text-[13.5px] text-ink-400">No rounds scheduled yet.</span>
+
+    <.form for={@new_round_form} phx-submit="create_round" class="flex items-center gap-2">
+      <.input
+        field={@new_round_form[:name]}
+        placeholder={"New round in #{@stage.name}…"}
+        class="min-w-[200px] rounded-full border border-ink-300 bg-white px-4 py-2 font-sans text-[13px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none"
+      />
+      <button
+        type="submit"
+        class="rounded-full border border-ink-300 px-3.5 py-[9px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+      >
+        + New round
+      </button>
+    </.form>
+  </div>
+
+  <form phx-change="update_rows" phx-submit="noop" id="draws-form">
     <div class="mb-4 overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
       <table class="w-full min-w-[820px] border-collapse">
         <thead>
@@ -41,81 +82,83 @@
           </tr>
         </thead>
         <tbody>
-          <tr :for={row <- @rows} class="border-b border-ink-100 last:border-0">
-            <td class="p-2">
-              <select
-                name={"rows[#{row.id}][category]"}
-                class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13.5px]"
-              >
-                <option
-                  :for={{label, value} <- @categories}
-                  value={value}
-                  selected={value == row.category}
+          <%= for row <- @rows do %>
+            <tr class="border-b border-ink-100 last:border-0">
+              <td class="p-2">
+                <select
+                  name={"rows[#{row.id}][category]"}
+                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13.5px]"
                 >
-                  {label}
-                </option>
-              </select>
-            </td>
-            <td class="p-2">
-              <input
-                type="text"
-                name={"rows[#{row.id}][a]"}
-                value={row.a}
-                placeholder="Search name…"
-                class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13.5px] focus:border-red-500 focus:outline-none"
-              />
-            </td>
-            <td class="p-2">
-              <input
-                type="text"
-                name={"rows[#{row.id}][b]"}
-                value={row.b}
-                placeholder="Search name…"
-                class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13.5px] focus:border-red-500 focus:outline-none"
-              />
-            </td>
-            <td class="p-2">
-              <select
-                name={"rows[#{row.id}][venue_id]"}
-                class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13.5px]"
-              >
-                <option value="">Select venue…</option>
-                <option
-                  :for={venue <- @venues}
-                  value={venue.id}
-                  selected={venue.id == row.venue_id}
+                  <option
+                    :for={{label, value} <- @categories}
+                    value={value}
+                    selected={value == row.category}
+                  >
+                    {label}
+                  </option>
+                </select>
+              </td>
+              <td class="p-2 align-top">
+                <AdminComponents.field_search
+                  row_id={row.id}
+                  field="a"
+                  value={row.a}
+                  confirmed={!!row.a_id}
+                  placeholder="Search name…"
+                  suggestions={row.a_suggestions}
+                />
+              </td>
+              <td class="p-2 align-top">
+                <AdminComponents.field_search
+                  row_id={row.id}
+                  field="b"
+                  value={row.b}
+                  confirmed={!!row.b_id}
+                  placeholder="Search name…"
+                  suggestions={row.b_suggestions}
+                />
+              </td>
+              <td class="p-2 align-top">
+                <AdminComponents.field_search
+                  row_id={row.id}
+                  field="venue"
+                  value={row.venue}
+                  confirmed={!!row.venue_id}
+                  placeholder="Search venue…"
+                  suggestions={row.venue_suggestions}
+                />
+              </td>
+              <td class="p-2">
+                <input
+                  type="date"
+                  name={"rows[#{row.id}][date]"}
+                  value={row.date}
+                  class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+                />
+              </td>
+              <td class="p-2">
+                <input
+                  type="time"
+                  name={"rows[#{row.id}][time]"}
+                  value={row.time}
+                  class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+                />
+              </td>
+              <td class="p-2 text-center">
+                <button
+                  type="button"
+                  phx-click="remove_row"
+                  phx-value-id={row.id}
+                  class="rounded-md p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-700"
                 >
-                  {venue.name}
-                </option>
-              </select>
-            </td>
-            <td class="p-2">
-              <input
-                type="date"
-                name={"rows[#{row.id}][date]"}
-                value={row.date}
-                class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
-              />
-            </td>
-            <td class="p-2">
-              <input
-                type="time"
-                name={"rows[#{row.id}][time]"}
-                value={row.time}
-                class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
-              />
-            </td>
-            <td class="p-2 text-center">
-              <button
-                type="button"
-                phx-click="remove_row"
-                phx-value-id={row.id}
-                class="rounded-md p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-700"
-              >
-                ✕
-              </button>
-            </td>
-          </tr>
+                  ✕
+                </button>
+              </td>
+            </tr>
+            <tr :if={row.error} class="border-b border-ink-100 bg-red-50 last:border-0">
+              <td colspan="7" class="px-3.5 py-1.5 text-[12.5px] text-red-700">{row.error}</td>
+            </tr>
+          <% end %>
         </tbody>
       </table>
     </div>
@@ -139,7 +182,38 @@
   </div>
 
   <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Already entered</h2>
-  <div class="rounded-2xl border border-ink-200 bg-white px-[22px] py-[30px] text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
+  <div
+    id="entered-fixtures"
+    phx-update="stream"
+    class={[
+      "overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]",
+      !@has_entered_fixtures && "hidden"
+    ]}
+  >
+    <div
+      :for={{dom_id, fixture} <- @streams.entered_fixtures}
+      id={dom_id}
+      class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
+    >
+      <div class="min-w-[200px] flex-1">
+        <div class="text-[14.5px] font-semibold text-ink-950">
+          {Competitions.participant_name(fixture.participant_a)} vs {Competitions.participant_name(
+            fixture.participant_b
+          )}
+        </div>
+        <div class="text-[12.5px] text-ink-400">
+          {fixture.venue.name} · {fixture_time_label(fixture)}
+        </div>
+      </div>
+      <span class="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-700">
+        Unplayed
+      </span>
+    </div>
+  </div>
+  <div
+    :if={!@has_entered_fixtures}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-[30px] text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
     No fixtures entered for this round yet — add rows above and save.
   </div>
 </AdminComponents.app_shell>
