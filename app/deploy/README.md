@@ -98,8 +98,8 @@ it can request certificates).
      endpoint, see `lib/cuevolution/accounts/profile_picture/storage/s3.ex`).
 
      Create an IAM user (or role, if the server itself runs on AWS) with
-     an inline policy scoped to just that bucket, plus SES sending (used
-     for email below — one IAM user covers both):
+     an inline policy scoped to just that bucket (email no longer goes
+     through AWS — see Postmark setup below):
 
      ```json
      {
@@ -109,11 +109,6 @@ it can request certificates).
            "Effect": "Allow",
            "Action": ["s3:PutObject", "s3:GetObject"],
            "Resource": "arn:aws:s3:::<bucket-name>/*"
-         },
-         {
-           "Effect": "Allow",
-           "Action": "ses:SendRawEmail",
-           "Resource": "*"
          }
        ]
      }
@@ -122,21 +117,23 @@ it can request certificates).
      Generate an access key for that IAM user (Security credentials →
      Access keys) and note the bucket's region — both go in `.env` below.
 
-   - **Set up SES** (Amazon SES console, same region as above — SES sends
-     over HTTPS rather than SMTP, since some hosts block outbound SMTP
-     ports at the network level):
-     - Verify a sending identity: either a single email address
-       (Identities → Create identity → Email address, then click the
-       confirmation link it emails you), or an entire domain (adds DNS
-       records instead — lets you send from any address `@your-domain`
-       without re-verifying each one). This becomes `MAIL_FROM_ADDRESS`
-       below.
-     - New SES accounts start in **sandbox mode** — you can only send *to*
-       addresses that are *also* verified, which is fine for your own
-       testing but blocks real signups. Request production access under
-       Account dashboard → Sending statistics → "Request production
-       access" (a short form; usually approved within a day) before this
-       matters for real users.
+   - **Set up Postmark** (sends over Postmark's SMTP relay):
+     - Create a server in the Postmark account (Servers → create one per
+       environment, e.g. "staging" / "production", so bounces/activity
+       don't mix) and copy its **Server API Token** (Servers → your
+       server → API Tokens) — this becomes both `POSTMARK_SMTP_USERNAME`
+       and `POSTMARK_SMTP_PASSWORD` below. `POSTMARK_SMTP_HOST` /
+       `POSTMARK_SMTP_PORT` are `smtp.postmarkapp.com` / `587`.
+     - Verify a Sender Signature: either a single email address (Sender
+       Signatures → Add, then click the confirmation link it emails you),
+       or an entire domain via DKIM/Return-Path DNS records (Sender
+       Signatures → Domains — lets you send from any address
+       `@your-domain` without re-verifying each one). This becomes
+       `MAIL_FROM_ADDRESS` below.
+     - New Postmark accounts start in **trial mode** with a sending cap
+       and Postmark's own review before full sending is unlocked —
+       request approval under your account's settings once you're ready
+       for real traffic.
 
    - Create the app directory:
 

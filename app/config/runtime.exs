@@ -145,31 +145,67 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer (Amazon SES)
+  # ## Configuring the mailer (Postmark SMTP)
   #
-  # Sends over the SES HTTPS API (via ExAwsAmazonSES, reusing the same
-  # :ex_aws credentials configured above for S3 — that IAM user/role needs
-  # ses:SendRawEmail added to its policy) rather than raw SMTP — some
-  # hosts block outbound SMTP ports (25/465/587) at the network level,
-  # which an HTTPS-based API sidesteps entirely.
+  # Sends over Postmark's SMTP relay. Host/port/username/password are all
+  # read from their own env vars (rather than hardcoding Postmark's host
+  # and port) so the relay can be pointed elsewhere without a code change.
+  # Username and password are both the same Postmark Server API Token —
+  # Postmark accepts that token in both fields.
   #
-  # MAIL_FROM_ADDRESS must be a verified identity in SES (an individually
-  # verified address, or any address on a verified domain) — SES rejects
-  # sends from anything else. New SES accounts also start in "sandbox"
-  # mode, where *recipients* must be verified too, until you request
-  # production access in the SES console (Account dashboard → Request
-  # production access — usually approved within a day).
+  # MAIL_FROM_ADDRESS must be a verified Sender Signature in Postmark (an
+  # individually verified address, or any address on a verified/DKIM'd
+  # sending domain) — Postmark rejects sends from anything else.
   mail_from_address =
     System.get_env("MAIL_FROM_ADDRESS") ||
       raise """
       environment variable MAIL_FROM_ADDRESS is missing.
-      Must be a verified identity in SES — see Cuevolution.Mailer config in
-      config/runtime.exs.
+      Must be a verified Sender Signature in Postmark — see Cuevolution.Mailer
+      config in config/runtime.exs.
+      """
+
+  postmark_smtp_host =
+    System.get_env("POSTMARK_SMTP_HOST") ||
+      raise """
+      environment variable POSTMARK_SMTP_HOST is missing.
+      Use smtp.postmarkapp.com.
+      """
+
+  postmark_smtp_port =
+    System.get_env("POSTMARK_SMTP_PORT") ||
+      raise """
+      environment variable POSTMARK_SMTP_PORT is missing.
+      Use 587.
+      """
+
+  postmark_smtp_username =
+    System.get_env("POSTMARK_SMTP_USERNAME") ||
+      raise """
+      environment variable POSTMARK_SMTP_USERNAME is missing.
+      The Server API Token from the Postmark server's API Tokens tab.
+      """
+
+  postmark_smtp_password =
+    System.get_env("POSTMARK_SMTP_PASSWORD") ||
+      raise """
+      environment variable POSTMARK_SMTP_PASSWORD is missing.
+      The same Server API Token as POSTMARK_SMTP_USERNAME — Postmark accepts
+      it in both fields.
       """
 
   config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
 
-  config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.ExAwsAmazonSES
+  config :cuevolution, Cuevolution.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: postmark_smtp_host,
+    port: String.to_integer(postmark_smtp_port),
+    username: postmark_smtp_username,
+    password: postmark_smtp_password,
+    ssl: false,
+    tls: :always,
+    auth: :always,
+    retries: 2,
+    no_mx_lookups: true
 
   # ## Configuring SMS (Africa's Talking)
   africastalking_api_key =
