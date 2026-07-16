@@ -117,22 +117,16 @@ it can request certificates).
      Generate an access key for that IAM user (Security credentials →
      Access keys) and note the bucket's region — both go in `.env` below.
 
-   - **Set up Postmark** (sends over Postmark's SMTP relay):
+   - **Set up Postmark** (sends over Postmark's HTTPS API, not SMTP — SMTP
+     hit a wall of issues on this host: port `587` was blocked outright at
+     the network level, and the alternate port `2525` kept failing with
+     an opaque `tls_failed` that turned out to be Erlang's `:ssl` app
+     defaulting to `verify_peer` with no CA bundle supplied. The HTTPS API
+     sidesteps all of that):
      - Create a server in the Postmark account (Servers → create one per
        environment, e.g. "staging" / "production", so bounces/activity
        don't mix) and copy its **Server API Token** (Servers → your
-       server → API Tokens) — this becomes both `POSTMARK_SMTP_USERNAME`
-       and `POSTMARK_SMTP_PASSWORD` below. `POSTMARK_SMTP_HOST` is
-       `smtp.postmarkapp.com`; use port `2525` for `POSTMARK_SMTP_PORT`,
-       not the standard `587` — this server's outbound 587 is blocked at
-       the network level (confirmed by connecting directly from inside
-       the app container: `docker compose exec app bin/cuevolution rpc
-       "IO.inspect(:gen_tcp.connect(~c\"smtp.postmarkapp.com\", 587, [],
-       5000))"` returned `{:error, :timeout}`, while port `2525` — an
-       alternate Postmark offers for exactly this situation — connected
-       fine). If you ever see stuck `status: "sending"` rows in the
-       `notifications` table with no `error` recorded, re-run that same
-       check against whichever port is configured.
+       server → API Tokens) — this becomes `POSTMARK_API_KEY` below.
      - Verify a Sender Signature: either a single email address (Sender
        Signatures → Add, then click the confirmation link it emails you),
        or an entire domain via DKIM/Return-Path DNS records (Sender

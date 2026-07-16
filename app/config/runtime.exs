@@ -145,14 +145,6 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer (Postmark SMTP)
-  #
-  # Sends over Postmark's SMTP relay. Host/port/username/password are all
-  # read from their own env vars (rather than hardcoding Postmark's host
-  # and port) so the relay can be pointed elsewhere without a code change.
-  # Username and password are both the same Postmark Server API Token —
-  # Postmark accepts that token in both fields.
-  #
   # MAIL_FROM_ADDRESS must be a verified Sender Signature in Postmark (an
   # individually verified address, or any address on a verified/DKIM'd
   # sending domain) — Postmark rejects sends from anything else.
@@ -164,55 +156,18 @@ if config_env() == :prod do
       config in config/runtime.exs.
       """
 
-  postmark_smtp_host =
-    System.get_env("POSTMARK_SMTP_HOST") ||
+  postmark_api_key =
+    System.get_env("POSTMARK_API_KEY") ||
       raise """
-      environment variable POSTMARK_SMTP_HOST is missing.
-      Use smtp.postmarkapp.com.
-      """
-
-  postmark_smtp_port =
-    System.get_env("POSTMARK_SMTP_PORT") ||
-      raise """
-      environment variable POSTMARK_SMTP_PORT is missing.
-      Use 587.
-      """
-
-  postmark_smtp_username =
-    System.get_env("POSTMARK_SMTP_USERNAME") ||
-      raise """
-      environment variable POSTMARK_SMTP_USERNAME is missing.
+      environment variable POSTMARK_API_KEY is missing.
       The Server API Token from the Postmark server's API Tokens tab.
-      """
-
-  postmark_smtp_password =
-    System.get_env("POSTMARK_SMTP_PASSWORD") ||
-      raise """
-      environment variable POSTMARK_SMTP_PASSWORD is missing.
-      The same Server API Token as POSTMARK_SMTP_USERNAME — Postmark accepts
-      it in both fields.
       """
 
   config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
 
   config :cuevolution, Cuevolution.Mailer,
-    adapter: Swoosh.Adapters.SMTP,
-    relay: postmark_smtp_host,
-    port: String.to_integer(postmark_smtp_port),
-    username: postmark_smtp_username,
-    password: postmark_smtp_password,
-    ssl: false,
-    # gen_smtp doesn't send SNI during the STARTTLS upgrade unless told to —
-    # confirmed via `openssl s_client -starttls smtp` completing a clean
-    # TLSv1.2 handshake against this host while gen_smtp's own upgrade threw
-    # {temporary_failure, tls_failed} every time. Postmark's cert is a
-    # wildcard (*.postmarkapp.com) served off shared infra that needs SNI to
-    # pick the right certificate.
-    tls_options: [server_name_indication: String.to_charlist(postmark_smtp_host)],
-    tls: :always,
-    auth: :always,
-    retries: 2,
-    no_mx_lookups: true
+    adapter: Swoosh.Adapters.Postmark,
+    api_key: postmark_api_key
 
   # ## Configuring SMS (Twilio)
   twilio_account_sid =

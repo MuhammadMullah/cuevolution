@@ -4,24 +4,67 @@ defmodule Cuevolution.Notifications.Emails do
   implementation detail (spec 002 Assumptions) — not specified by the
   business requirements. Every email gets a plain-text alternative body
   alongside the HTML one, for clients that don't render HTML.
+
+  HTML bodies share `layout/2` and `button/2` (ink/red branding matching
+  the landing page — see assets/css/app.css) and use a table-based,
+  inline-styled layout since email clients don't reliably support external
+  stylesheets. Any player-supplied or captain-supplied string (name, team
+  name, venue, etc.) is HTML-escaped before interpolation — these values
+  aren't sanitized at the source, and an unescaped one could break the
+  layout or inject markup into a rendered email.
   """
   import Swoosh.Email
 
+  alias CuevolutionWeb.Endpoint
+
+  @ink "#0d0c22"
+  @body_bg "#f0efec"
+  @text "#16152b"
+  @text_muted "#6b6a78"
+  @red "#e32219"
+
   @doc "Welcome email sent right after successful registration."
   def registration_confirmation(player) do
+    first_name = esc(player.first_name)
+
     base(player)
     |> subject("Welcome to Cuevolution!")
-    |> html_body("""
-    <p>Hi #{player.first_name},</p>
-    <p>Your Cuevolution account is ready. You're all set to check standings, join a team, and
-    get notified as soon as your fixtures are published.</p>
-    <p>See you at the table!</p>
-    """)
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        Your Cuevolution account is ready — you're officially part of Kenya's pool circuit.
+      </p>
+      <p style="margin:0 0 16px;">Here's what happens next:</p>
+      <ul style="margin:0 0 16px;padding-left:20px;">
+        <li style="margin-bottom:8px;">
+          <strong>Join or start a team</strong> — team play is optional, but it's the fastest way
+          into league fixtures.
+        </li>
+        <li style="margin-bottom:8px;">
+          <strong>Check standings</strong> any time to see how players and teams in your region
+          are ranked.
+        </li>
+        <li style="margin-bottom:8px;">
+          <strong>Watch your inbox</strong> — we'll email you the moment a fixture is published
+          for you.
+        </li>
+      </ul>
+      #{button("Log In to Cuevolution", url("/login"))}
+      <p style="margin:24px 0 0;">See you at the table!</p>
+      """)
+    )
     |> text_body("""
     Hi #{player.first_name},
 
-    Your Cuevolution account is ready. You're all set to check standings, join a team, and get
-    notified as soon as your fixtures are published.
+    Your Cuevolution account is ready — you're officially part of Kenya's pool circuit.
+
+    Here's what happens next:
+    - Join or start a team — team play is optional, but it's the fastest way into league fixtures.
+    - Check standings any time to see how players and teams in your region are ranked.
+    - Watch your inbox — we'll email you the moment a fixture is published for you.
+
+    Log in any time: #{url("/login")}
 
     See you at the table!
     """)
@@ -34,29 +77,30 @@ defmodule Cuevolution.Notifications.Emails do
   """
   def fixture_assignment(player, payload) do
     %{opponent_name: opponent, venue: venue, date: date, time: time} = payload
+    first_name = esc(player.first_name)
 
     base(player)
     |> subject("Your next fixture: vs #{opponent}")
-    |> html_body("""
-    <p>Hi #{player.first_name},</p>
-    <p>A new fixture has been published for you:</p>
-    <p>
-      <strong>Opponent:</strong> #{opponent}<br/>
-      <strong>Venue:</strong> #{venue}<br/>
-      <strong>Date:</strong> #{date}<br/>
-      <strong>Time:</strong> #{time}
-    </p>
-    <p>Good luck!</p>
-    """)
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">A new fixture has been published for you:</p>
+      #{fixture_table(opponent, venue, date, time)}
+      #{button("View My Fixtures", url("/fixtures"))}
+      <p style="margin:24px 0 0;">Good luck!</p>
+      """)
+    )
     |> text_body("""
     Hi #{player.first_name},
 
     A new fixture has been published for you:
 
     Opponent: #{opponent}
-    Venue: #{venue}
-    Date: #{date}
-    Time: #{time}
+    Venue:    #{venue}
+    Date:     #{date}
+    Time:     #{time}
+
+    See all your fixtures: #{url("/fixtures")}
 
     Good luck!
     """)
@@ -65,19 +109,29 @@ defmodule Cuevolution.Notifications.Emails do
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload
+    first_name = esc(player.first_name)
+    team_name_esc = esc(team_name)
+    captain_name_esc = esc(captain_name)
 
     base(player)
     |> subject("You've been added to #{team_name}")
-    |> html_body("""
-    <p>Hi #{player.first_name},</p>
-    <p><strong>#{captain_name}</strong> added you to <strong>#{team_name}</strong>. You can see
-    your roster and teammates any time in the app.</p>
-    """)
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        <strong>#{captain_name_esc}</strong> added you to <strong>#{team_name_esc}</strong>.
+        You can see your roster and teammates any time in the app.
+      </p>
+      #{button("View My Team", url("/team"))}
+      """)
+    )
     |> text_body("""
     Hi #{player.first_name},
 
     #{captain_name} added you to #{team_name}. You can see your roster and teammates any time
     in the app.
+
+    View your team: #{url("/team")}
     """)
   end
 
@@ -85,5 +139,108 @@ defmodule Cuevolution.Notifications.Emails do
     new()
     |> to({"#{player.first_name} #{player.last_name}", player.email})
     |> from(Application.get_env(:cuevolution, :mail_from))
+  end
+
+  defp url(path), do: Endpoint.url() <> path
+
+  defp esc(string), do: string |> Plug.HTML.html_escape() |> to_string()
+
+  defp fixture_table(opponent, venue, date, time) do
+    """
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="margin:0 0 20px;border:1px solid #e5e3df;border-radius:8px;overflow:hidden;">
+      #{fixture_row("Opponent", esc(opponent))}
+      #{fixture_row("Venue", esc(venue))}
+      #{fixture_row("Date", esc(date))}
+      #{fixture_row("Time", esc(time))}
+    </table>
+    """
+  end
+
+  defp fixture_row(label, value) do
+    """
+    <tr>
+      <td style="padding:10px 16px;background-color:#{@body_bg};font-size:13px;
+        color:#{@text_muted};width:96px;border-bottom:1px solid #e5e3df;">#{label}</td>
+      <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#{@text};
+        border-bottom:1px solid #e5e3df;">#{value}</td>
+    </tr>
+    """
+  end
+
+  defp button(text, href) do
+    """
+    <table role="presentation" cellpadding="0" cellspacing="0" class="cta-table" style="margin:8px 0 4px;">
+      <tr>
+        <td style="border-radius:8px;background-color:#{@red};">
+          <a href="#{href}" class="cta-link" style="display:inline-block;padding:12px 28px;
+            font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;
+            text-align:center;">#{text}</a>
+        </td>
+      </tr>
+    </table>
+    """
+  end
+
+  # Fluid table (width="100%" capped by max-width) so it already shrinks to
+  # fit a phone screen without a media query. The <meta viewport> tag is
+  # what actually matters on top of that — several mobile mail clients
+  # otherwise render at a fixed desktop width and force pinch-zoom even
+  # though the table itself is fluid. The @media block on top is the usual
+  # "hybrid coding" layer: inline styles are the safe fallback for clients
+  # that ignore <style> in <head>, the media query tightens padding and
+  # makes the CTA full-width/easier to tap on small screens for the many
+  # clients that do support it (Apple/Gmail/Outlook.com apps).
+  defp layout(inner_html) do
+    """
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light">
+        <meta name="supported-color-schemes" content="light">
+        <style>
+          @media only screen and (max-width: 480px) {
+            .email-header, .email-content, .email-footer { padding-left: 20px !important; padding-right: 20px !important; }
+            .cta-table { width: 100% !important; }
+            .cta-link { display: block !important; width: 100% !important; }
+          }
+        </style>
+      </head>
+      <body style="margin:0;padding:0;background-color:#{@body_bg};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+          style="background-color:#{@body_bg};padding:32px 16px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                style="max-width:560px;background-color:#ffffff;border-radius:12px;
+                overflow:hidden;font-family:'Mona Sans',Inter,-apple-system,'Helvetica Neue',
+                Arial,sans-serif;">
+                <tr>
+                  <td class="email-header" style="background-color:#{@ink};padding:24px 32px;text-align:center;">
+                    <img src="#{url("/images/cuevolution-logo-white.png")}" alt="Cuevolution"
+                      height="28" style="height:28px;display:inline-block;border:0;">
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-content" style="padding:32px;font-size:15px;line-height:1.6;color:#{@text};">
+                    #{inner_html}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-footer" style="padding:20px 32px;background-color:#{@body_bg};text-align:center;
+                    font-size:12px;color:#{@text_muted};">
+                    © #{Date.utc_today().year} Cuevolution. All rights reserved.<br>
+                    You're receiving this email because you have an account on Cuevolution.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
   end
 end
