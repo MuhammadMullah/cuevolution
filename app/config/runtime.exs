@@ -202,55 +202,41 @@ if config_env() == :prod do
     username: postmark_smtp_username,
     password: postmark_smtp_password,
     ssl: false,
+    # gen_smtp doesn't send SNI during the STARTTLS upgrade unless told to —
+    # confirmed via `openssl s_client -starttls smtp` completing a clean
+    # TLSv1.2 handshake against this host while gen_smtp's own upgrade threw
+    # {temporary_failure, tls_failed} every time. Postmark's cert is a
+    # wildcard (*.postmarkapp.com) served off shared infra that needs SNI to
+    # pick the right certificate.
+    tls_options: [server_name_indication: String.to_charlist(postmark_smtp_host)],
     tls: :always,
     auth: :always,
     retries: 2,
     no_mx_lookups: true
 
-  # ## Configuring SMS (Africa's Talking)
-  africastalking_api_key =
-    System.get_env("AFRICASTALKING_API_KEY") ||
+  # ## Configuring SMS (Twilio)
+  twilio_account_sid =
+    System.get_env("TWILIO_ACCOUNT_SID") ||
       raise """
-      environment variable AFRICASTALKING_API_KEY is missing.
-      Find it under Settings > API Key in your Africa's Talking dashboard.
+      environment variable TWILIO_ACCOUNT_SID is missing.
+      Find it in your Twilio Console dashboard.
       """
 
-  africastalking_username =
-    System.get_env("AFRICASTALKING_USERNAME") ||
+  twilio_auth_token =
+    System.get_env("TWILIO_AUTH_TOKEN") ||
       raise """
-      environment variable AFRICASTALKING_USERNAME is missing.
-      This is your live app's username (not "sandbox") in production.
+      environment variable TWILIO_AUTH_TOKEN is missing.
+      Find it in your Twilio Console dashboard.
       """
 
-  config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter
+  twilio_from_number =
+    System.get_env("TWILIO_FROM_NUMBER") ||
+      raise """
+      environment variable TWILIO_FROM_NUMBER is missing.
+      This must be a phone number you own in your Twilio account.
+      """
 
-  config :cuevolution, :africastalking,
-    api_key: africastalking_api_key,
-    username: africastalking_username,
-    sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
-
-  # ## Configuring SMS (Twilio) — an alternative to Africa's Talking above.
-  # It isn't the active :sms_adapter (AT is, set above); only configured at
-  # all if TWILIO_ACCOUNT_SID is present, so a deploy that never sets these
-  # doesn't fail to boot over an adapter it isn't using. To switch to it,
-  # also set
-  # `config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.TwilioAdapter`.
-  if twilio_account_sid = System.get_env("TWILIO_ACCOUNT_SID") do
-    twilio_auth_token =
-      System.get_env("TWILIO_AUTH_TOKEN") ||
-        raise """
-        environment variable TWILIO_AUTH_TOKEN is missing (TWILIO_ACCOUNT_SID is set).
-        Find it in your Twilio Console dashboard.
-        """
-
-    twilio_from_number =
-      System.get_env("TWILIO_FROM_NUMBER") ||
-        raise """
-        environment variable TWILIO_FROM_NUMBER is missing (TWILIO_ACCOUNT_SID is set).
-        This must be a phone number you own in your Twilio account.
-        """
-
-    config :ex_twilio, account_sid: twilio_account_sid, auth_token: twilio_auth_token
-    config :cuevolution, :twilio, from: twilio_from_number
-  end
+  config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.TwilioAdapter
+  config :ex_twilio, account_sid: twilio_account_sid, auth_token: twilio_auth_token
+  config :cuevolution, :twilio, from: twilio_from_number
 end

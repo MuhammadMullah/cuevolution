@@ -10,10 +10,10 @@ defmodule Cuevolution.Notifications.SmsAdapter.TwilioAdapter do
   messages are sent from.
 
   `ex_twilio` talks HTTP via `HTTPoison` directly, with no pluggable test
-  transport (unlike `Req`, which `AfricasTalkingAdapter` stubs via
-  `Req.Test`). So the actual `ExTwilio.Message.create/1` call goes through
-  the swappable `Client` behaviour (`config :cuevolution, :twilio_client`)
-  instead of being called here directly — that's the seam tests Mox-mock.
+  transport (unlike `Req`, which some adapters stub via `Req.Test`). So
+  the actual `ExTwilio.Message.create/1` call goes through the swappable
+  `Client` behaviour (`config :cuevolution, :twilio_client`) instead of
+  being called here directly — that's the seam tests Mox-mock.
   """
   @behaviour Cuevolution.Notifications.SmsAdapter
 

@@ -122,8 +122,17 @@ it can request certificates).
        environment, e.g. "staging" / "production", so bounces/activity
        don't mix) and copy its **Server API Token** (Servers → your
        server → API Tokens) — this becomes both `POSTMARK_SMTP_USERNAME`
-       and `POSTMARK_SMTP_PASSWORD` below. `POSTMARK_SMTP_HOST` /
-       `POSTMARK_SMTP_PORT` are `smtp.postmarkapp.com` / `587`.
+       and `POSTMARK_SMTP_PASSWORD` below. `POSTMARK_SMTP_HOST` is
+       `smtp.postmarkapp.com`; use port `2525` for `POSTMARK_SMTP_PORT`,
+       not the standard `587` — this server's outbound 587 is blocked at
+       the network level (confirmed by connecting directly from inside
+       the app container: `docker compose exec app bin/cuevolution rpc
+       "IO.inspect(:gen_tcp.connect(~c\"smtp.postmarkapp.com\", 587, [],
+       5000))"` returned `{:error, :timeout}`, while port `2525` — an
+       alternate Postmark offers for exactly this situation — connected
+       fine). If you ever see stuck `status: "sending"` rows in the
+       `notifications` table with no `error` recorded, re-run that same
+       check against whichever port is configured.
      - Verify a Sender Signature: either a single email address (Sender
        Signatures → Add, then click the confirmation link it emails you),
        or an entire domain via DKIM/Return-Path DNS records (Sender

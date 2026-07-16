@@ -91,25 +91,13 @@ config :phoenix_live_view,
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
-# Real Africa's Talking integration, pointed at their free Sandbox app —
-# lets you verify actual SMS delivery to whitelisted test numbers before
-# going live. Set these in your shell (e.g. via direnv/.env) — the
-# username must be "sandbox" for the adapter to hit the sandbox host.
-# If unset, the adapter fails the send (visible in the admin notification
-# log) instead of silently doing nothing.
-config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter
+# Real Twilio integration — lets you verify actual SMS delivery before
+# going live. Set these in your shell (e.g. via direnv/.env). Trial
+# accounts can only send to phone numbers you've verified in the Twilio
+# console. If unset, the adapter fails the send (visible in the admin
+# notification log) instead of silently doing nothing.
+config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.TwilioAdapter
 
-config :cuevolution, :africastalking,
-  api_key: System.get_env("AFRICASTALKING_API_KEY"),
-  username: System.get_env("AFRICASTALKING_USERNAME", "sandbox")
-
-# sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
-
-# Twilio adapter, available as an alternative to AfricasTalkingAdapter above
-# — not the active :sms_adapter by default. To try it in dev, set
-# `config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.TwilioAdapter`
-# once these env vars are set. Trial accounts can only send to phone
-# numbers you've verified in the Twilio console.
 config :ex_twilio,
   account_sid: System.get_env("TWILIO_ACCOUNT_SID"),
   auth_token: System.get_env("TWILIO_AUTH_TOKEN")
