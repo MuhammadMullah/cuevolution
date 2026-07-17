@@ -135,6 +135,41 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc """
+  Password-reset link email (spec 011). Sent via a standalone worker, not
+  `Notifications.dispatch/3` — see that worker's moduledoc for why.
+  """
+  def reset_password_instructions(player, url) do
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("Reset your Cuevolution password")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        We got a request to reset your Cuevolution password. Click below to choose a new one —
+        this link expires in 20 minutes.
+      </p>
+      #{button("Reset My Password", url)}
+      <p style="margin:24px 0 0;">
+        If you didn't request this, you can safely ignore this email — your password won't
+        change.
+      </p>
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    We got a request to reset your Cuevolution password. Use the link below to choose a new
+    one — it expires in 20 minutes.
+
+    #{url}
+
+    If you didn't request this, you can safely ignore this email — your password won't change.
+    """)
+  end
+
   defp base(player) do
     new()
     |> to({"#{player.first_name} #{player.last_name}", player.email})

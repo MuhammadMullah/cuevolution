@@ -2,6 +2,7 @@ defmodule Cuevolution.AccountsTest do
   use Cuevolution.DataCase, async: true
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Player
 
   describe "authenticate_admin/2" do
     test "returns the admin given correct email and password" do
@@ -299,6 +300,110 @@ defmodule Cuevolution.AccountsTest do
 
       assert Accounts.get_admin_by_session_token(player_token) == nil
       assert Accounts.get_player_by_session_token(admin_token) == nil
+    end
+  end
+
+  describe "get_player_by_login/1" do
+    test "finds the player by email, case-insensitively" do
+      player = insert(:player, email: "Findme@Example.com")
+      assert Accounts.get_player_by_login("findme@example.com").id == player.id
+    end
+
+    test "finds the player by username, case-insensitively" do
+      player = insert(:player, username: "FindMe")
+      assert Accounts.get_player_by_login("findme").id == player.id
+    end
+
+    test "returns nil for a login matching no player" do
+      assert Accounts.get_player_by_login("nobody-at-all") == nil
+    end
+  end
+
+  describe "deliver_player_reset_password_instructions/2 and get_player_by_reset_password_token/1" do
+    test "enqueues a reset email whose URL round-trips to the player" do
+      player = insert(:player, notification_preference: "sms")
+
+      assert {:ok, _job} =
+               Accounts.deliver_player_reset_password_instructions(
+                 player,
+                 &"https://cuevolution.test/reset-password/#{&1}"
+               )
+
+      assert_enqueued(
+        worker: Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker,
+        args: %{"player_id" => player.id}
+      )
+
+      [job] = all_enqueued(worker: Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker)
+      "https://cuevolution.test/reset-password/" <> token = job.args["reset_url"]
+
+      assert Accounts.get_player_by_reset_password_token(token).id == player.id
+    end
+
+    test "requesting a second link invalidates the first" do
+      player = insert(:player)
+
+      Accounts.deliver_player_reset_password_instructions(
+        player,
+        &"https://cuevolution.test/reset-password/#{&1}"
+      )
+
+      [first_job] =
+        all_enqueued(worker: Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker)
+
+      "https://cuevolution.test/reset-password/" <> first_token = first_job.args["reset_url"]
+
+      Accounts.deliver_player_reset_password_instructions(
+        player,
+        &"https://cuevolution.test/reset-password/#{&1}"
+      )
+
+      assert Accounts.get_player_by_reset_password_token(first_token) == nil
+    end
+
+    test "an unknown or garbage token resolves to nil" do
+      assert Accounts.get_player_by_reset_password_token("garbage") == nil
+    end
+  end
+
+  describe "reset_player_password/2" do
+    test "updates the password and invalidates every existing token" do
+      player = insert(:player, hashed_password: Bcrypt.hash_pwd_salt("Old-Pass1!"))
+      session_token = Accounts.generate_player_session_token(player)
+
+      assert {:ok, updated} =
+               Accounts.reset_player_password(player, %{
+                 "password" => "New-Pass1!",
+                 "password_confirmation" => "New-Pass1!"
+               })
+
+      assert Bcrypt.verify_pass("New-Pass1!", updated.hashed_password)
+      assert Accounts.get_player_by_session_token(session_token) == nil
+    end
+
+    test "rejects a weak password without changing the stored hash" do
+      player = insert(:player, hashed_password: Bcrypt.hash_pwd_salt("Old-Pass1!"))
+
+      assert {:error, changeset} =
+               Accounts.reset_player_password(player, %{
+                 "password" => "short",
+                 "password_confirmation" => "short"
+               })
+
+      refute changeset.valid?
+      assert Bcrypt.verify_pass("Old-Pass1!", Repo.get!(Player, player.id).hashed_password)
+    end
+
+    test "rejects a mismatched confirmation" do
+      player = insert(:player)
+
+      assert {:error, changeset} =
+               Accounts.reset_player_password(player, %{
+                 "password" => "New-Pass1!",
+                 "password_confirmation" => "Different1!"
+               })
+
+      assert "does not match" in errors_on(changeset).password_confirmation
     end
   end
 

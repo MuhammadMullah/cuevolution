@@ -44,12 +44,73 @@ input::placeholder{color:#9E9EA7;}
             <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Password</label>
             <input type="password" value="{{ si.pass }}" onInput="{{ siH.pass }}" placeholder="••••••••" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
           </div>
-          <div style="text-align:right;margin-bottom:18px;"><a href="#" onClick="{{ noop }}" style="font-size:13px;font-weight:600;">Forgot password?</a></div>
+          <div style="text-align:right;margin-bottom:18px;"><a href="#" onClick="{{ go.forgot }}" style="font-size:13px;font-weight:600;">Forgot password?</a></div>
           <sc-if value="{{ siError }}" hint-placeholder-val="">
             <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;font-weight:500;border-radius:10px;padding:10px 12px;margin-bottom:16px;">{{ siError }}</div>
           </sc-if>
           <button onClick="{{ signIn }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Sign in</button>
           <p style="text-align:center;font-size:14px;color:#6E6D7A;margin:20px 0 0;">New to Cuevolution? <a href="#" onClick="{{ go.register }}" style="font-weight:600;">Create an account</a></p>
+        </div>
+      </sc-if>
+
+      <!-- ---- FORGOT PASSWORD: request ---- -->
+      <sc-if value="{{ isForgot }}" hint-placeholder-val="">
+        <div style="width:100%;max-width:420px;background:#fff;border:1px solid #E7E7E9;border-radius:20px;box-shadow:0 8px 30px rgba(13,12,34,0.06);padding:clamp(24px,5vw,36px);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Reset Password</div>
+          <h1 style="font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 6px;">Forgot your password?</h1>
+          <p style="font-size:15px;line-height:1.5;color:#6E6D7A;margin:0 0 24px;">Enter the email or username on your account and we'll send a link to reset it.</p>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Email or username</label>
+            <input type="text" value="{{ fp.email }}" onInput="{{ fpH.email }}" placeholder="you@example.com" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+          </div>
+          <sc-if value="{{ fpError }}" hint-placeholder-val="">
+            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;font-weight:500;border-radius:10px;padding:10px 12px;margin:8px 0 0;">{{ fpError }}</div>
+          </sc-if>
+          <button onClick="{{ sendReset }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;margin-top:18px;" style-hover="background:#16152B;">Send reset link</button>
+          <p style="text-align:center;font-size:14px;color:#6E6D7A;margin:20px 0 0;"><a href="#" onClick="{{ go.signin }}" style="font-weight:600;">Back to sign in</a></p>
+        </div>
+      </sc-if>
+
+      <!-- ---- FORGOT PASSWORD: sent ---- -->
+      <sc-if value="{{ isForgotSent }}" hint-placeholder-val="">
+        <div style="width:100%;max-width:420px;background:#fff;border:1px solid #E7E7E9;border-radius:20px;box-shadow:0 8px 30px rgba(13,12,34,0.06);padding:clamp(24px,5vw,36px);text-align:center;">
+          <div style="width:52px;height:52px;border-radius:9999px;background:#FDECEA;color:#C81E16;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:24px;">✉</div>
+          <h1 style="font-size:24px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 8px;">Check your email</h1>
+          <p style="font-size:15px;line-height:1.5;color:#6E6D7A;margin:0 0 26px;">We sent a password reset link to <strong style="color:#0D0C22;">{{ fp.email }}</strong>. Click the link to choose a new password.</p>
+          <button onClick="{{ go.reset }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Open reset link</button>
+          <p style="text-align:center;font-size:14px;color:#6E6D7A;margin:20px 0 0;">Didn't get it? <a href="#" onClick="{{ sendReset }}" style="font-weight:600;">Resend email</a> · <a href="#" onClick="{{ go.signin }}" style="font-weight:600;">Back to sign in</a></p>
+        </div>
+      </sc-if>
+
+      <!-- ---- FORGOT PASSWORD: new password ---- -->
+      <sc-if value="{{ isReset }}" hint-placeholder-val="">
+        <div style="width:100%;max-width:420px;background:#fff;border:1px solid #E7E7E9;border-radius:20px;box-shadow:0 8px 30px rgba(13,12,34,0.06);padding:clamp(24px,5vw,36px);">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Reset Password</div>
+          <h1 style="font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 6px;">Choose a new password</h1>
+          <p style="font-size:15px;line-height:1.5;color:#6E6D7A;margin:0 0 24px;">Must be at least 8 characters.</p>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">New password</label>
+            <input type="password" value="{{ fp.pass }}" onInput="{{ fpH.pass }}" placeholder="••••••••" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Confirm password</label>
+            <input type="password" value="{{ fp.confirm }}" onInput="{{ fpH.confirm }}" placeholder="••••••••" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:11px 13px;font-family:inherit;font-size:15px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.18);outline:none;" />
+          </div>
+          <sc-if value="{{ fpError }}" hint-placeholder-val="">
+            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;font-weight:500;border-radius:10px;padding:10px 12px;margin-bottom:16px;">{{ fpError }}</div>
+          </sc-if>
+          <button onClick="{{ resetPassword }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Reset password</button>
+          <p style="text-align:center;font-size:14px;color:#6E6D7A;margin:20px 0 0;"><a href="#" onClick="{{ go.signin }}" style="font-weight:600;">Back to sign in</a></p>
+        </div>
+      </sc-if>
+
+      <!-- ---- FORGOT PASSWORD: done ---- -->
+      <sc-if value="{{ isResetDone }}" hint-placeholder-val="">
+        <div style="width:100%;max-width:420px;background:#fff;border:1px solid #E7E7E9;border-radius:20px;box-shadow:0 8px 30px rgba(13,12,34,0.06);padding:clamp(24px,5vw,36px);text-align:center;">
+          <div style="width:52px;height:52px;border-radius:9999px;background:#EAF6EC;color:#1E7A34;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:26px;">✓</div>
+          <h1 style="font-size:24px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 8px;">Password reset</h1>
+          <p style="font-size:15px;line-height:1.5;color:#6E6D7A;margin:0 0 26px;">Your password has been updated. Sign in with your new password.</p>
+          <button onClick="{{ go.signin }}" style="width:100%;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Back to sign in</button>
         </div>
       </sc-if>
 
@@ -611,6 +672,7 @@ class Component extends DCLogic {
   state = {
     authed:false, route:'signin', 
     si:{email:'',pass:''}, siError:'',
+    fp:{email:'',pass:'',confirm:''}, fpError:'',
     regStep:1,
     reg:{name:'',dob:'',gender:'',town:'',photo:false,email:'',mobile:'',username:'',pass:'',region:'',venue:'',venueOther:'',notify:''},
     regErrors:{},
@@ -953,8 +1015,9 @@ class Component extends DCLogic {
     return {
       // shell
       showAuth:!S.authed, isSignin:S.route==='signin', isRegister:S.route==='register',
+      isForgot:S.route==='forgot', isForgotSent:S.route==='forgotSent', isReset:S.route==='reset', isResetDone:S.route==='resetDone',
       showApp:S.authed, rIsStandings:S.route==='standings', rIsTeam:S.route==='team', rIsFixtures:S.route==='fixtures', rIsProfile:S.route==='profile', rIsSettings:S.route==='settings',
-      go:{signin:()=>this.go('signin'), register:()=>{this.setState({regStep:1});this.go('register');}, standings:()=>this.go('standings'), team:()=>this.go('team'), fixtures:()=>this.go('fixtures'), profile:()=>this.go('profile')},
+      go:{signin:()=>{this.setState({fp:{email:'',pass:'',confirm:''},fpError:''});this.go('signin');}, register:()=>{this.setState({regStep:1});this.go('register');}, forgot:()=>{this.setState({fpError:''});this.go('forgot');}, reset:()=>{this.setState({fpError:''});this.go('reset');}, standings:()=>this.go('standings'), team:()=>this.go('team'), fixtures:()=>this.go('fixtures'), profile:()=>this.go('profile')},
       menuOpen:S.menuOpen,
       toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})),
       closeMenu:()=>this.setState({menuOpen:false}),
@@ -968,6 +1031,11 @@ class Component extends DCLogic {
       siH:{email:(e)=>this.setState(s=>({si:{...s.si,email:e.target.value},siError:''})), pass:(e)=>this.setState(s=>({si:{...s.si,pass:e.target.value},siError:''}))},
       signIn:()=>{ if(!S.si.email.trim()||!S.si.pass){ this.setState({siError:'Enter your email/username and password to continue.'}); return; } this.setState({authed:true,route:'fixtures',siError:''}); try{window.scrollTo(0,0);}catch(e){} },
       signOut:()=>{ this.setState({authed:false,route:'signin',si:{email:'',pass:''}}); try{window.scrollTo(0,0);}catch(e){} },
+      // forgot password
+      fp:S.fp, fpError:S.fpError,
+      fpH:{email:(e)=>this.setState(s=>({fp:{...s.fp,email:e.target.value},fpError:''})), pass:(e)=>this.setState(s=>({fp:{...s.fp,pass:e.target.value},fpError:''})), confirm:(e)=>this.setState(s=>({fp:{...s.fp,confirm:e.target.value},fpError:''}))},
+      sendReset:()=>{ if(!S.fp.email.trim()){ this.setState({fpError:'Enter your email or username to continue.'}); return; } this.go('forgotSent'); },
+      resetPassword:()=>{ if(!S.fp.pass||S.fp.pass.length<8){ this.setState({fpError:'Password must be at least 8 characters.'}); return; } if(S.fp.pass!==S.fp.confirm){ this.setState({fpError:'Passwords do not match.'}); return; } this.go('resetDone'); },
       // register
       regStep:S.regStep, regProgress:(Math.min(S.regStep,4)/4*100)+'%',
       regInProgress:S.regStep<=4, rs1:S.regStep===1, rs2:S.regStep===2, rs3:S.regStep===3, rs4:S.regStep===4, rs5:S.regStep===5,

@@ -4,6 +4,7 @@ defmodule Cuevolution.Accounts.PlayerToken do
 
   @rand_size 32
   @session_validity_in_days 60
+  @reset_password_validity_in_minutes 20
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -35,6 +36,51 @@ defmodule Cuevolution.Accounts.PlayerToken do
         select: player
 
     {:ok, query}
+  end
+
+  @doc """
+  Builds a password-reset token: returns `{url_safe_raw_token, token_struct}`.
+
+  Unlike the session token above, this one is emailed to the player, so only
+  its hash is persisted — the raw value is never stored anywhere, matching
+  `phx.gen.auth`'s approach to reset tokens (a DB read alone can't
+  reconstruct a working reset link).
+  """
+  def build_reset_password_token(player) do
+    raw = :crypto.strong_rand_bytes(@rand_size)
+
+    token_struct = %__MODULE__{
+      token: :crypto.hash(:sha256, raw),
+      context: "reset_password",
+      sent_to: player.email,
+      player_id: player.id
+    }
+
+    {Base.url_encode64(raw, padding: false), token_struct}
+  end
+
+  @doc """
+  Verifies an encoded reset-password token and returns a query resolving to
+  its player, or `:error` if the string isn't even decodable — a malformed
+  or never-issued token is treated identically to an expired one by the
+  caller, so this doesn't need to distinguish the two.
+  """
+  def verify_reset_password_token_query(encoded_token) do
+    case Base.url_decode64(encoded_token, padding: false) do
+      {:ok, raw} ->
+        hashed = :crypto.hash(:sha256, raw)
+
+        query =
+          from t in by_token_and_context_query(hashed, "reset_password"),
+            join: player in assoc(t, :player),
+            where: t.inserted_at > ago(@reset_password_validity_in_minutes, "minute"),
+            select: player
+
+        {:ok, query}
+
+      :error ->
+        :error
+    end
   end
 
   def by_token_and_context_query(token, context) do

@@ -35,6 +35,8 @@ defmodule CuevolutionWeb.Router do
     live_session :player_guest do
       live "/register", RegistrationLive, :new
       live "/login", PlayerLoginLive, :new
+      live "/forgot-password", ForgotPasswordLive, :new
+      live "/reset-password/:token", ResetPasswordLive, :new
     end
 
     post "/login", PlayerSessionController, :create

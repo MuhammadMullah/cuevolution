@@ -644,7 +644,7 @@ defmodule CuevolutionWeb.PlayerComponents do
 
   def guest_shell(assigns) do
     ~H"""
-    <div class="flex min-h-screen flex-col items-center bg-ink-25 px-5 py-12 font-sans text-ink-700 antialiased sm:py-16">
+    <div class="bg-auth-pattern flex min-h-screen flex-col items-center px-5 py-12 font-sans text-ink-700 antialiased sm:py-16">
       <.flash_group flash={@flash} />
       <img src={~p"/images/cuevolution-logo.png"} class="mb-7 h-10 w-auto" alt="Cuevolution" />
       <div class={[

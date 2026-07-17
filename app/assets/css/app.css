@@ -197,4 +197,14 @@
   border-radius: 50%;
 }
 
+/* WhatsApp-chat-wallpaper-inspired doodle pattern behind the guest auth
+   card (sign in / register / forgot password) — per the updated mockup at
+   project-scope/Quevolution/Cuevolution Player App.dc.html. */
+.bg-auth-pattern {
+  background-color: #f3f1ec;
+  background-repeat: repeat;
+  background-size: 180px 180px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27180%27 height=%27180%27%3E%3Cg fill=%27none%27 stroke=%27%230D0C22%27 stroke-width=%272%27 opacity=%270.07%27%3E%3Ccircle cx=%2728%27 cy=%2728%27 r=%2715%27/%3E%3Ccircle cx=%2728%27 cy=%2728%27 r=%275%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3Cpath d=%27M95 12 L138 55%27/%3E%3Ccircle cx=%27140%27 cy=%2757%27 r=%274%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3Cpath d=%27M35 100 L58 138 L12 138 Z%27/%3E%3Ccircle cx=%27125%27 cy=%27115%27 r=%2712%27/%3E%3Cpath d=%27M118 108 L132 122 M132 108 L118 122%27/%3E%3Cpath d=%27M60 165 h28%27 stroke-width=%273%27/%3E%3Ccircle cx=%2765%27 cy=%2765%27 r=%273%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3C/g%3E%3C/svg%3E");
+}
+
 /* This file is for your main application CSS */

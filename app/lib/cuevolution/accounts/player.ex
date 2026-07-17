@@ -29,6 +29,7 @@ defmodule Cuevolution.Accounts.Player do
     field :notification_preference, :string
     field :hashed_password, :string
     field :password, :string, virtual: true
+    field :password_confirmation, :string, virtual: true
     field :anonymized_at, :utc_datetime
 
     belongs_to :region, Cuevolution.Accounts.Region
@@ -92,6 +93,16 @@ defmodule Cuevolution.Accounts.Player do
     )
     |> unique_constraint(:mobile_number, message: "has already been taken")
     |> foreign_key_constraint(:preferred_venue_id)
+    |> hash_password()
+  end
+
+  @doc "Sets a new password after a reset-password link is verified (spec 011)."
+  def reset_password_changeset(player, attrs) do
+    player
+    |> cast(attrs, [:password, :password_confirmation])
+    |> validate_required([:password, :password_confirmation])
+    |> validate_confirmation(:password, message: "does not match")
+    |> PasswordValidator.validate_password(:password)
     |> hash_password()
   end
 

@@ -15,6 +15,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Accounts.PlayerToken
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Notifications
+  alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
 
   @doc """
@@ -157,6 +158,15 @@ defmodule Cuevolution.Accounts do
     end
   end
 
+  @doc """
+  Looks up a player by email or username (case-insensitive), or `nil` if no
+  match — used by the password-reset request flow (spec 011), which must
+  not otherwise reveal whether a given login is registered.
+  """
+  def get_player_by_login(login) when is_binary(login) do
+    Repo.one(player_by_login_query(login))
+  end
+
   defp player_by_login_query(login) do
     login = String.downcase(login)
 
@@ -181,6 +191,57 @@ defmodule Cuevolution.Accounts do
   def delete_player_session_token(token) do
     Repo.delete_all(PlayerToken.by_token_and_context_query(token, "session"))
     :ok
+  end
+
+  @doc """
+  Issues a fresh password-reset token for `player` and enqueues the reset
+  email (spec 011). Any previously issued, unused reset token for this
+  player is invalidated first — only the most recently requested link is
+  ever valid (spec.md FR-005).
+
+  `reset_password_url_fun` receives the URL-safe encoded token and must
+  return the full reset URL — callers build this with their own route
+  helper (e.g. `&url(~p"/reset-password/\#{&1}")`) rather than this context
+  hardcoding a path.
+  """
+  def deliver_player_reset_password_instructions(%Player{} = player, reset_password_url_fun)
+      when is_function(reset_password_url_fun, 1) do
+    Repo.delete_all(PlayerToken.by_player_and_contexts_query(player, ["reset_password"]))
+
+    {encoded_token, token_struct} = PlayerToken.build_reset_password_token(player)
+    Repo.insert!(token_struct)
+
+    %{"player_id" => player.id, "reset_url" => reset_password_url_fun.(encoded_token)}
+    |> SendPasswordResetEmailWorker.new()
+    |> Oban.insert()
+  end
+
+  @doc """
+  Looks up the player a password-reset token belongs to — `nil` if the
+  token is malformed, unknown, expired, or already consumed (spec 011
+  FR-006 deliberately doesn't distinguish these cases to the caller).
+  """
+  def get_player_by_reset_password_token(token) do
+    case PlayerToken.verify_reset_password_token_query(token) do
+      {:ok, query} -> Repo.one(query)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Sets a player's new password and invalidates every one of their tokens —
+  including the reset token just used and any other active sessions (spec
+  011 FR-008) — in a single transaction.
+  """
+  def reset_player_password(%Player{} = player, attrs) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:player, Player.reset_password_changeset(player, attrs))
+    |> Ecto.Multi.delete_all(:tokens, PlayerToken.by_player_and_contexts_query(player, :all))
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: player}} -> {:ok, player}
+      {:error, :player, changeset, _changes} -> {:error, changeset}
+    end
   end
 
   @doc "Updates a player's notification preference (spec 003 US2)."
