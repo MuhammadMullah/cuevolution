@@ -39,6 +39,28 @@ defmodule Cuevolution.Release do
     :ok
   end
 
+  @doc """
+  Enrolls every player/team that predates auto-enrollment into Grassroots
+  (spec 006). Idempotent — safe to re-run. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.backfill_grassroots()'
+  """
+  def backfill_grassroots do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    %{players: {player_count, player_errors}, teams: {team_count, team_errors}} =
+      Cuevolution.Competitions.backfill_grassroots_enrollments()
+
+    IO.puts("Enrolled #{player_count} player(s) and #{team_count} team(s) into Grassroots.")
+
+    for {id, changeset} <- player_errors ++ team_errors do
+      IO.puts(:stderr, "Failed to enroll #{id}: #{inspect(changeset.errors)}")
+    end
+
+    :ok
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end

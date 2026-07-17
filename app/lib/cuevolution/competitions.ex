@@ -72,6 +72,54 @@ defmodule Cuevolution.Competitions do
     })
   end
 
+  @doc """
+  Enrolls every player/team that predates auto-enrollment into Grassroots
+  (spec 006 migration path). Idempotent — skips anyone who already has a
+  participation for any stage. Shared by `Mix.Tasks.Cuevolution.BackfillGrassroots`
+  (dev/test) and `Cuevolution.Release.backfill_grassroots/0` (production
+  releases, which have no Mix), so the enrollment rule lives in one place.
+  Returns `%{players: {count, errors}, teams: {count, errors}}`.
+  """
+  def backfill_grassroots_enrollments do
+    %{players: backfill_player_enrollments(), teams: backfill_team_enrollments()}
+  end
+
+  defp backfill_player_enrollments do
+    enrolled_ids = participation_owner_ids(:player_id)
+
+    Player
+    |> Repo.all()
+    |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
+    |> Enum.reduce({0, []}, fn player, {count, errors} ->
+      case player |> enroll_player_in_grassroots_changeset() |> Repo.insert() do
+        {:ok, _} -> {count + 1, errors}
+        {:error, changeset} -> {count, [{player.id, changeset} | errors]}
+      end
+    end)
+  end
+
+  defp backfill_team_enrollments do
+    enrolled_ids = participation_owner_ids(:team_id)
+
+    Team
+    |> Repo.all()
+    |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
+    |> Enum.reduce({0, []}, fn team, {count, errors} ->
+      case team |> enroll_team_in_grassroots_changeset() |> Repo.insert() do
+        {:ok, _} -> {count + 1, errors}
+        {:error, changeset} -> {count, [{team.id, changeset} | errors]}
+      end
+    end)
+  end
+
+  defp participation_owner_ids(field) do
+    StageParticipation
+    |> where([sp], not is_nil(field(sp, ^field)))
+    |> select([sp], field(sp, ^field))
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
   @doc "The stage a participation currently sits in (spec 006)."
   def current_stage(%StageParticipation{} = participation) do
     participation |> Repo.preload(:stage) |> Map.fetch!(:stage)
