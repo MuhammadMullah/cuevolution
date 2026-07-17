@@ -19,7 +19,7 @@ defmodule Cuevolution.Seeds.Accounts do
 
   def run do
     seed_admin()
-    seed_players()
+    # seed_players()
   end
 
   defp seed_admin do

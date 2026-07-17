@@ -207,6 +207,25 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
     assert html =~ "Type the venue name"
   end
 
+  test "the Create account button stays disabled until terms are accepted", %{conn: conn} do
+    region = build(:region)
+    venue = insert(:venue, region_id: region.id)
+
+    {:ok, view, _html} = live(conn, ~p"/register")
+    complete_steps_1_and_2(view)
+    choose_region(view, region.id)
+    choose(view, "preferred_venue_id", venue.id)
+    continue(view)
+
+    assert has_element?(view, "button[type=submit][disabled]")
+
+    view |> element(~s(input[type="checkbox"])) |> render_click()
+    refute has_element?(view, "button[type=submit][disabled]")
+
+    view |> element(~s(input[type="checkbox"])) |> render_click()
+    assert has_element?(view, "button[type=submit][disabled]")
+  end
+
   test "completing all steps creates the account and logs the player in", %{conn: conn} do
     region = build(:region)
     venue = insert(:venue, region_id: region.id)

@@ -16,3 +16,17 @@
   </PlayerComponents.option_card>
 </div>
 <.field_error field={@form[:notification_preference]} />
+
+<div class="mt-5 flex items-start gap-2.5 border-t border-ink-100 pt-5">
+  <input
+    type="checkbox"
+    checked={@terms_accepted}
+    phx-click="toggle_terms"
+    class="mt-0.5 size-4 shrink-0 cursor-pointer rounded border-ink-300 accent-ink-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
+  />
+  <p class="text-[13.5px] text-ink-700">
+    I agree to the
+    <a href="#" class="font-semibold text-red-600 hover:text-red-700">Terms of Service</a>
+    and <a href="#" class="font-semibold text-red-600 hover:text-red-700">Privacy Policy</a>.
+  </p>
+</div>

@@ -43,6 +43,7 @@ defmodule CuevolutionWeb.RegistrationLive do
        notification_defs: @notification_defs,
        last_step: @last_step,
        registered: false,
+       terms_accepted: false,
        touched_fields: MapSet.new()
      )
      |> allow_upload(:photo,
@@ -65,6 +66,16 @@ defmodule CuevolutionWeb.RegistrationLive do
      |> assign(:attrs, attrs)
      |> touch_target(full_params["_target"])
      |> assign_form(changeset)}
+  end
+
+  # The terms-of-service checkbox on the last step isn't a named form field
+  # (it's not part of the Player schema), but it still sits inside the
+  # `phx-change="validate"` form, so ticking it fires a native "change" that
+  # bubbles up without a "player" key — this no-ops that instead of crashing.
+  def handle_event("validate", _params, socket), do: {:noreply, socket}
+
+  def handle_event("toggle_terms", _params, socket) do
+    {:noreply, Phoenix.Component.update(socket, :terms_accepted, &(!&1))}
   end
 
   def handle_event("choose", %{"field" => field, "choice" => value}, socket) do
