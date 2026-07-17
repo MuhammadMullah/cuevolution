@@ -69,7 +69,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
 
     html =
       view
-      |> form("form", %{"region" => "Rift B", "stage" => "Finals"})
+      |> form("form", %{"region" => "South Rift", "stage" => "Finals"})
       |> render_change()
 
     assert html =~ "No standings yet"

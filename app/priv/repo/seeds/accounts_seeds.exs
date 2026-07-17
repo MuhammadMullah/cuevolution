@@ -12,8 +12,8 @@ defmodule Cuevolution.Seeds.Accounts do
   alias Cuevolution.Repo
   alias Cuevolution.Venues.Venue
 
-  @admin_email "admin@cuevolution.test"
-  @admin_password "Seed1!Admin"
+  @admin_email "admin@cuevolutionke.com"
+  @admin_password "Admin@Cue26"
   @player_count 40
   @player_username_prefix "seedplayer"
 

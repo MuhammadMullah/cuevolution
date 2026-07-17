@@ -12,7 +12,7 @@ defmodule CuevolutionWeb.StandingsLive do
   alias CuevolutionWeb.PlayerComponents
   alias Phoenix.LiveView.JS
 
-  # Mirrors the region set seeded in `create_regions.exs` — hardcoded here
+  # Mirrors the region set seeded in `regions_seeds.exs` — hardcoded here
   # because standings has no real data yet and thus no FK to `regions`.
   @regions [
     "Nairobi A",
@@ -20,8 +20,8 @@ defmodule CuevolutionWeb.StandingsLive do
     "Central",
     "Eastern",
     "Coast",
-    "Rift A",
-    "Rift B",
+    "North Rift",
+    "South Rift",
     "Nyanza & Western"
   ]
 

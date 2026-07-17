@@ -13,12 +13,24 @@ defmodule Cuevolution.Seeds.Regions do
     "Central",
     "Eastern",
     "Coast",
-    "Rift A",
-    "Rift B",
+    "North Rift",
+    "South Rift",
     "Nyanza & Western"
   ]
 
+  # "Rift A"/"Rift B" were placeholder names used before the real regional
+  # names were known. Renamed in place (rather than left to insert as new
+  # rows below) so any region already seeded/referenced under the old name
+  # keeps its id — no orphaned duplicate and no dangling foreign keys on
+  # players/venues that already point at it.
+  @renames %{
+    "Rift A" => "North Rift",
+    "Rift B" => "South Rift"
+  }
+
   def run do
+    rename_existing()
+
     existing_slugs = Repo.all(Region) |> MapSet.new(& &1.slug)
 
     inserted =
@@ -29,6 +41,20 @@ defmodule Cuevolution.Seeds.Regions do
       end)
 
     IO.puts("Seeded #{length(inserted)} new region(s) (#{length(@regions)} total).")
+  end
+
+  defp rename_existing do
+    Enum.each(@renames, fn {old_name, new_name} ->
+      case Repo.get_by(Region, slug: slug(old_name)) do
+        nil ->
+          :ok
+
+        region ->
+          region
+          |> Ecto.Changeset.change(name: new_name, slug: slug(new_name))
+          |> Repo.update!()
+      end
+    end)
   end
 
   defp slug(name) do
