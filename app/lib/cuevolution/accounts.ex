@@ -14,9 +14,11 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Accounts.PlayerToken
   alias Cuevolution.Accounts.Region
+  alias Cuevolution.Competitions
   alias Cuevolution.Notifications
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
+  alias Ecto.Multi
 
   @doc """
   Authenticates an admin by email and password.
@@ -121,17 +123,30 @@ defmodule Cuevolution.Accounts do
   end
 
   @doc """
-  Registers a player (spec 003 US1) and dispatches a registration-confirmation
-  notification. A notification-dispatch failure is caught and logged — it
-  never rolls back the already-committed account (spec 002).
+  Registers a player (spec 003 US1), enrolls them into the Grassroots stage
+  under their gender category (spec 006 default entry point), and dispatches
+  a registration-confirmation notification. The stage enrollment is created
+  atomically with the account — a player never exists without a Grassroots
+  `StageParticipation`. The notification dispatch, by contrast, runs after
+  commit and its failure is caught and logged rather than rolling back the
+  already-committed account (spec 002).
   """
   def register_player(attrs) do
-    case Player.registration_changeset(%Player{}, attrs) |> Repo.insert() do
-      {:ok, player} ->
+    Multi.new()
+    |> Multi.insert(:player, Player.registration_changeset(%Player{}, attrs))
+    |> Multi.insert(:stage_participation, fn %{player: player} ->
+      Competitions.enroll_player_in_grassroots_changeset(player)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: player}} ->
         dispatch_registration_confirmation(player)
         {:ok, player}
 
-      {:error, changeset} ->
+      {:error, :player, changeset, _changes} ->
+        {:error, changeset}
+
+      {:error, :stage_participation, changeset, _changes} ->
         {:error, changeset}
     end
   end

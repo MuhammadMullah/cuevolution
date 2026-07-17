@@ -8,14 +8,18 @@ defmodule Cuevolution.Teams do
   require Logger
 
   alias Cuevolution.Accounts.Player
+  alias Cuevolution.Competitions
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
   alias Ecto.Multi
 
   @doc """
-  Creates a team with `captain` as its Team Captain (spec 005 FR-001). The
-  team's region is inherited from the captain, never user-supplied.
+  Creates a team with `captain` as its Team Captain (spec 005 FR-001), and
+  enrolls it into the Grassroots stage under the "team" category (spec 006
+  default entry point) — atomically, so a team never exists without a
+  Grassroots `StageParticipation`. The team's region is inherited from the
+  captain, never user-supplied.
 
   Atomically claims the captain's roster slot (`players.team_id`) — if the
   captain is concurrently claimed by another `create_team/2` or
@@ -34,6 +38,9 @@ defmodule Cuevolution.Teams do
 
     Multi.new()
     |> Multi.insert(:team, changeset)
+    |> Multi.insert(:stage_participation, fn %{team: team} ->
+      Competitions.enroll_team_in_grassroots_changeset(team)
+    end)
     |> Multi.update_all(
       :claim_captain,
       fn %{team: team} -> claim_query(captain.id, team.id) end,
@@ -46,6 +53,7 @@ defmodule Cuevolution.Teams do
     |> case do
       {:ok, %{team: team}} -> {:ok, team}
       {:error, :team, changeset, _changes} -> {:error, changeset}
+      {:error, :stage_participation, changeset, _changes} -> {:error, changeset}
       {:error, :verify_claim, :already_on_a_team, _changes} -> {:error, :already_on_a_team}
     end
   end

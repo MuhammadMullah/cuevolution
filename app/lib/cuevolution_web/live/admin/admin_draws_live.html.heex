@@ -87,7 +87,7 @@
               <td class="p-2">
                 <select
                   name={"rows[#{row.id}][category]"}
-                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13.5px]"
+                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13.5px] text-ink-950"
                 >
                   <option
                     :for={{label, value} <- @categories}
@@ -133,7 +133,7 @@
                   type="date"
                   name={"rows[#{row.id}][date]"}
                   value={row.date}
-                  class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950"
                 />
               </td>
               <td class="p-2">
@@ -141,7 +141,7 @@
                   type="time"
                   name={"rows[#{row.id}][time]"}
                   value={row.time}
-                  class="w-full rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950"
                 />
               </td>
               <td class="p-2 text-center">

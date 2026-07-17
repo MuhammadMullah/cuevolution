@@ -10,6 +10,7 @@ defmodule Cuevolution.Competitions do
 
   require Logger
 
+  alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Competitions.Group
   alias Cuevolution.Competitions.GroupMembership
@@ -20,6 +21,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
+  alias Cuevolution.Teams.Team
   alias Ecto.Multi
 
   # EAT = East Africa Time, UTC+3, fixed offset (no DST) — spec 007 FR-008.
@@ -33,6 +35,41 @@ defmodule Cuevolution.Competitions do
   @doc "The stage immediately after `stage` in pipeline order, or `nil` if `stage` is Finals."
   def next_stage(%Stage{order: order}) do
     Repo.one(from s in Stage, where: s.order == ^(order + 1))
+  end
+
+  @doc "The first stage in pipeline order — every new player/team enters here (spec 006)."
+  def grassroots_stage do
+    Repo.one!(from s in Stage, where: s.order == 1)
+  end
+
+  @doc """
+  Enrolls `player` into Grassroots under their gender category — the
+  default entry point for every newly registered player (spec 006).
+  Returns a changeset for composition inside a caller's `Ecto.Multi`.
+  """
+  def enroll_player_in_grassroots_changeset(%Player{} = player) do
+    StageParticipation.changeset(%StageParticipation{}, %{
+      player_id: player.id,
+      region_id: player.region_id,
+      stage_id: grassroots_stage().id,
+      category: player.gender,
+      joined_at: DateTime.utc_now()
+    })
+  end
+
+  @doc """
+  Enrolls `team` into Grassroots under the "team" category — the default
+  entry point for every newly created team (spec 006). Returns a changeset
+  for composition inside a caller's `Ecto.Multi`.
+  """
+  def enroll_team_in_grassroots_changeset(%Team{} = team) do
+    StageParticipation.changeset(%StageParticipation{}, %{
+      team_id: team.id,
+      region_id: team.region_id,
+      stage_id: grassroots_stage().id,
+      category: "team",
+      joined_at: DateTime.utc_now()
+    })
   end
 
   @doc "The stage a participation currently sits in (spec 006)."

@@ -261,7 +261,7 @@ defmodule CuevolutionWeb.AdminComponents do
         phx-value-row={@row_id}
         phx-value-field={@field}
         class={[
-          "w-full rounded-lg border px-2.5 py-2 text-[13.5px] focus:outline-none",
+          "w-full rounded-lg border bg-white px-2.5 py-2 text-[13.5px] text-ink-950 focus:outline-none",
           @confirmed && "border-green-300 focus:border-green-500",
           !@confirmed && "border-ink-300 focus:border-red-500"
         ]}

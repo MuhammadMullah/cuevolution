@@ -355,7 +355,6 @@ defmodule Cuevolution.CompetitionsTest do
     end
 
     test "Team-category fixtures dispatch to every roster member of both teams", %{
-      grassroots: grassroots,
       region: region,
       venue: venue,
       round: round
@@ -367,22 +366,6 @@ defmodule Cuevolution.CompetitionsTest do
 
       captain_b = insert(:player, region_id: region.id)
       {:ok, team_b} = Cuevolution.Teams.create_team(captain_b, %{"name" => "Team B"})
-
-      insert(:stage_participation,
-        stage_id: grassroots.id,
-        region_id: region.id,
-        category: "team",
-        player_id: nil,
-        team_id: team_a.id
-      )
-
-      insert(:stage_participation,
-        stage_id: grassroots.id,
-        region_id: region.id,
-        category: "team",
-        player_id: nil,
-        team_id: team_b.id
-      )
 
       team_row = %{
         "category" => "team",
