@@ -7,10 +7,13 @@ defmodule Cuevolution.Factory do
   alias Cuevolution.Accounts.{Admin, Player, Region}
 
   alias Cuevolution.Competitions.{
+    CuevoPointsEntry,
     Fixture,
     Group,
     GroupMembership,
     KnockoutBracket,
+    MatchFrame,
+    MatchResult,
     Round,
     Stage,
     StageCapacityConfig,
@@ -125,6 +128,7 @@ defmodule Cuevolution.Factory do
     %Group{
       stage_id: build(:stage).id,
       region_id: build(:region).id,
+      category: Enum.random(~w(male female team)),
       name: sequence(:group_name, &"Group #{&1}")
     }
   end
@@ -136,13 +140,30 @@ defmodule Cuevolution.Factory do
     }
   end
 
+  @doc """
+  Cycles through the 6 Circuit/Finals × male/female/team combos — brackets
+  are stage+category unique, and only Circuit/Finals ever get one. Only good
+  for 6 inserts before it starts repeating combos (see
+  `stage_capacity_config_factory/0`'s identical caveat).
+  """
   def knockout_bracket_factory do
-    %KnockoutBracket{group_id: insert(:group).id}
+    bracket_stages =
+      Cuevolution.Repo.all(from s in Stage, where: s.order in [3, 4], order_by: s.order)
+
+    combos = for s <- bracket_stages, category <- ~w(male female team), do: {s, category}
+    index = sequence(:knockout_bracket_cycle, & &1)
+    {stage, category} = Enum.at(combos, rem(index, length(combos)))
+
+    %KnockoutBracket{stage_id: stage.id, category: category}
   end
 
+  @doc "Round-robin round on a group belonging to the same freshly-picked stage — referentially consistent by default. For a knockout-stage round, override with `group_id: nil, knockout_bracket_id: insert(:knockout_bracket).id`."
   def round_factory do
+    stage = build(:stage)
+
     %Round{
-      stage_id: build(:stage).id,
+      stage_id: stage.id,
+      group_id: insert(:group, stage_id: stage.id).id,
       name: sequence(:round_name, &"Round #{&1}")
     }
   end
@@ -161,6 +182,43 @@ defmodule Cuevolution.Factory do
       participant_b_id: participant_b.id,
       venue_id: insert(:venue).id,
       scheduled_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+  end
+
+  @doc "A recorded result for a freshly-built fixture, winner defaults to participant A."
+  def match_result_factory do
+    fixture = insert(:fixture)
+
+    %MatchResult{
+      fixture_id: fixture.id,
+      winner_participation_id: fixture.participant_a_id,
+      recorded_by_admin_id: insert(:admin).id
+    }
+  end
+
+  @doc "One frame of a Team-category match result — home/away players default to two freshly-built players, winner defaults to home."
+  def match_frame_factory do
+    home = insert(:player)
+    away = insert(:player)
+
+    %MatchFrame{
+      match_result_id: insert(:match_result).id,
+      home_player_id: home.id,
+      away_player_id: away.id,
+      winner_player_id: home.id,
+      sequence: sequence(:frame_sequence, & &1) + 1
+    }
+  end
+
+  @doc "A Cuevo Points entry against a freshly-built match result, awarded to that result's winner by default."
+  def cuevo_points_entry_factory do
+    result = insert(:match_result)
+
+    %CuevoPointsEntry{
+      participant_id: result.winner_participation_id,
+      match_result_id: result.id,
+      points: 3,
+      recorded_by_admin_id: insert(:admin).id
     }
   end
 end

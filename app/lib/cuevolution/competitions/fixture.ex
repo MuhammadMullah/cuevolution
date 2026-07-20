@@ -7,16 +7,12 @@ defmodule Cuevolution.Competitions.Fixture do
 
   schema "fixtures" do
     field :scheduled_at, :utc_datetime
-    # Plain field, not `belongs_to` — Ecto validates association targets at
-    # compile time, and `Competitions.MatchResult` doesn't exist until the
-    # results/points plan. Upgrade to `belongs_to :result,
-    # Cuevolution.Competitions.MatchResult` once that schema lands.
-    field :result_id, :binary_id
 
     belongs_to :round, Cuevolution.Competitions.Round
     belongs_to :participant_a, Cuevolution.Competitions.StageParticipation
     belongs_to :participant_b, Cuevolution.Competitions.StageParticipation
     belongs_to :venue, Cuevolution.Venues.Venue
+    belongs_to :result, Cuevolution.Competitions.MatchResult
 
     timestamps()
   end
@@ -54,6 +50,14 @@ defmodule Cuevolution.Competitions.Fixture do
     |> cast(attrs, [:venue_id, :scheduled_at])
     |> validate_required([:venue_id, :scheduled_at])
     |> foreign_key_constraint(:venue_id)
+  end
+
+  @doc "Links a freshly-recorded `MatchResult` to this fixture — `Competitions.record_result/3` calls this inside the same `Ecto.Multi` as the result insert."
+  def result_changeset(fixture, result_id) do
+    fixture
+    |> cast(%{result_id: result_id}, [:result_id])
+    |> validate_required([:result_id])
+    |> foreign_key_constraint(:result_id)
   end
 
   defp validate_same_category_and_stage(changeset, pa, pb) do

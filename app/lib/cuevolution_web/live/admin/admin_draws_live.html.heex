@@ -1,56 +1,101 @@
 <AdminComponents.app_shell current_admin={@current_admin} active={:draws} flash={@flash}>
-  <div class="mb-4">
-    <AdminComponents.eyebrow class="mb-1.5">Draws</AdminComponents.eyebrow>
-    <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
-      Fixture entry
-    </h1>
-  </div>
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <AdminComponents.eyebrow class="mb-1.5">Draws</AdminComponents.eyebrow>
+      <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+        Fixture entry
+      </h1>
+    </div>
 
-  <div class="mb-3 flex gap-2 overflow-x-auto border-b border-ink-200">
-    <button
-      :for={stage <- @stages}
-      type="button"
-      phx-click="select_stage"
-      phx-value-id={stage.id}
-      class={[
-        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
-        @stage.id == stage.id && "border-red-500 text-ink-950",
-        @stage.id != stage.id && "border-transparent text-ink-500 hover:text-ink-950"
-      ]}
-    >
-      {stage.name}
-    </button>
-  </div>
-
-  <div class="mb-5 flex flex-wrap items-center gap-2.5">
-    <form :if={@rounds != []} phx-change="select_round">
-      <select
-        name="id"
-        class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
-      >
-        <option value="" selected={is_nil(@round)}>Select a round…</option>
-        <option
-          :for={round <- @rounds}
-          value={round.id}
-          selected={@round && @round.id == round.id}
+    <div class="flex flex-wrap gap-2.5">
+      <form phx-change="select_round">
+        <select
+          name="id"
+          class="cursor-pointer rounded-lg border border-ink-300 bg-white px-3.5 py-2.5 font-sans text-sm text-ink-950"
         >
-          {round.name}
-        </option>
-      </select>
-    </form>
-    <span :if={@rounds == []} class="text-[13.5px] text-ink-400">No rounds scheduled yet.</span>
+          <option value="" selected={is_nil(@round)}>Select a round…</option>
+          <option
+            :for={round <- @rounds}
+            value={round.id}
+            selected={@round && @round.id == round.id}
+          >
+            {round_label(round)}
+          </option>
+        </select>
+      </form>
+      <span :if={@rounds == []} class="self-center text-[13.5px] text-ink-400">
+        No rounds scheduled yet.
+      </span>
 
-    <.form for={@new_round_form} phx-submit="create_round" class="flex items-center gap-2">
-      <.input
-        field={@new_round_form[:name]}
-        placeholder={"New round in #{@stage.name}…"}
-        class="min-w-[200px] rounded-full border border-ink-300 bg-white px-4 py-2 font-sans text-[13px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none"
-      />
       <button
-        type="submit"
-        class="rounded-full border border-ink-300 px-3.5 py-[9px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        type="button"
+        phx-click="toggle_new_round"
+        class="rounded-full border border-ink-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
       >
         + New round
+      </button>
+    </div>
+  </div>
+
+  <div
+    :if={@show_new_round}
+    class="mb-5 rounded-2xl border border-ink-200 bg-white px-5 py-[18px] shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <div class="mb-3 flex flex-wrap gap-2.5">
+      <form phx-change="select_new_round_stage">
+        <select
+          name="id"
+          class="cursor-pointer rounded-lg border border-ink-300 bg-white px-[13px] py-2 font-sans text-[13px] text-ink-950"
+        >
+          <option
+            :for={stage <- @stages}
+            value={stage.id}
+            selected={@new_round_stage.id == stage.id}
+          >
+            {stage.name}
+          </option>
+        </select>
+      </form>
+      <select
+        :if={group_stage?(@new_round_stage)}
+        name="round[group_id]"
+        form="new-round-form"
+        class="min-w-[220px] flex-1 cursor-pointer rounded-lg border border-ink-300 bg-white px-[13px] py-2 font-sans text-[13px] text-ink-950"
+      >
+        <option value="">Select a group…</option>
+        <option :for={group <- @round_groups} value={group.id}>
+          {group.name} · {if group.venue_id, do: group.venue.name, else: group.region.name} · {group.category}
+        </option>
+      </select>
+      <select
+        :if={!group_stage?(@new_round_stage)}
+        name="round[category]"
+        form="new-round-form"
+        class="cursor-pointer rounded-lg border border-ink-300 bg-white px-[13px] py-2 font-sans text-[13px] text-ink-950"
+      >
+        <option :for={{label, value} <- @categories} value={value}>{label}</option>
+      </select>
+    </div>
+    <.form
+      id="new-round-form"
+      for={@new_round_form}
+      phx-submit="create_round"
+      class="flex flex-wrap gap-2.5"
+    >
+      <div class="min-w-[200px] flex-1">
+        <.input
+          field={@new_round_form[:name]}
+          placeholder={
+            if group_stage?(@new_round_stage), do: "e.g. Round 4", else: "Round of 64…"
+          }
+          class="w-full rounded-lg border border-ink-300 bg-white px-[13px] py-2.5 font-sans text-[14px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none"
+        />
+      </div>
+      <button
+        type="submit"
+        class="rounded-full bg-ink-950 px-[22px] py-2.5 text-[14px] font-semibold text-white hover:bg-ink-900"
+      >
+        Create round
       </button>
     </.form>
   </div>
@@ -129,19 +174,17 @@
                 />
               </td>
               <td class="p-2">
-                <input
-                  type="date"
+                <AdminComponents.date_field
+                  id={"row-#{row.id}-date"}
                   name={"rows[#{row.id}][date]"}
                   value={row.date}
-                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950"
                 />
               </td>
               <td class="p-2">
-                <input
-                  type="time"
+                <AdminComponents.time_select
+                  id={"row-#{row.id}-time"}
                   name={"rows[#{row.id}][time]"}
                   value={row.time}
-                  class="w-full rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950"
                 />
               </td>
               <td class="p-2 text-center">

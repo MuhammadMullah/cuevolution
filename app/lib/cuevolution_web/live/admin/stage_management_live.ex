@@ -11,7 +11,9 @@ defmodule CuevolutionWeb.StageManagementLive do
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.StageCapacityConfig
+  alias Cuevolution.Competitions.StageGroupConfig
   alias CuevolutionWeb.AdminComponents
+  alias CuevolutionWeb.PlayerComponents
 
   @categories [{"Individual Male", "male"}, {"Individual Female", "female"}, {"Teams", "team"}]
 
@@ -27,16 +29,20 @@ defmodule CuevolutionWeb.StageManagementLive do
        regions: regions,
        categories: @categories,
        stage: List.first(stages),
+       next_stage: Competitions.next_stage(List.first(stages)),
        region: List.first(regions),
        category: "male",
        panel: :participants,
        editing_config: nil,
+       editing_group_config: nil,
        filter_form:
          to_form(%{"region_id" => List.first(regions).id, "category" => "male"}, as: :filter)
      )
      |> assign_config_form()
+     |> assign_group_config_form()
      |> load_participations()
-     |> load_configs()}
+     |> load_configs()
+     |> load_group_configs()}
   end
 
   def handle_event("select_stage", %{"id" => id}, socket) do
@@ -45,8 +51,10 @@ defmodule CuevolutionWeb.StageManagementLive do
     {:noreply,
      socket
      |> assign(:stage, stage)
+     |> assign(:next_stage, Competitions.next_stage(stage))
      |> load_participations()
-     |> load_configs()}
+     |> load_configs()
+     |> load_group_configs()}
   end
 
   def handle_event("filter_participants", %{"filter" => params}, socket) do
@@ -113,6 +121,35 @@ defmodule CuevolutionWeb.StageManagementLive do
     end
   end
 
+  def handle_event("edit_group_config", %{"id" => id}, socket) do
+    config = Enum.find(socket.assigns.group_configs, &(&1.id == id))
+
+    {:noreply,
+     socket |> assign(:editing_group_config, config) |> assign_group_config_form(config)}
+  end
+
+  def handle_event("cancel_edit_group_config", _params, socket) do
+    {:noreply, socket |> assign(:editing_group_config, nil) |> assign_group_config_form()}
+  end
+
+  def handle_event("save_group_config", %{"config" => params}, socket) do
+    case Competitions.update_group_config(socket.assigns.editing_group_config, params) do
+      {:ok, config} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           "Group settings for #{config.category} updated: size #{config.group_size}, top #{config.advancer_count} advance."
+         )
+         |> assign(:editing_group_config, nil)
+         |> assign_group_config_form()
+         |> load_group_configs()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :group_config_form, to_form(changeset, as: :config))}
+    end
+  end
+
   defp load_participations(socket) do
     assign(
       socket,
@@ -129,11 +166,29 @@ defmodule CuevolutionWeb.StageManagementLive do
     assign(socket, :configs, Competitions.list_capacity_configs(socket.assigns.stage.id))
   end
 
+  defp load_group_configs(socket) do
+    assign(socket, :group_configs, Competitions.list_group_configs(socket.assigns.stage.id))
+  end
+
   defp assign_config_form(socket, config \\ nil) do
     changeset = StageCapacityConfig.changeset(config || %StageCapacityConfig{}, %{})
     assign(socket, :config_form, to_form(changeset, as: :config))
   end
 
+  defp assign_group_config_form(socket, config \\ nil) do
+    changeset = StageGroupConfig.changeset(config || %StageGroupConfig{}, %{})
+    assign(socket, :group_config_form, to_form(changeset, as: :config))
+  end
+
   defp participant_name(%{player_id: nil, team: team}), do: team.name
   defp participant_name(%{player: player}), do: "#{player.first_name} #{player.last_name}"
+
+  defp participant_sub(%{player_id: nil} = p), do: "Team · #{p.region.name}"
+  defp participant_sub(p), do: "Player · #{p.region.name}"
+
+  # Matches CuevolutionWeb.PlayerComponents' @stage_styles palette (the
+  # actual app design system), not the mockup's latest (incorrect) colors.
+  defp stage_tab_active_class("Grassroots"), do: "border-ink-500 bg-ink-100 text-ink-700"
+  defp stage_tab_active_class("Regional"), do: "border-green-500 bg-green-100 text-green-700"
+  defp stage_tab_active_class(_stage), do: "border-red-500 bg-red-50 text-red-700"
 end

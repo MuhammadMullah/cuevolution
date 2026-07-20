@@ -1,34 +1,34 @@
 <AdminComponents.app_shell current_admin={@current_admin} active={:stages} flash={@flash}>
-  <AdminComponents.eyebrow class="mb-1.5">Stages</AdminComponents.eyebrow>
+  <AdminComponents.eyebrow class="mb-1.5">Qualification Pipeline</AdminComponents.eyebrow>
   <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
-    Qualification pipeline
+    Stages
   </h1>
 
-  <div class="mb-[18px] flex gap-2 overflow-x-auto border-b border-ink-200">
+  <div class="mb-3.5 flex gap-2 overflow-x-auto">
     <button
       :for={stage <- @stages}
       type="button"
       phx-click="select_stage"
       phx-value-id={stage.id}
       class={[
-        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
-        @stage.id == stage.id && "border-red-500 text-ink-950",
-        @stage.id != stage.id && "border-transparent text-ink-500 hover:text-ink-950"
+        "whitespace-nowrap rounded-full border px-4 py-[9px] text-[13.5px] font-semibold",
+        @stage.id == stage.id && stage_tab_active_class(stage.name),
+        @stage.id != stage.id && "border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
       ]}
     >
       {stage.name}
     </button>
   </div>
 
-  <div class="mb-5 flex gap-2">
+  <div class="mb-5 flex gap-5 border-b border-ink-200">
     <button
       type="button"
       phx-click="switch_panel"
       phx-value-panel="participants"
       class={[
-        "rounded-full px-4 py-2 text-[13px] font-semibold",
-        @panel == :participants && "bg-ink-950 text-white",
-        @panel != :participants && "border border-ink-300 text-ink-700 hover:bg-ink-50"
+        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        @panel == :participants && "border-red-500 text-ink-950",
+        @panel != :participants && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
     >
       Participants
@@ -38,12 +38,12 @@
       phx-click="switch_panel"
       phx-value-panel="capacity"
       class={[
-        "rounded-full px-4 py-2 text-[13px] font-semibold",
-        @panel == :capacity && "bg-ink-950 text-white",
-        @panel != :capacity && "border border-ink-300 text-ink-700 hover:bg-ink-50"
+        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        @panel == :capacity && "border-red-500 text-ink-950",
+        @panel != :capacity && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
     >
-      Capacity
+      {if @stage.name in ["Circuit", "Finals"], do: "Capacity", else: "Group settings"}
     </button>
   </div>
 
@@ -71,16 +71,19 @@
         :for={p <- @participations}
         class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
       >
-        <div class="min-w-[180px] flex-1 text-[14.5px] font-semibold text-ink-950">
-          {participant_name(p)}
+        <div class="min-w-[180px] flex-1">
+          <div class="text-[14.5px] font-semibold text-ink-950">{participant_name(p)}</div>
+          <div class="text-[12.5px] text-ink-400">{participant_sub(p)}</div>
         </div>
+        <PlayerComponents.stage_badge stage={@stage.name} />
         <button
+          :if={@next_stage}
           type="button"
           phx-click="advance"
           phx-value-id={p.id}
           class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
         >
-          Advance
+          Advance → {@next_stage.name}
         </button>
       </div>
     </div>
@@ -93,6 +96,9 @@
   </div>
 
   <div :if={@panel == :capacity}>
+    <p :if={@configs != []} class="mb-3.5 text-[13.5px] text-ink-500">
+      Circuit and Finals run single knockout brackets per category, capped by entrant count.
+    </p>
     <div
       :if={@configs != []}
       class="mb-5 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
@@ -142,16 +148,84 @@
             phx-value-id={config.id}
             class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
           >
-            Edit
+            Edit limit
           </button>
         <% end %>
       </div>
     </div>
     <div
-      :if={@configs == []}
+      :if={@configs == [] and @group_configs == []}
       class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
     >
       {@stage.name} is open — no capacity limit configured.
+    </div>
+
+    <div :if={@group_configs != []}>
+      <p class="mb-3.5 text-[13.5px] text-ink-500">
+        Grassroots and Regional are open, round-robin stages — this configures group size and how many advance, not a capacity limit.
+      </p>
+      <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
+        <div
+          :for={config <- @group_configs}
+          class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
+        >
+          <.form
+            :if={@editing_group_config && @editing_group_config.id == config.id}
+            for={@group_config_form}
+            phx-submit="save_group_config"
+            class="flex flex-1 flex-wrap items-center gap-2.5"
+          >
+            <span class="min-w-[140px] text-[14.5px] font-semibold text-ink-950">
+              {config.category}
+            </span>
+            <label class="flex items-center gap-1.5 text-[13px] text-ink-500">
+              Group size
+              <.input
+                field={@group_config_form[:group_size]}
+                type="number"
+                class="w-20 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
+              />
+            </label>
+            <label class="flex items-center gap-1.5 text-[13px] text-ink-500">
+              Advance top
+              <.input
+                field={@group_config_form[:advancer_count]}
+                type="number"
+                class="w-20 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
+              />
+            </label>
+            <button
+              type="submit"
+              class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              phx-click="cancel_edit_group_config"
+              class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              Cancel
+            </button>
+          </.form>
+          <%= if is_nil(@editing_group_config) or @editing_group_config.id != config.id do %>
+            <div class="min-w-[140px] flex-1 text-[14.5px] font-semibold text-ink-950">
+              {config.category}
+            </div>
+            <span class="font-mono text-[13.5px] text-ink-500">
+              groups of {config.group_size}, top {config.advancer_count} advance
+            </span>
+            <button
+              type="button"
+              phx-click="edit_group_config"
+              phx-value-id={config.id}
+              class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              Edit
+            </button>
+          <% end %>
+        </div>
+      </div>
     </div>
   </div>
 </AdminComponents.app_shell>

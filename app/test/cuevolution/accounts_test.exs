@@ -3,6 +3,8 @@ defmodule Cuevolution.AccountsTest do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Accounts.Player
+  alias Cuevolution.Competitions
+  alias Cuevolution.Teams
 
   describe "authenticate_admin/2" do
     test "returns the admin given correct email and password" do
@@ -427,5 +429,169 @@ defmodule Cuevolution.AccountsTest do
       },
       overrides
     )
+  end
+
+  describe "region_locked?/1 and change_region/2" do
+    test "unlocked for a player with no match result" do
+      player = insert(:player)
+      refute Accounts.region_locked?(player)
+    end
+
+    test "locked for a player with a recorded match result" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      fixture = insert(:fixture, participant_a_id: participation.id)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => participation.id
+        })
+
+      assert Accounts.region_locked?(player)
+    end
+
+    test "change_region/2 updates the region when unlocked" do
+      player = insert(:player)
+      new_region = build(:region)
+
+      assert {:ok, updated} = Accounts.change_region(player, new_region.id)
+      assert updated.region_id == new_region.id
+    end
+
+    test "change_region/2 rejects the change when locked, even bypassing any UI check" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      fixture = insert(:fixture, participant_a_id: participation.id)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => participation.id
+        })
+
+      new_region = build(:region)
+      assert {:error, :region_locked} = Accounts.change_region(player, new_region.id)
+    end
+  end
+
+  describe "anonymize_warnings/1" do
+    test "returns [] for a non-captain player with no pending fixtures" do
+      player = insert(:player)
+      assert Accounts.anonymize_warnings(player) == []
+    end
+
+    test "flags :captain for a team captain" do
+      captain = insert(:player)
+      {:ok, _team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+
+      assert :captain in Accounts.anonymize_warnings(captain)
+    end
+
+    test "flags :pending_fixtures for a player with an unplayed fixture" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      insert(:fixture, participant_a_id: participation.id)
+
+      assert :pending_fixtures in Accounts.anonymize_warnings(player)
+    end
+
+    test "flags both when the player is a captain with a pending fixture" do
+      captain = insert(:player)
+      {:ok, _team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+
+      participation =
+        insert(:stage_participation,
+          player_id: captain.id,
+          region_id: captain.region_id,
+          category: captain.gender
+        )
+
+      insert(:fixture, participant_a_id: participation.id)
+
+      warnings = Accounts.anonymize_warnings(captain)
+      assert :captain in warnings
+      assert :pending_fixtures in warnings
+    end
+  end
+
+  describe "anonymize_player/2" do
+    test "clears PII, sets anonymized_at, and logs the admin action" do
+      player = insert(:player)
+      admin = insert(:admin)
+
+      assert {:ok, anonymized} = Accounts.anonymize_player(player, admin)
+
+      assert anonymized.first_name == "Former"
+      assert anonymized.last_name == "Player"
+      assert anonymized.email != player.email
+      assert anonymized.mobile_number != player.mobile_number
+      assert anonymized.username != player.username
+      assert anonymized.anonymized_at
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          entity_id: player.id,
+          action_type: "anonymize_player"
+        )
+
+      assert log.admin_id == admin.id
+    end
+
+    test "leaves historical match results untouched" do
+      player = insert(:player)
+      admin = insert(:admin)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      fixture = insert(:fixture, participant_a_id: participation.id)
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => participation.id
+        })
+
+      {:ok, _anonymized} = Accounts.anonymize_player(player, admin)
+
+      persisted = Repo.get!(Cuevolution.Competitions.MatchResult, result.id)
+      assert persisted.winner_participation_id == participation.id
+    end
+
+    test "login is rejected after anonymization" do
+      player = insert(:player, hashed_password: Bcrypt.hash_pwd_salt("Valid1!Pass"))
+      admin = insert(:admin)
+
+      original_username = player.username
+      {:ok, _anonymized} = Accounts.anonymize_player(player, admin)
+
+      assert {:error, :invalid_credentials} =
+               Accounts.authenticate_player(original_username, "Valid1!Pass")
+    end
   end
 end

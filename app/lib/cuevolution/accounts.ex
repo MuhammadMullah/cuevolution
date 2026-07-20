@@ -18,6 +18,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Notifications
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
+  alias Cuevolution.Teams.Team
   alias Ecto.Multi
 
   @doc """
@@ -264,6 +265,58 @@ defmodule Cuevolution.Accounts do
     player
     |> Player.notification_preference_changeset(%{notification_preference: preference})
     |> Repo.update()
+  end
+
+  @doc "Whether `player` is locked out of changing their region (spec 003 US3/FR-008) — locked once they have a recorded match result, not merely a scheduled fixture."
+  def region_locked?(%Player{} = player) do
+    Competitions.player_has_match_result?(player.id)
+  end
+
+  @doc "Updates `player`'s region, rejecting the change once `region_locked?/1` is true (spec 003 US3)."
+  def change_region(%Player{} = player, region_id) do
+    if region_locked?(player) do
+      {:error, :region_locked}
+    else
+      player
+      |> Player.region_changeset(%{region_id: region_id})
+      |> Repo.update()
+    end
+  end
+
+  @doc """
+  Warnings the admin must see and explicitly confirm before anonymizing
+  `player` (spec 010 FR-007) — `[:captain]` if they captain a team,
+  `[:pending_fixtures]` if they have a fixture with no result yet, both,
+  or `[]`. Never blocks — the caller (`PlayerDetailLive`) decides whether
+  to proceed after showing these.
+  """
+  def anonymize_warnings(%Player{} = player) do
+    []
+    |> add_warning_if(:captain, Repo.get_by(Team, captain_id: player.id) != nil)
+    |> add_warning_if(:pending_fixtures, Competitions.player_has_pending_fixtures?(player.id))
+  end
+
+  defp add_warning_if(warnings, warning, true), do: [warning | warnings]
+  defp add_warning_if(warnings, _warning, false), do: warnings
+
+  @doc """
+  Anonymizes `player` (spec 010 FR-004/FR-007) — clears PII, sets
+  `anonymized_at`, and logs the action. Historical `match_results`/
+  `cuevo_points_entries` are untouched (they reference the `StageParticipation`,
+  not the `Player`, directly). Login is naturally rejected afterward since
+  the anonymized email/username no longer match what the player would enter.
+  """
+  def anonymize_player(%Player{} = player, %Admin{} = admin) do
+    Multi.new()
+    |> Multi.update(:player, Player.anonymize_changeset(player))
+    |> Multi.run(:log, fn _repo, %{player: updated} ->
+      log_admin_action("anonymize_player", admin, updated)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: player}} -> {:ok, player}
+      {:error, :player, changeset, _changes} -> {:error, changeset}
+    end
   end
 
   @doc """

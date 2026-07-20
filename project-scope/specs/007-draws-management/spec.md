@@ -59,6 +59,7 @@ The admin corrects a fixture's venue, date, time, or opponent before the match h
 ### Edge Cases
 
 - **Cross-category/cross-stage pairing errors** [Resolved — see FR-006]: previously left fully to admin trust; now guarded by a cheap, explicit check (same category, same stage/group) since it catches fat-finger errors before they corrupt standings, at negligible implementation cost. The admin is still trusted on everything the check doesn't cover (e.g., whether the pairing is fair/correct within a valid group).
+- **Cross-venue (Grassroots) / cross-region (Regional) pairing errors** [Resolved — see FR-011]: at Grassroots and Regional, a round always belongs to exactly one group (spec 006), and both fixture participants must be members of that group — this transitively enforces "same venue" at Grassroots and "same region" at Regional, with no separate venue/region check needed beyond group membership. Circuit and Finals rounds belong to a knockout bracket instead of a group and have no such restriction — opponents may be drawn from any region.
 - What happens when a fixture is entered for a bye (uneven number of participants in a group/bracket round)?
 - What happens if a participant's notification send fails (handled by spec 002's retry/logging, but the draws feature must not fail/rollback the fixture save itself if only the notification leg fails)?
 - What happens when the same two participants are drawn against each other more than once across different rounds (e.g., group stage vs. knockout)? This is expected and must not be treated as a duplicate-entry error. **Distinct from — and not to be confused with — a duplicate entry of the *same* pairing within the *same* round (double-submit or a repeated CSV row), which FR-007 does treat as an error.**
@@ -80,11 +81,12 @@ The admin corrects a fixture's venue, date, time, or opponent before the match h
 - **FR-008**: The system MUST store fixture date/time in UTC and display it in East Africa Time (UTC+3) in all admin and player-facing views.
 - **FR-009**: A batch/bulk fixture upload MUST commit all individually-valid rows and MUST report each invalid row with its specific error, rather than rejecting the entire batch for one invalid row.
 - **FR-010**: A fixture-assignment notification (spec 002) MUST contain the opponent's name only — never the opponent's email address or mobile number.
+- **FR-011**: For a round belonging to a Grassroots or Regional group, the system MUST reject a fixture pairing where either participant is not a member of that round's group (transitively enforcing same-venue pairing at Grassroots and same-region pairing at Regional, per spec 006). Rounds belonging to a Circuit or Finals knockout bracket instead of a group have no such restriction — opponents may be drawn from any region.
 
 ### Key Entities
 
 - **Fixture (Draw Entry)**: A scheduled matchup for one round. Attributes: round reference, stage/group reference, two participants (players or teams, same category), venue, date, time (stored UTC), result reference (nullable until played), timestamps. Unique per `(round, participant A, participant B)`.
-- **Round**: A named grouping of fixtures within a stage/group (e.g., "Grassroots Group A — Round 2").
+- **Round**: A named grouping of fixtures within a stage, belonging to exactly one of: a Group (Grassroots/Regional, e.g., "Grassroots Group A — Round 2") or a Knockout Bracket (Circuit/Finals, e.g., "Circuit Individual Male — Round of 64").
 
 ## Success Criteria *(mandatory)*
 
@@ -93,7 +95,7 @@ The admin corrects a fixture's venue, date, time, or opponent before the match h
 - **SC-001**: 100% of fixtures entered/uploaded during testing produce exactly one notification event per participant (two notifications per fixture).
 - **SC-002**: An admin can enter a full round of fixtures (e.g., 8–16 pairings) in a single sitting with minimal repeated navigation (batch-oriented entry, not one full-page form per fixture).
 - **SC-003**: 100% of edits to a not-yet-played fixture during testing produce an updated notification to both participants with the corrected details.
-- **SC-004**: 100% of cross-category/cross-stage or same-round-duplicate fixture entry attempts are rejected in testing; 100% of legitimate cross-round rematches are accepted.
+- **SC-004**: 100% of cross-category/cross-stage, cross-group (Grassroots/Regional), or same-round-duplicate fixture entry attempts are rejected in testing; 100% of legitimate cross-round rematches are accepted; 100% of Circuit/Finals cross-region pairings are accepted (no restriction at those stages).
 - **SC-005**: A batch upload containing a mix of valid and invalid rows in testing commits every valid row and reports every invalid row individually, with zero all-or-nothing rejections.
 
 ## Assumptions

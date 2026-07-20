@@ -1,75 +1,76 @@
 defmodule CuevolutionWeb.StandingsLive do
   @moduledoc """
-  Player standings (spec design: "Standings" screen). `Cuevolution.Competitions`
-  doesn't exist yet, so there's no data source at all — every tab is always
-  empty, correctly showing the "No standings yet" state. Swap
-  `standings_rows/1` for a real query once match results are tracked; the
-  region/stage filters are already wired to distinguish "no data at all"
-  from "filters narrowed a real result set to zero," ready for that.
+  Player standings (spec 009) — live-ranked by Cuevo Points, subscribes to
+  the `"standings"` PubSub topic (first real PubSub usage in this app,
+  wired in `Competitions.record_points/3`/`correct_points/3`) so a points
+  change from any admin session re-ranks every connected viewer without a
+  page reload.
   """
   use CuevolutionWeb, :live_view
 
+  alias Cuevolution.Accounts
+  alias Cuevolution.Competitions
   alias CuevolutionWeb.PlayerComponents
   alias Phoenix.LiveView.JS
-
-  # Mirrors the region set seeded in `regions_seeds.exs` — hardcoded here
-  # because standings has no real data yet and thus no FK to `regions`.
-  @regions [
-    "Nairobi A",
-    "Nairobi B",
-    "Central",
-    "Eastern",
-    "Coast",
-    "North Rift",
-    "South Rift",
-    "Nyanza & Western"
-  ]
-
-  @stages ~w(Finals Circuit Regional Grassroots)
 
   @tabs [{"male", "Individual Male"}, {"female", "Individual Female"}, {"team", "Teams"}]
 
   def mount(_params, _session, socket) do
+    if connected?(socket), do: Phoenix.PubSub.subscribe(Cuevolution.PubSub, "standings")
+
     {:ok,
-     assign(socket,
+     socket
+     |> assign(
        page_title: "Standings",
        tab: "male",
        region_filter: "All",
        stage_filter: "All",
        tabs: @tabs,
-       regions: @regions,
-       stages: @stages
-     )}
-  end
-
-  def render(assigns) do
-    all_rows = standings_rows(assigns.tab)
-
-    assigns =
-      assign(assigns,
-        all_rows: all_rows,
-        rows: apply_filters(all_rows, assigns.region_filter, assigns.stage_filter)
-      )
-
-    render_standings(assigns)
+       regions: Enum.map(Accounts.list_regions(), & &1.name),
+       stages: Enum.map(Competitions.list_stages(), & &1.name)
+     )
+     |> load_standings()}
   end
 
   embed_templates "standings_live/render_standings*"
 
+  def render(assigns), do: render_standings(assigns)
+
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, tab: tab, region_filter: "All", stage_filter: "All")}
+    {:noreply,
+     socket
+     |> assign(tab: tab, region_filter: "All", stage_filter: "All")
+     |> load_standings()}
   end
 
   def handle_event("filter", params, socket) do
     {:noreply,
-     assign(socket,
+     socket
+     |> assign(
        region_filter: Map.get(params, "region", socket.assigns.region_filter),
        stage_filter: Map.get(params, "stage", socket.assigns.stage_filter)
-     )}
+     )
+     |> load_standings()}
   end
 
   def handle_event("clear_filters", _params, socket) do
-    {:noreply, assign(socket, region_filter: "All", stage_filter: "All")}
+    {:noreply,
+     socket
+     |> assign(region_filter: "All", stage_filter: "All")
+     |> load_standings()}
+  end
+
+  def handle_info({:points_updated, _participant_id}, socket) do
+    {:noreply, load_standings(socket)}
+  end
+
+  defp load_standings(socket) do
+    all_rows = Competitions.standings_for_category(socket.assigns.tab)
+    rows = apply_filters(all_rows, socket.assigns.region_filter, socket.assigns.stage_filter)
+
+    socket
+    |> assign(all_rows_empty?: all_rows == [], rows_empty?: rows == [])
+    |> stream(:standings, rows, reset: true)
   end
 
   defp apply_filters(rows, region_filter, stage_filter) do
@@ -78,9 +79,4 @@ defmodule CuevolutionWeb.StandingsLive do
         (stage_filter == "All" or row.stage == stage_filter)
     end)
   end
-
-  # `Cuevolution.Competitions` doesn't exist yet — no match results have
-  # ever been recorded, so there's nothing to rank. Replace with a real
-  # query once match results are tracked.
-  defp standings_rows(_tab), do: []
 end

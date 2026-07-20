@@ -34,6 +34,54 @@
         <div class="text-sm font-semibold text-ink-950">{value}</div>
       </div>
     </div>
+
+    <div :if={is_nil(@player.anonymized_at) and is_nil(@anonymize_warnings)} class="mt-4">
+      <button
+        type="button"
+        phx-click="confirm_anonymize"
+        class="w-full rounded-full border border-red-300 bg-white px-[22px] py-3 text-[14.5px] font-semibold text-red-700 hover:bg-red-50"
+      >
+        Anonymize this record
+      </button>
+    </div>
+
+    <div
+      :if={@anonymize_warnings}
+      class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-[15px] py-[13px]"
+    >
+      <div :if={@anonymize_warnings != []}>
+        <div class="mb-1.5 text-[13px] font-bold text-amber-900">
+          Before you anonymize:
+        </div>
+        <ul class="mb-0 list-disc pl-[18px] text-[13px] leading-relaxed text-amber-800">
+          <li :if={:captain in @anonymize_warnings}>
+            This player is a team captain — anonymizing them does not reassign the captaincy.
+          </li>
+          <li :if={:pending_fixtures in @anonymize_warnings}>
+            This player has a fixture with no result recorded yet.
+          </li>
+        </ul>
+      </div>
+      <p :if={@anonymize_warnings == []} class="m-0 text-[13px] leading-relaxed text-amber-800">
+        This will permanently remove {@player.first_name} {@player.last_name}'s personal details. Historical results and points remain intact.
+      </p>
+      <div class="mt-3 flex gap-2">
+        <button
+          type="button"
+          phx-click="anonymize"
+          class="rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700"
+        >
+          Yes, anonymize
+        </button>
+        <button
+          type="button"
+          phx-click="cancel_anonymize"
+          class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   </AdminComponents.card>
 
   <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">

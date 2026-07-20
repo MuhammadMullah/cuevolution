@@ -103,8 +103,11 @@
   </div>
 
   <div
-    :if={@rows != []}
-    class="overflow-auto rounded-2xl border border-ink-200 bg-white shadow-sm"
+    id="standings-table"
+    class={[
+      "overflow-auto rounded-2xl border border-ink-200 bg-white shadow-sm",
+      @rows_empty? && "hidden"
+    ]}
   >
     <table class="w-full min-w-[680px] border-collapse">
       <thead>
@@ -132,8 +135,12 @@
           </th>
         </tr>
       </thead>
-      <tbody>
-        <tr :for={row <- @rows} class="border-b border-ink-100 last:border-b-0">
+      <tbody id="standings-rows" phx-update="stream">
+        <tr
+          :for={{dom_id, row} <- @streams.standings}
+          id={dom_id}
+          class="border-b border-ink-100 last:border-b-0"
+        >
           <td class={[
             "border-l-4 px-4 py-3 font-mono text-[15px] font-semibold",
             row.rank == 1 && "border-red-500 text-gold-700",
@@ -174,13 +181,12 @@
     </table>
   </div>
 
-  <p :if={@rows != []} class="mt-3.5 text-[12.5px] text-ink-400">
-    {length(@rows)} entries · points in gold are Cuevo Points, earned from the Circuit stage
-    onward. Rank #1 is marked with a red accent.
+  <p :if={not @rows_empty?} class="mt-3.5 text-[12.5px] text-ink-400">
+    Points in gold are Cuevo Points, earned from the Circuit stage onward. Rank #1 is marked with a red accent.
   </p>
 
   <PlayerComponents.empty_state
-    :if={@rows == [] and @all_rows != []}
+    :if={@rows_empty? and not @all_rows_empty?}
     icon="hero-flag"
     title="No players match these filters"
   >
@@ -188,7 +194,7 @@
   </PlayerComponents.empty_state>
 
   <PlayerComponents.empty_state
-    :if={@all_rows == []}
+    :if={@all_rows_empty?}
     icon="hero-hashtag"
     title="No standings yet"
   >

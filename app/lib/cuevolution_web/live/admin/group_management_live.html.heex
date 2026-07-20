@@ -1,98 +1,136 @@
 <AdminComponents.app_shell current_admin={@current_admin} active={:groups} flash={@flash}>
-  <AdminComponents.eyebrow class="mb-1.5">Groups</AdminComponents.eyebrow>
+  <AdminComponents.eyebrow class="mb-1.5">Qualification Pipeline</AdminComponents.eyebrow>
   <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
-    Group management
+    Groups
   </h1>
 
-  <div class="mb-3 flex gap-2 overflow-x-auto border-b border-ink-200">
+  <div class="mb-3.5 flex gap-2 overflow-x-auto">
     <button
       :for={stage <- @stages}
       type="button"
       phx-click="select_stage"
       phx-value-id={stage.id}
       class={[
-        "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
-        @stage.id == stage.id && "border-red-500 text-ink-950",
-        @stage.id != stage.id && "border-transparent text-ink-500 hover:text-ink-950"
+        "whitespace-nowrap rounded-full border px-4 py-[9px] text-[13.5px] font-semibold",
+        @stage.id == stage.id && stage_tab_active_class(stage.name),
+        @stage.id != stage.id && "border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
       ]}
     >
       {stage.name}
     </button>
   </div>
 
-  <div class="mb-[18px] flex gap-2 overflow-x-auto">
+  <div class="mb-2.5 flex gap-5 overflow-x-auto border-b border-ink-200">
     <button
       :for={region <- @regions}
       type="button"
       phx-click="select_region"
       phx-value-id={region.id}
       class={[
-        "whitespace-nowrap rounded-full px-3.5 py-[7px] text-[13px] font-semibold",
-        @region.id == region.id && "bg-ink-950 text-white",
-        @region.id != region.id && "border border-ink-300 text-ink-700 hover:bg-ink-50"
+        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        @region.id == region.id && "border-red-500 text-ink-950",
+        @region.id != region.id && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
     >
       {region.name}
     </button>
   </div>
 
-  <.form for={@form} phx-submit="create_group" class="mb-5 flex flex-wrap items-center gap-2.5">
-    <.input
-      field={@form[:name]}
-      placeholder={"New group name in #{@region.name}…"}
+  <div
+    :if={@stage.name == "Grassroots"}
+    class="mb-2.5 flex gap-5 overflow-x-auto border-b border-ink-200"
+  >
+    <button
+      :for={venue <- @venues}
+      type="button"
+      phx-click="select_venue"
+      phx-value-id={venue.id}
+      class={[
+        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        @venue && @venue.id == venue.id && "border-red-500 text-ink-950",
+        !(@venue && @venue.id == venue.id) && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {venue.name}
+    </button>
+    <span :if={@venues == []} class="py-2.5 text-[13px] text-ink-400">
+      No active venues in {@region.name}.
+    </span>
+  </div>
+
+  <div class="mb-5 flex gap-5 overflow-x-auto border-b border-ink-200">
+    <button
+      :for={category <- @categories}
+      type="button"
+      phx-click="select_category"
+      phx-value-category={category}
+      class={[
+        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold capitalize",
+        @category == category && "border-red-500 text-ink-950",
+        @category != category && "border-transparent text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {category_label(category)}
+    </button>
+  </div>
+
+  <form phx-submit="create_group" class="mb-5 flex flex-wrap items-center gap-2.5">
+    <input
+      type="text"
+      name={@form[:name].name}
+      value={@form[:name].value}
+      placeholder={"New group name in #{if @stage.name == "Grassroots" && @venue, do: @venue.name, else: @region.name}…"}
       class="min-w-[220px] flex-1 rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
     />
     <button
       type="submit"
-      class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
+      disabled={@stage.name == "Grassroots" && is_nil(@venue)}
+      class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
     >
-      Add group
+      Create group
     </button>
-  </.form>
+  </form>
 
   <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
     <AdminComponents.card :for={group <- @groups}>
       <h2 class="mb-2.5 text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
-      <div
-        :for={membership <- group.group_memberships}
-        class="border-b border-ink-100 py-2 text-[13.5px] text-ink-700 last:border-0"
-      >
-        {participant_name(membership.stage_participation)}
-      </div>
-      <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
-        No members yet.
+      <div class="mb-3.5 flex flex-col gap-1.5">
+        <div
+          :for={membership <- group.group_memberships}
+          class="rounded-[9px] bg-ink-50 px-3 py-2 text-[13.5px] font-semibold text-ink-950"
+        >
+          {participant_name(membership.stage_participation)}
+        </div>
+        <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
+          No members yet.
+        </div>
       </div>
 
-      <.form
+      <form
         :if={@unassigned != []}
-        for={to_form(%{}, as: :assign)}
-        phx-submit="assign_to_group"
+        phx-change="assign_to_group"
         phx-value-group_id={group.id}
-        class="mt-3 flex items-center gap-2"
       >
         <select
           name="participation_id"
-          class="min-w-0 flex-1 rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px]"
+          class="w-full rounded-full border border-ink-300 bg-white px-3.5 py-2 text-[13px] text-ink-950"
         >
+          <option value="">+ Add member…</option>
           <option :for={p <- @unassigned} value={p.id}>{participant_name(p)}</option>
         </select>
-        <button
-          type="submit"
-          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-        >
-          Add
-        </button>
-      </.form>
+      </form>
     </AdminComponents.card>
   </div>
   <div
     :if={@groups == []}
     class="mb-7 rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    No groups yet for {@stage.name} · {@region.name}.
+    No groups yet for {scope_label(assigns)}.
   </div>
 
-  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Unassigned</h2>
+  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">
+    Unassigned participants — {scope_label(assigns)}
+  </h2>
   <div
     :if={@unassigned != []}
     class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"

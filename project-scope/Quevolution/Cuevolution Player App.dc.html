@@ -231,6 +231,12 @@ input::placeholder{color:#9E9EA7;}
               </sc-for>
             </div>
             <sc-if value="{{ err.notify }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:8px;">{{ err.notify }}</div></sc-if>
+
+            <label style="display:flex;align-items:flex-start;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid #F3F3F4;cursor:pointer;">
+              <input type="checkbox" checked="{{ reg.acceptTerms }}" onChange="{{ toggleTerms }}" style="margin-top:3px;width:16px;height:16px;flex:none;accent-color:#0D0C22;" />
+              <span style="font-size:13.5px;line-height:1.5;color:#3A3546;">I agree to the <a href="#" onClick="{{ noop }}" style="font-weight:600;">Terms of Service</a> and <a href="#" onClick="{{ noop }}" style="font-weight:600;">Privacy Policy</a>.</span>
+            </label>
+            <sc-if value="{{ err.acceptTerms }}" hint-placeholder-val=""><div style="color:#A81810;font-size:12.5px;font-weight:500;margin-top:6px;">{{ err.acceptTerms }}</div></sc-if>
           </sc-if>
 
           <!-- STEP 5 · Success -->
@@ -249,7 +255,7 @@ input::placeholder{color:#9E9EA7;}
               <sc-if value="{{ canBack }}" hint-placeholder-val="">
                 <button onClick="{{ regBack }}" style="background:#fff;color:#0D0C22;border:1px solid #DBDBDE;border-radius:9999px;padding:12px 22px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Back</button>
               </sc-if>
-              <button onClick="{{ regNext }}" style="flex:1;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:12px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">{{ nextLabel }}</button>
+              <button onClick="{{ regNext }}" disabled="{{ nextDisabled }}" style="{{ nextBtnStyle }}">{{ nextLabel }}</button>
             </div>
             <p style="text-align:center;font-size:13.5px;color:#6E6D7A;margin:18px 0 0;">Already have an account? <a href="#" onClick="{{ go.signin }}" style="font-weight:600;">Sign in</a></p>
           </sc-if>
@@ -548,12 +554,16 @@ input::placeholder{color:#9E9EA7;}
                   <span style="flex:none;padding:2px 9px;border-radius:9999px;background:#F3F3F4;color:#524B63;font-size:11px;font-weight:600;letter-spacing:0.04em;">LOCKED</span>
                   <span>Region can't be changed — you've played matches this season.</span>
                 </div>
+                <div style="font-size:14px;font-weight:600;color:#0D0C22;margin-top:6px;">{{ profileRegionValue }}</div>
               </sc-if>
               <sc-if value="{{ regionUnlocked }}" hint-placeholder-val="">
-                <div style="display:flex;align-items:center;gap:9px;padding:14px 0 2px;font-size:13px;color:#6E6D7A;">
+                <div style="display:flex;align-items:center;gap:9px;padding:14px 0 8px;font-size:13px;color:#6E6D7A;">
                   <span style="flex:none;padding:2px 9px;border-radius:9999px;background:#FDECEA;color:#A81810;font-size:11px;font-weight:600;letter-spacing:0.04em;">EDITABLE</span>
                   <span>You can still change your region — you haven't played a match yet.</span>
                 </div>
+                <select value="{{ profileRegionValue }}" onChange="{{ onProfileRegion }}" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;cursor:pointer;">
+                  <sc-for list="{{ profileRegionOpts }}" as="o" hint-placeholder-count="8"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                </select>
               </sc-if>
             </div>
 
@@ -674,7 +684,7 @@ class Component extends DCLogic {
     si:{email:'',pass:''}, siError:'',
     fp:{email:'',pass:'',confirm:''}, fpError:'',
     regStep:1,
-    reg:{name:'',dob:'',gender:'',town:'',photo:false,email:'',mobile:'',username:'',pass:'',region:'',venue:'',venueOther:'',notify:''},
+    reg:{name:'',dob:'',gender:'',town:'',photo:false,email:'',mobile:'',username:'',pass:'',region:'',venue:'',venueOther:'',notify:'',acceptTerms:false},
     regErrors:{},
     stTab:'male', stRegion:'All', stStage:'All', selectedPlayer:null, filterOpen:false, menuOpen:false,
     roster:[
@@ -869,6 +879,7 @@ class Component extends DCLogic {
       }
     } else if(n===4){
       if(!r.notify) e.notify='Please choose a notification preference.';
+      if(!r.acceptTerms) e.acceptTerms='You must accept the terms to continue.';
     }
     return e;
   }
@@ -979,10 +990,12 @@ class Component extends DCLogic {
     }));
 
     // --- profile ---
+    const profileRegionOpts=this.REGIONS ? this.REGIONS.map(r=>({value:r,label:r})) : [{value:'Nairobi A',label:'Nairobi A'}];
+    const profileRegionValue=this._profileRegion||'Nairobi A';
+    const onProfileRegion=(e)=>{ this._profileRegion=e.target.value; this.forceUpdate(); };
     const profileRows=[
       {label:'Category',value:'Male'},
       {label:'Date of birth',value:'12 Mar 1994'},
-      {label:'Region',value:'Nairobi A'},
       {label:'Preferred venue',value:'Westlands Cue Club'},
       {label:'Email',value:'brian.otieno@example.com'},
       {label:'Mobile',value:'+254712345678'},
@@ -1040,6 +1053,11 @@ class Component extends DCLogic {
       regStep:S.regStep, regProgress:(Math.min(S.regStep,4)/4*100)+'%',
       regInProgress:S.regStep<=4, rs1:S.regStep===1, rs2:S.regStep===2, rs3:S.regStep===3, rs4:S.regStep===4, rs5:S.regStep===5,
       canBack:S.regStep>1 && S.regStep<5, nextLabel:S.regStep===4?'Create account':'Continue',
+      toggleTerms:()=>this.setState(s=>({reg:{...s.reg,acceptTerms:!s.reg.acceptTerms}, regErrors:{...s.regErrors,acceptTerms:''}})),
+      nextDisabled: S.regStep===4 && !S.reg.acceptTerms,
+      nextBtnStyle: (S.regStep===4 && !S.reg.acceptTerms)
+        ? 'flex:1;background:#DBDBDE;color:#9E9EA7;border:none;border-radius:9999px;padding:12px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:not-allowed;'
+        : 'flex:1;background:#0D0C22;color:#FDFCFB;border:none;border-radius:9999px;padding:12px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;',
       reg:S.reg, err:S.regErrors,
       h:{name:setReg('name'),dob:setReg('dob'),town:setReg('town'),email:setReg('email'),mobile:setReg('mobile'),username:setReg('username'),pass:setReg('pass'),venueOther:setReg('venueOther')},
       togglePhoto:()=>this.setState(s=>({reg:{...s.reg,photo:!s.reg.photo}})),
@@ -1076,6 +1094,7 @@ class Component extends DCLogic {
       acct:S.acct, acctH, acctError:S.acctError, acctMsg:S.acctMsg, saveAccount,
       profileTeamLabel: cfg.team==='none' ? 'No team yet' : 'Westlands Cue Kings',
       regionLocked: cfg.locked, regionUnlocked: !cfg.locked,
+      profileRegionOpts, profileRegionValue, onProfileRegion,
       // demo states
       hasStandings: cfg.standings, noStandings: !cfg.standings,
       hasUpcoming: cfg.upcoming, noUpcoming: !cfg.upcoming, hasResults: cfg.results, noResults: !cfg.results,

@@ -139,6 +139,165 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
           </div>
         </sc-if>
 
+        <!-- ===== STAGES ===== -->
+        <sc-if value="{{ rIsStages }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Qualification Pipeline</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 18px;">Stages</h1>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+            <sc-for list="{{ stageTabs }}" as="t" hint-placeholder-count="4"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+          <div style="display:flex;gap:8px;border-bottom:1px solid #E7E7E9;margin-bottom:20px;">
+            <sc-for list="{{ stagesPanelTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+
+          <!-- participants panel -->
+          <div style="display:{{ stagesParticipantsDisplay }};">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+              <select value="{{ stagesRegion }}" onChange="{{ onStagesRegion }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:9px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                <sc-for list="{{ stagesRegionOpts }}" as="o" hint-placeholder-count="9"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+              <select value="{{ stagesCategory }}" onChange="{{ onStagesCategory }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:9px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                <sc-for list="{{ stagesCategoryOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+            </div>
+            <sc-if value="{{ hasStagesParticipants }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <sc-for list="{{ stagesParticipantRows }}" as="d" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid #F3F3F4;flex-wrap:wrap;">
+                  <div style="flex:1;min-width:180px;"><div style="font-size:14.5px;font-weight:600;color:#0D0C22;">{{ d.name }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ d.sub }}</div></div>
+                  <span style="{{ d.badgeStyle }}">{{ d.stage }}</span>
+                  <sc-if value="{{ d.canAdvance }}" hint-placeholder-val="{{ true }}"><button onClick="{{ d.advance }}" style="background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Advance → {{ stagesNextLabel }}</button></sc-if>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ noStagesParticipants }}" hint-placeholder-val="">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:36px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No participants match these filters at this stage.</div>
+            </sc-if>
+          </div>
+
+          <!-- capacity / group settings panel -->
+          <div style="display:{{ stagesSettingsDisplay }};">
+            <sc-if value="{{ stagesIsCapped }}" hint-placeholder-val="">
+              <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 14px;">Circuit and Finals run single knockout brackets per category, capped by entrant count.</p>
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                <table style="width:100%;border-collapse:collapse;">
+                  <thead><tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                    <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Category</th>
+                    <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Current / Limit</th>
+                    <th style="padding:11px 16px;"></th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ capTable }}" as="c" hint-placeholder-count="3">
+                      <tr style="border-bottom:1px solid #F3F3F4;">
+                        <td style="padding:11px 16px;font-size:14px;font-weight:600;color:#0D0C22;">{{ c.label }}</td>
+                        <td style="padding:11px 16px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;">
+                          <sc-if value="{{ c.editing }}" hint-placeholder-val="">{{ c.count }} / <input type="number" value="{{ c.editValue }}" onInput="{{ c.onEditInput }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:inherit;font-size:14px;" /></sc-if>
+                          <sc-if value="{{ c.notEditing }}" hint-placeholder-val="{{ true }}">{{ c.count }} / {{ c.limit }}</sc-if>
+                        </td>
+                        <td style="padding:11px 16px;text-align:right;">
+                          <sc-if value="{{ c.editing }}" hint-placeholder-val=""><button onClick="{{ c.saveEdit }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:7px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Save</button></sc-if>
+                          <sc-if value="{{ c.notEditing }}" hint-placeholder-val="{{ true }}"><button onClick="{{ c.startEdit }}" style="background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Edit limit</button></sc-if>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+            <div style="display:{{ stagesGroupSettingsDisplay }};">
+              <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 14px;">Grassroots and Regional are open, round-robin stages — this configures group size and how many advance, not a capacity limit.</p>
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                <table style="width:100%;border-collapse:collapse;">
+                  <thead><tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                    <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Category</th>
+                    <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Group size</th>
+                    <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Top N advance</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ groupSettingsTable }}" as="g" hint-placeholder-count="3">
+                      <tr style="border-bottom:1px solid #F3F3F4;">
+                        <td style="padding:11px 16px;font-size:14px;font-weight:600;color:#0D0C22;">{{ g.label }}</td>
+                        <td style="padding:11px 16px;">
+                          <sc-if value="{{ g.editingSize }}" hint-placeholder-val=""><input type="number" value="{{ g.sizeVal }}" onInput="{{ g.onSizeInput }}" onBlur="{{ g.saveSize }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;" /></sc-if>
+                          <sc-if value="{{ g.editingSize }}" hint-placeholder-val="{{ true }}"><span onClick="{{ g.startEditSize }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ g.sizeVal }}</span></sc-if>
+                        </td>
+                        <td style="padding:11px 16px;">
+                          <sc-if value="{{ g.editingTop }}" hint-placeholder-val=""><input type="number" value="{{ g.topVal }}" onInput="{{ g.onTopInput }}" onBlur="{{ g.saveTop }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;" /></sc-if>
+                          <sc-if value="{{ g.editingTop }}" hint-placeholder-val="{{ true }}"><span onClick="{{ g.startEditTop }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ g.topVal }}</span></sc-if>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== GROUPS ===== -->
+        <sc-if value="{{ rIsGroups }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Qualification Pipeline</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 18px;">Groups</h1>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+            <sc-for list="{{ groupsStageTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+          <div style="display:flex;gap:6px;overflow-x:auto;border-bottom:1px solid #E7E7E9;margin-bottom:14px;">
+            <sc-for list="{{ groupsRegionTabs }}" as="t" hint-placeholder-count="8"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+          <sc-if value="{{ hasGroupsVenues }}" hint-placeholder-val="">
+            <div style="display:flex;gap:6px;overflow-x:auto;border-bottom:1px solid #E7E7E9;margin-bottom:14px;padding-left:12px;">
+              <sc-for list="{{ groupsVenueTabs }}" as="t" hint-placeholder-count="3"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+            </div>
+          </sc-if>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+            <sc-for list="{{ groupsCategoryTabs }}" as="t" hint-placeholder-count="3"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+            <input type="text" value="{{ newGroupName }}" onInput="{{ onNewGroupName }}" placeholder="New group name…" style="flex:1;min-width:200px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+            <button onClick="{{ createGroup }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 22px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Create group</button>
+          </div>
+
+          <sc-if value="{{ hasGroupCards }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:28px;">
+            <sc-for list="{{ groupCards }}" as="g" hint-placeholder-count="2">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:18px 20px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                <div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:12px;letter-spacing:-0.01em;">{{ g.name }}</div>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                  <sc-for list="{{ g.members }}" as="m" hint-placeholder-count="4">
+                    <div style="padding:8px 12px;background:#FAF9FB;border-radius:9px;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ m.name }}</div>
+                  </sc-for>
+                </div>
+                <select value="" onChange="{{ g.onAdd }}" style="width:100%;border:1px solid #DBDBDE;border-radius:9999px;padding:8px 13px;font-family:inherit;font-size:13px;color:#0D0C22;background:#fff;cursor:pointer;">
+                  <sc-for list="{{ g.addOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                </select>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noGroupCards }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:30px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:28px;">No groups yet for {{ groupsScopeLabel }}.</div>
+          </sc-if>
+
+          <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 12px;letter-spacing:-0.01em;">Unassigned participants — {{ groupsScopeLabel }}</h2>
+          <sc-if value="{{ hasUnassigned }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ groupsUnassignedRows }}" as="u" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid #F3F3F4;">
+                <div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ u.name }}</div>
+                <div style="font-size:12.5px;color:#9E9EA7;">{{ u.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noUnassigned }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;text-align:center;color:#9E9EA7;font-size:13.5px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">Everyone in this stage/region is already grouped.</div>
+          </sc-if>
+        </sc-if>
+
         <!-- ===== DRAWS ===== -->
         <sc-if value="{{ rIsDraws }}" hint-placeholder-val="">
           <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:20px;">
@@ -150,8 +309,33 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
               <select value="{{ drawRound }}" onChange="{{ onDrawRound }}" style="border:1px solid #DBDBDE;border-radius:10px;padding:9px 14px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
                 <sc-for list="{{ roundOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
               </select>
+              <button onClick="{{ toggleNewRound }}" style="background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:9px 16px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">+ New round</button>
             </div>
           </div>
+
+          <sc-if value="{{ showNewRound }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+                <select value="{{ newRoundStage }}" onChange="{{ onNewRoundStage }}" style="border:1px solid #DBDBDE;border-radius:10px;padding:9px 13px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                  <sc-for list="{{ newRoundStageOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                </select>
+                <sc-if value="{{ newRoundIsGroupStage }}" hint-placeholder-val="{{ true }}">
+                  <select value="{{ newRoundGroup }}" onChange="{{ onNewRoundGroup }}" style="flex:1;min-width:220px;border:1px solid #DBDBDE;border-radius:10px;padding:9px 13px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                    <sc-for list="{{ newRoundGroupOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                  </select>
+                </sc-if>
+                <sc-if value="{{ newRoundIsGroupStage }}" hint-placeholder-val="">
+                  <select value="{{ newRoundCategory }}" onChange="{{ onNewRoundCategory }}" style="flex:1;min-width:180px;border:1px solid #DBDBDE;border-radius:10px;padding:9px 13px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                    <sc-for list="{{ newRoundCategoryOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                  </select>
+                </sc-if>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <input type="text" value="{{ newRoundName }}" onInput="{{ onNewRoundName }}" placeholder="{{ newRoundNamePlaceholder }}" style="flex:1;min-width:200px;border:1px solid #DBDBDE;border-radius:10px;padding:10px 13px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;outline:none;" />
+                <button onClick="{{ createRound }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:10px 22px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Create round</button>
+              </div>
+            </div>
+          </sc-if>
 
           <sc-if value="{{ drawSavedMsg }}" hint-placeholder-val="">
             <div style="display:flex;align-items:center;gap:10px;background:#DCF3E4;border:1px solid #b9e6c9;color:#0E6A30;border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:14px;font-weight:600;">✓ {{ drawSavedMsg }}</div>
@@ -353,7 +537,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
         </div>
         <div style="padding:22px 24px 24px;">
           <sc-if value="{{ resultModal.isCorrection }}" hint-placeholder-val="">
-            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;font-weight:500;border-radius:10px;padding:10px 13px;margin-bottom:18px;">This fixture already has a result. Saving will log a correction with both the prior and new value.</div>
+            <div style="background:#FEF3E2;border:1px solid #F6D9A5;color:#92400E;font-size:13px;font-weight:500;border-radius:10px;padding:10px 13px;margin-bottom:18px;">Correcting this result may affect standings and any stage advancement already made from it — review before saving.</div>
           </sc-if>
           <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:9px;">Winner</label>
           <div style="display:flex;gap:10px;margin-bottom:18px;">
@@ -422,8 +606,20 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             </sc-for>
           </div>
 
-          <sc-if value="{{ dirDetail.anonWarning }}" hint-placeholder-val="">
-            <div style="background:#FDECEA;border:1px solid #FBD5D0;color:#A81810;font-size:13px;border-radius:10px;padding:11px 13px;margin-bottom:14px;">{{ dirDetail.anonWarning }}</div>
+          <sc-if value="{{ dirDetail.anonConfirming }}" hint-placeholder-val="">
+            <div style="background:#FEF3E2;border:1px solid #F6D9A5;color:#92400E;font-size:13px;line-height:1.5;border-radius:10px;padding:13px 15px;margin-bottom:14px;">
+              <sc-if value="{{ dirDetail.hasAnonWarnings }}" hint-placeholder-val="">
+                <div style="font-weight:700;margin-bottom:6px;">Before you anonymize:</div>
+                <ul style="margin:0;padding-left:18px;">
+                  <sc-for list="{{ dirDetail.anonWarningList }}" as="w" hint-placeholder-count="2"><li style="margin-bottom:3px;">{{ w }}</li></sc-for>
+                </ul>
+              </sc-if>
+              <sc-if value="{{ dirDetail.anonPlain }}" hint-placeholder-val="{{ true }}">This will permanently remove {{ dirDetail.name }}'s personal details. Historical results and points remain intact.</sc-if>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:14px;">
+              <button onClick="{{ dirDetail.confirmCancel }}" style="flex:1;background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:11px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Cancel</button>
+              <button onClick="{{ dirDetail.confirmYes }}" style="flex:1;background:#A81810;color:#fff;border:none;border-radius:9999px;padding:11px 18px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#8A140D;">Yes, anonymize</button>
+            </div>
           </sc-if>
           <sc-if value="{{ dirDetail.canAnonymize }}" hint-placeholder-val="">
             <button onClick="{{ dirDetail.anonymize }}" style="width:100%;background:#fff;color:#A81810;border:1px solid #FBD5D0;border-radius:9999px;padding:12px 22px;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer;" style-hover="background:#FDECEA;">Anonymize this record</button>
@@ -457,7 +653,10 @@ class Component extends DCLogic {
     resTab:'unplayed', resultModal:null,
     dirSearch:'', dirKind:'all', dirRegion:'All', dirStage:'All', dirDetail:null,
     venueRegion:'Nairobi A', newVenueName:'', venueMsg:'', venueMsgOk:false,
-    scenario:'default', switcherOpen:false
+    scenario:'default', switcherOpen:false,
+    stagesStage:'Grassroots', stagesPanel:'participants', stagesRegion:'All', stagesCategory:'all',
+    groupsStage:'Grassroots', groupsRegion:'Nairobi A', groupsVenue:'', groupsCategory:'male', newGroupName:'',
+    showNewRound:false, newRoundStage:'Grassroots', newRoundGroup:'', newRoundCategory:'male', newRoundName:'', extraRounds:[]
   };
 
   REGIONS=['Nairobi A','Nairobi B','Central','Eastern','Coast','Rift A','Rift B','Nyanza & Western'];
@@ -482,9 +681,9 @@ class Component extends DCLogic {
   _seed(n){ const x=Math.sin(n*127.1+311.7)*43758.5453; return x-Math.floor(x); }
   stageStyle(stage){
     const m={
-      Grassroots:['rgba(110,109,122,0.14)','#3A3546','#6E6D7A'],
-      Regional:['#DCF3E4','#0E6A30','#16A34A'],
-      Circuit:['#FDECEA','#A81810','#E32219'],
+      Grassroots:['#CFF5E2','#0A3F2A','#189A63'],
+      Regional:['rgba(87,97,180,0.14)','#3d4590','#5761B4'],
+      Circuit:['#FCEFCB','#9C7318','#D9A02B'],
       Finals:['#0D0C22','#FDFCFB','#0D0C22']
     };
     return m[stage]||m.Grassroots;
@@ -584,6 +783,47 @@ class Component extends DCLogic {
     return {id, cat:'male', a:'', b:'', venue:'', date:'2026-07-19', time:'14:00'};
   }
 
+  groupKey(stage,region,venue,cat){ return [stage,region,venue||'',cat].join('|'); }
+  buildCapacity(){
+    if(this._capacity) return this._capacity;
+    this._capacity={
+      Circuit:{male:{limit:128},female:{limit:64},team:{limit:20}},
+      Finals:{male:{limit:64},female:{limit:32},team:{limit:8}}
+    };
+    return this._capacity;
+  }
+  buildGroupSettings(){
+    if(this._groupSettings) return this._groupSettings;
+    const mk=()=>({male:{size:8,topN:2},female:{size:8,topN:2},team:{size:8,topN:2}});
+    this._groupSettings={Grassroots:mk(),Regional:mk()};
+    return this._groupSettings;
+  }
+  buildGroups(){
+    if(this._groups) return this._groups;
+    const dir=this.buildDirectory();
+    const g={};
+    const seed=(stage,region,venue,cat,chunks)=>{
+      const key=this.groupKey(stage,region,venue,cat);
+      g[key]=chunks.map((members,i)=>({id:key+'-g'+i,name:'Group '+String.fromCharCode(65+i),members}));
+    };
+    const poolMale=dir.filter(d=>d.kind==='male'&&d.stage==='Grassroots'&&d.region==='Nairobi A').slice(0,8).map(p=>({id:p.id,name:p.name}));
+    if(poolMale.length) seed('Grassroots','Nairobi A','Westlands Cue Club','male',[poolMale.slice(0,4),poolMale.slice(4,8)].filter(c=>c.length));
+    const poolFemale=dir.filter(d=>d.kind==='female'&&d.stage==='Regional'&&d.region==='Central').slice(0,4).map(p=>({id:p.id,name:p.name}));
+    if(poolFemale.length) seed('Regional','Central','','female',[poolFemale]);
+    this._groups=g;
+    return g;
+  }
+  allGroupsFlat(){
+    const g=this.buildGroups();
+    const catLabel={male:'Individual Male',female:'Individual Female',team:'Teams'};
+    const out=[];
+    for(const key in g){
+      const [stage,region,venue,cat]=key.split('|');
+      g[key].forEach(grp=>out.push({stage,region,venue,cat,key,group:grp,label:grp.name+' · '+(venue||region)+' · '+catLabel[cat]}));
+    }
+    return out;
+  }
+
   renderVals(){
     const S=this.state;
     const SC={
@@ -608,7 +848,7 @@ class Component extends DCLogic {
     const mobileBarDisplay = isMobileLayout ? 'flex' : 'none';
     const sidebarLogoDisplay = isMobileLayout ? 'none' : 'flex';
 
-    const navDefs=[['dashboard','▦','Dashboard'],['draws','⚏','Draws'],['results','◔','Results & Points'],['directory','☰','Directory'],['venues','⚑','Venues']];
+    const navDefs=[['dashboard','▦','Dashboard'],['stages','◆','Stages'],['groups','▤','Groups'],['draws','⚏','Draws'],['results','◔','Results & Points'],['directory','☰','Directory'],['venues','⚑','Venues']];
     const navItems=navDefs.map(([r,icon,label])=>({icon,label,onClick:()=>{this.setState({route:r,drawerOpen:false});},
       style:`display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;color:${S.route===r?'#fff':'#9E9EA7'};background:${S.route===r?'rgba(227,34,25,0.18)':'transparent'};`}));
 
@@ -636,7 +876,16 @@ class Component extends DCLogic {
 
     // ---- draws ----
     if(S.drawRows.length===0 && !this._drawInit){ this._drawInit=true; this.state.drawRows=[this.makeDrawRow('r1'),this.makeDrawRow('r2')]; }
-    const roundOpts=[['grassroots-r3','Grassroots — Round 3'],['regional-r1','Regional — Round 1'],['circuit-r2','Circuit — Round 2']].map(([v,l])=>({value:v,label:l}));
+    const roundOpts=[['grassroots-r3','Grassroots — Round 3'],['regional-r1','Regional — Round 1'],['circuit-r2','Circuit — Round 2']].map(([v,l])=>({value:v,label:l})).concat(S.extraRounds.map(r=>({value:r.value,label:r.label})));
+    const newRoundIsGroupStage = S.newRoundStage==='Grassroots'||S.newRoundStage==='Regional';
+    const newRoundGroupOpts=[{value:'',label:'Select group…'}].concat(this.allGroupsFlat().filter(x=>x.stage===S.newRoundStage).map(x=>({value:x.key+'::'+x.group.id,label:x.label})));
+    const newRoundCategoryOpts=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
+    const createRound=()=>{
+      const name=S.newRoundName.trim(); if(!name) return;
+      const value='custom-'+Date.now();
+      this.state.extraRounds=[...S.extraRounds,{value,label:S.newRoundStage+' — '+name}];
+      this.setState({drawRound:value, showNewRound:false, newRoundName:'', newRoundGroup:''});
+    };
     const drawRoundLabel=(roundOpts.find(r=>r.value===S.drawRound)||{}).label||'';
     const catOpts=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
     const allVenueNames=Object.values(venues).flat().filter(v=>v.active).map(v=>v.name);
@@ -728,6 +977,81 @@ class Component extends DCLogic {
       }
     }));
 
+    // ---- stages ----
+    const stageTabs=this.STAGES.map(s=>{ const [bg,col]=this.stageStyle(s); return {label:s,onClick:()=>this.setState({stagesStage:s}),
+      style:`padding:9px 16px;border-radius:9999px;border:1px solid ${S.stagesStage===s?col:'#DBDBDE'};background:${S.stagesStage===s?bg:'#fff'};color:${S.stagesStage===s?col:'#3A3546'};font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap;`}; });
+    const stagesIsCapped=S.stagesStage==='Circuit'||S.stagesStage==='Finals';
+    const stagesPanelTabs=[['participants','Participants'],['settings',stagesIsCapped?'Capacity':'Group settings']].map(([k,label])=>({label,onClick:()=>this.setState({stagesPanel:k}),style:this.tabStyle(S.stagesPanel===k)}));
+    const stagesRegionOpts=['All',...this.REGIONS].map(r=>({value:r,label:r==='All'?'All regions':r}));
+    const stagesCategoryOpts=[['all','All categories'],['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
+    const stagesPool=dir.filter(d=>d.stage===S.stagesStage && (S.stagesRegion==='All'||d.region===S.stagesRegion) && (S.stagesCategory==='all'||d.kind===S.stagesCategory));
+    const stIdx=this.STAGES.indexOf(S.stagesStage);
+    const stagesNext = stIdx>=0 && stIdx<3 ? this.STAGES[stIdx+1] : null;
+    const stagesParticipantRows=stagesPool.slice(0,60).map(d=>{
+      const [bg,col]=this.stageStyle(d.stage);
+      return {...d, sub:(d.kind==='team'?'Team':'Player')+' · '+d.region,
+        badgeStyle:`display:inline-flex;align-items:center;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600;background:${bg};color:${col};flex:none;`,
+        canAdvance:!!stagesNext, advance:()=>{ if(stagesNext){ d.stage=stagesNext; this.forceUpdate(); } }
+      };
+    });
+    const catLabelMap={male:'Individual Male',female:'Individual Female',team:'Teams'};
+    const capacity=this.buildCapacity();
+    const capTable = stagesIsCapped ? ['male','female','team'].map(k=>{
+      const rec=capacity[S.stagesStage][k];
+      const editing=this._editingCap===S.stagesStage+'|'+k;
+      const count=dir.filter(d=>d.kind===k && d.stage===S.stagesStage).length;
+      return {label:catLabelMap[k], count, limit:rec.limit, editing, notEditing:!editing, editValue: editing?(this._editingCapVal ?? rec.limit):rec.limit,
+        startEdit:()=>{ this._editingCap=S.stagesStage+'|'+k; this._editingCapVal=rec.limit; this.forceUpdate(); },
+        onEditInput:(e)=>{ this._editingCapVal=e.target.value; this.forceUpdate(); },
+        saveEdit:()=>{ const v=parseInt(this._editingCapVal,10); if(v>0) rec.limit=v; this._editingCap=null; this.forceUpdate(); }};
+    }) : [];
+    const groupSettingsMap=this.buildGroupSettings();
+    const groupSettingsTable = !stagesIsCapped ? ['male','female','team'].map(k=>{
+      const rec=groupSettingsMap[S.stagesStage][k];
+      const editingSize=this._editingGS===S.stagesStage+'|'+k+'|size';
+      const editingTop=this._editingGS===S.stagesStage+'|'+k+'|topN';
+      return {label:catLabelMap[k],
+        editingSize, sizeVal: editingSize?(this._editingGSVal ?? rec.size):rec.size,
+        startEditSize:()=>{ this._editingGS=S.stagesStage+'|'+k+'|size'; this._editingGSVal=rec.size; this.forceUpdate(); },
+        onSizeInput:(e)=>{ this._editingGSVal=e.target.value; this.forceUpdate(); },
+        saveSize:()=>{ const v=parseInt(this._editingGSVal,10); if(v>0) rec.size=v; this._editingGS=null; this.forceUpdate(); },
+        editingTop, topVal: editingTop?(this._editingGSVal ?? rec.topN):rec.topN,
+        startEditTop:()=>{ this._editingGS=S.stagesStage+'|'+k+'|topN'; this._editingGSVal=rec.topN; this.forceUpdate(); },
+        onTopInput:(e)=>{ this._editingGSVal=e.target.value; this.forceUpdate(); },
+        saveTop:()=>{ const v=parseInt(this._editingGSVal,10); if(v>0) rec.topN=v; this._editingGS=null; this.forceUpdate(); }};
+    }) : [];
+
+    // ---- groups ----
+    const groupsStageTabs=['Grassroots','Regional'].map(s=>{ const [bg,col]=this.stageStyle(s); return {label:s,onClick:()=>this.setState({groupsStage:s,groupsVenue:''}),
+      style:`padding:9px 16px;border-radius:9999px;border:1px solid ${S.groupsStage===s?col:'#DBDBDE'};background:${S.groupsStage===s?bg:'#fff'};color:${S.groupsStage===s?col:'#3A3546'};font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap;`}; });
+    const groupsRegionTabs=this.REGIONS.map(r=>({label:r,onClick:()=>this.setState({groupsRegion:r,groupsVenue:''}),style:this.tabStyle(S.groupsRegion===r)}));
+    const groupsIsGrassroots=S.groupsStage==='Grassroots';
+    const groupsVenueList=groupsIsGrassroots ? (venues[S.groupsRegion]||[]).filter(v=>v.active).map(v=>v.name) : [];
+    if(groupsIsGrassroots && !S.groupsVenue && groupsVenueList.length){ this.state.groupsVenue=groupsVenueList[0]; }
+    const groupsVenueTabs=groupsVenueList.map(v=>({label:v,onClick:()=>this.setState({groupsVenue:v}),style:this.tabStyle(S.groupsVenue===v)}));
+    const groupsCategoryTabs=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({label:l,onClick:()=>this.setState({groupsCategory:v}),style:this.tabStyle(S.groupsCategory===v)}));
+    const gVenueScope = groupsIsGrassroots ? S.groupsVenue : '';
+    const gKey=this.groupKey(S.groupsStage,S.groupsRegion,gVenueScope,S.groupsCategory);
+    const groupsMap=this.buildGroups();
+    const currentGroupList=groupsMap[gKey]||(groupsMap[gKey]=[]);
+    const assignedIds=new Set(currentGroupList.flatMap(g=>g.members.map(m=>m.id)));
+    const groupsScopedPool=dir.filter(d=>d.stage===S.groupsStage && d.region===S.groupsRegion && d.kind===S.groupsCategory);
+    const groupsUnassigned=groupsScopedPool.filter(d=>!assignedIds.has(d.id));
+    const groupCards=currentGroupList.map(grp=>({
+      id:grp.id, name:grp.name,
+      members:grp.members.map(m=>({name:m.name})),
+      addOptions:[{value:'',label:'+ Add member…'}].concat(groupsUnassigned.map(u=>({value:u.id,label:u.name}))),
+      onAdd:(e)=>{ const uid=e.target.value; if(!uid) return; const p=groupsScopedPool.find(x=>x.id===uid); if(p) grp.members.push({id:p.id,name:p.name}); this.forceUpdate(); }
+    }));
+    const groupsUnassignedRows=groupsUnassigned.map(u=>({id:u.id,name:u.name,sub:u.kind==='team'?'Team':'Player'}));
+    const groupsScopeLabel=S.groupsStage+' · '+(groupsIsGrassroots?(S.groupsVenue||'—'):S.groupsRegion)+' · '+catLabelMap[S.groupsCategory];
+    const createGroup=()=>{
+      const name=S.newGroupName.trim(); if(!name) return;
+      const list=groupsMap[gKey]||(groupsMap[gKey]=[]);
+      list.push({id:gKey+'-'+Date.now(), name, members:[]});
+      this.setState({newGroupName:''});
+    };
+
     return {
       // auth
       showLogin:!S.authed, showApp:S.authed,
@@ -742,6 +1066,7 @@ class Component extends DCLogic {
       menuOpen:S.menuOpen, toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})), closeMenu:()=>this.setState({menuOpen:false}),
       stopClick:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); },
       rIsDash:S.route==='dashboard', rIsDraws:S.route==='draws', rIsResults:S.route==='results', rIsDirectory:S.route==='directory', rIsVenues:S.route==='venues',
+      rIsStages:S.route==='stages', rIsGroups:S.route==='groups',
       // dashboard
       statTiles, attentionItems, noAttention:attentionItems.length===0, pipelineBars,
       // draws
@@ -777,6 +1102,30 @@ class Component extends DCLogic {
       venueMsg:S.venueMsg, venueMsgStyle: S.venueMsgOk?'color:#0E6A30;font-size:13px;font-weight:600;margin-bottom:16px;':'color:#A81810;font-size:13px;font-weight:600;margin-bottom:16px;',
       venueRows, hasVenues:venueRows.length>0, noVenues:venueRows.length===0,
       customVenueRows, hasCustomVenues:customVenueRows.length>0, noCustomVenues:customVenueRows.length===0,
+      // stages
+      stageTabs, stagesPanelTabs, stagesPanel:S.stagesPanel, stagesIsCapped,
+      stagesRegionOpts, stagesRegion:S.stagesRegion, onStagesRegion:(e)=>this.setState({stagesRegion:e.target.value}),
+      stagesCategoryOpts, stagesCategory:S.stagesCategory, onStagesCategory:(e)=>this.setState({stagesCategory:e.target.value}),
+      stagesParticipantRows, hasStagesParticipants:stagesParticipantRows.length>0, noStagesParticipants:stagesParticipantRows.length===0,
+      stagesNextLabel:stagesNext||'', stagesStage:S.stagesStage,
+      capTable, groupSettingsTable,
+      stagesParticipantsDisplay: S.stagesPanel==='participants'?'block':'none',
+      stagesSettingsDisplay: S.stagesPanel==='settings'?'block':'none',
+      stagesGroupSettingsDisplay: stagesIsCapped?'none':'block',
+      // groups
+      groupsStageTabs, groupsRegionTabs, groupsVenueTabs, hasGroupsVenues:groupsIsGrassroots, groupsCategoryTabs,
+      groupsIsGrassroots, groupsScopeLabel,
+      groupCards, hasGroupCards:groupCards.length>0, noGroupCards:groupCards.length===0,
+      groupsUnassignedRows, hasUnassigned:groupsUnassignedRows.length>0, noUnassigned:groupsUnassignedRows.length===0 && groupsScopedPool.length>0,
+      newGroupName:S.newGroupName, onNewGroupName:(e)=>this.setState({newGroupName:e.target.value}), createGroup,
+      // draws new round
+      showNewRound:S.showNewRound, toggleNewRound:()=>this.setState(s=>({showNewRound:!s.showNewRound})),
+      newRoundStageOpts:this.STAGES.map(s=>({value:s,label:s})), newRoundStage:S.newRoundStage,
+      onNewRoundStage:(e)=>this.setState({newRoundStage:e.target.value,newRoundGroup:''}),
+      newRoundIsGroupStage, newRoundGroupOpts, newRoundGroup:S.newRoundGroup, onNewRoundGroup:(e)=>this.setState({newRoundGroup:e.target.value}),
+      newRoundCategoryOpts, newRoundCategory:S.newRoundCategory, onNewRoundCategory:(e)=>this.setState({newRoundCategory:e.target.value}),
+      newRoundNamePlaceholder: newRoundIsGroupStage?'e.g. Round 4':'Round of 64…',
+      newRoundName:S.newRoundName, onNewRoundName:(e)=>this.setState({newRoundName:e.target.value}), createRound,
       // demo switcher
       scenario:S.scenario, scenarioOpts, switcherOpen:S.switcherOpen,
       toggleSwitcher:()=>this.setState(s=>({switcherOpen:!s.switcherOpen}))
@@ -791,7 +1140,7 @@ class Component extends DCLogic {
       round:f.round, a:f.a, b:f.b, venue:f.venue, date:f.date,
       isCorrection,
       winner: f.winner||null, score: f.score||'', pointsA: f.pointsA ?? '', pointsB: f.pointsB ?? '',
-      showPoints: f.stage!=='Grassroots',
+      showPoints: f.stage==='Circuit'||f.stage==='Finals',
       error:'',
       saveLabel: isCorrection?'Save correction':'Save result',
       setScore:(e)=>{ this.state.resultModal={...this.state.resultModal, score:e.target.value}; this.forceUpdate(); },
@@ -846,13 +1195,21 @@ class Component extends DCLogic {
         {text:'Draw published — Round 3',when:'2 days ago'},
         {text:'Registration confirmed',when:'6 weeks ago'},
       ],
-      anonWarning: d.isAnon ? '' : (hasCaptaincyRisk ? 'This player is a team captain — reassign captaincy before anonymizing.' : (hasUpcoming ? 'This player has upcoming unplayed fixtures — anonymizing will require reviewing those fixtures.' : '')),
+      anonConfirming:false,
+      anonWarningList: d.isAnon ? [] : [
+        ...(hasCaptaincyRisk?['This player is a team captain — anonymizing them does not reassign the captaincy.']:[]),
+        ...(hasUpcoming?['This player has a fixture with no result recorded yet.']:[])
+      ],
       canAnonymize: !d.isAnon,
-      anonymize:()=>{
+      anonymize:()=>{ this.state.dirDetail={...this.state.dirDetail, anonConfirming:true, canAnonymize:false}; this.forceUpdate(); },
+      confirmCancel:()=>{ this.state.dirDetail={...this.state.dirDetail, anonConfirming:false, canAnonymize:true}; this.forceUpdate(); },
+      confirmYes:()=>{
         d.isAnon=true; d.name='Former Player #'+(100+Math.floor(this._seed(d.id.length)*900));
         this.setState({dirDetail:null});
       }
     };
+    detail.hasAnonWarnings=detail.anonWarningList.length>0;
+    detail.anonPlain=detail.anonWarningList.length===0;
     this.setState({dirDetail:detail});
   }
 }

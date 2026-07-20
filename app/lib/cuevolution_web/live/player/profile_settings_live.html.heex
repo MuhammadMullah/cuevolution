@@ -33,11 +33,36 @@
         <span class="text-sm text-ink-500">{label}</span>
         <span class="text-right text-sm font-semibold text-ink-950">{value}</span>
       </div>
-      <div class="flex items-center gap-2 pb-0.5 pt-3.5 text-[13px] text-ink-500">
-        <span class="shrink-0 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-red-700">
-          EDITABLE
-        </span>
-        <span>You can still change your region — you haven't played a match yet.</span>
+      <div :if={@region_locked?} class="pb-0.5 pt-3.5">
+        <div class="flex items-center gap-2 text-[13px] text-ink-500">
+          <span class="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-ink-500">
+            LOCKED
+          </span>
+          <span>Your region can't be changed — you've already played a match.</span>
+        </div>
+        <div class="mt-1.5 text-sm font-semibold text-ink-950">{@current_player.region.name}</div>
+      </div>
+      <div :if={not @region_locked?} class="pb-0.5 pt-3.5">
+        <div class="mb-1.5 flex items-center gap-2 text-[13px] text-ink-500">
+          <span class="shrink-0 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-red-700">
+            EDITABLE
+          </span>
+          <span>You can still change your region — you haven't played a match yet.</span>
+        </div>
+        <form phx-change="change_region" class="flex items-center gap-2">
+          <select
+            name="region_id"
+            class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+          >
+            <option
+              :for={region <- @regions}
+              value={region.id}
+              selected={region.id == @current_player.region_id}
+            >
+              {region.name}
+            </option>
+          </select>
+        </form>
       </div>
     </PlayerComponents.card>
 

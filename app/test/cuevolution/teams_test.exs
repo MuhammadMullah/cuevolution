@@ -171,4 +171,95 @@ defmodule Cuevolution.TeamsTest do
       assert Teams.eligible?(team)
     end
   end
+
+  describe "roster freeze (spec 005 FR-008)" do
+    test "add_player_to_roster/3 rejects once the roster is frozen" do
+      team = insert(:team)
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+
+      assert {:error, :roster_frozen} =
+               Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+    end
+
+    test "add_player_to_roster/3 succeeds when not frozen" do
+      team = insert(:team)
+
+      assert {:ok, _player} =
+               Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+    end
+
+    test "remove_player_from_roster/3 rejects once the roster is frozen" do
+      team = insert(:team)
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+
+      assert {:error, :roster_frozen} = Teams.remove_player_from_roster(team, member)
+    end
+
+    test "remove_player_from_roster/3 succeeds when not frozen" do
+      team = insert(:team)
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+
+      assert {:ok, _player} = Teams.remove_player_from_roster(team, member)
+    end
+
+    test "override_roster_change/4 bypasses the freeze for :add and always logs" do
+      team = insert(:team)
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      player = insert(:player, region_id: team.region_id)
+      admin = insert(:admin)
+
+      assert {:ok, added} = Teams.override_roster_change(:add, team, player, admin)
+      assert added.team_id == team.id
+
+      assert Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+               entity_id: player.id,
+               action_type: "override_roster_add"
+             )
+    end
+
+    test "override_roster_change/4 bypasses the freeze for :remove and always logs" do
+      team = insert(:team)
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      admin = insert(:admin)
+
+      assert {:ok, removed} = Teams.override_roster_change(:remove, team, member, admin)
+      assert is_nil(removed.team_id)
+
+      assert Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+               entity_id: member.id,
+               action_type: "override_roster_remove"
+             )
+    end
+
+    test "override_roster_change/4 still enforces the roster-size cap" do
+      team = insert(:team)
+      Teams.lock_roster(team.id)
+
+      for _ <- 1..8 do
+        team = Repo.get!(Cuevolution.Teams.Team, team.id)
+
+        Teams.override_roster_change(
+          :add,
+          team,
+          insert(:player, region_id: team.region_id),
+          insert(:admin)
+        )
+      end
+
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      admin = insert(:admin)
+      ninth_player = insert(:player, region_id: team.region_id)
+
+      assert {:error, :roster_full} =
+               Teams.override_roster_change(:add, team, ninth_player, admin)
+    end
+  end
 end

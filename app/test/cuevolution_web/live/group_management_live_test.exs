@@ -17,15 +17,17 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     assert {:error, {:redirect, %{to: "/admin/login"}}} = live(conn, ~p"/admin/groups")
   end
 
-  test "creating a group for Grassroots does not create a bracket, and lists unassigned participants",
+  test "creating a group for Grassroots requires the auto-selected venue and never creates a bracket",
        %{conn: conn} do
     grassroots = Repo.get_by!(Stage, name: "Grassroots")
     region = List.first(Accounts.list_regions())
-    player = insert(:player, region_id: region.id)
+    venue = insert(:venue, region_id: region.id)
+    player = insert(:player, region_id: region.id, gender: "male")
 
     insert(:stage_participation,
       stage_id: grassroots.id,
       region_id: region.id,
+      category: "male",
       player_id: player.id
     )
 
@@ -42,18 +44,24 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
 
     assert html =~ "created."
     assert html =~ "Pool A"
+
+    group = Repo.get_by!(Cuevolution.Competitions.Group, name: "Pool A")
+    assert group.venue_id == venue.id
+    refute Repo.get_by(Cuevolution.Competitions.KnockoutBracket, stage_id: grassroots.id)
   end
 
   test "assigning an unassigned participant to a group moves them out of the unassigned list",
        %{conn: conn} do
     grassroots = Repo.get_by!(Stage, name: "Grassroots")
     region = List.first(Accounts.list_regions())
-    player = insert(:player, region_id: region.id)
+    insert(:venue, region_id: region.id)
+    player = insert(:player, region_id: region.id, gender: "male")
 
     participation =
       insert(:stage_participation,
         stage_id: grassroots.id,
         region_id: region.id,
+        category: "male",
         player_id: player.id
       )
 
@@ -67,7 +75,7 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     html =
       view
       |> form("form[phx-value-group_id]", %{"participation_id" => participation.id})
-      |> render_submit()
+      |> render_change()
 
     assert html =~ "Added to Pool A."
     assert html =~ "Everyone in this stage/region is already grouped."

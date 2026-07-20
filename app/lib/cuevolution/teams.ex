@@ -7,6 +7,8 @@ defmodule Cuevolution.Teams do
 
   require Logger
 
+  alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions
   alias Cuevolution.Notifications
@@ -70,11 +72,15 @@ defmodule Cuevolution.Teams do
   far narrower window than the same-player race and isn't the scenario this
   task calls out as concurrency-critical.
 
-  ⚠️ The roster-freeze clause (FR-008, once `team.roster_locked_at` is set)
-  is deferred until `Competitions.MatchResult` exists — not implemented yet.
+  Once `team.roster_locked_at` is set (spec 005 FR-008 — the freeze applies
+  once the team has at least one recorded Team-category match result, per
+  `Competitions.record_result/3`'s `Teams.lock_roster/1` call), this
+  rejects with `{:error, :roster_frozen}` unless `opts[:override?]` is true
+  (the admin-override path, `override_roster_change/3`).
   """
-  def add_player_to_roster(%Team{} = team, %Player{} = player) do
+  def add_player_to_roster(%Team{} = team, %Player{} = player, opts \\ []) do
     Multi.new()
+    |> Multi.run(:check_not_frozen, fn _repo, _changes -> check_not_frozen(team, opts) end)
     |> Multi.run(:check_capacity, fn repo, _changes ->
       count = repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
       if count < @max_roster_size, do: {:ok, count}, else: {:error, :roster_full}
@@ -90,11 +96,22 @@ defmodule Cuevolution.Teams do
         dispatch_team_assignment(updated_player, team)
         {:ok, updated_player}
 
+      {:error, :check_not_frozen, :roster_frozen, _changes} ->
+        {:error, :roster_frozen}
+
       {:error, :check_capacity, :roster_full, _changes} ->
         {:error, :roster_full}
 
       {:error, :verify_claim, :already_on_a_team, _changes} ->
         {:error, :already_on_a_team}
+    end
+  end
+
+  defp check_not_frozen(team, opts) do
+    if Keyword.get(opts, :override?, false) or is_nil(team.roster_locked_at) do
+      {:ok, nil}
+    else
+      {:error, :roster_frozen}
     end
   end
 
@@ -125,18 +142,71 @@ defmodule Cuevolution.Teams do
   allowed to drop below the minimum — `eligible?/1` reflects that on its own
   next call rather than this function blocking the removal.
 
+  Same freeze guard as `add_player_to_roster/3` (spec 005 FR-008 covers both
+  add and remove, even though only the add-side has its own task number) —
+  rejects with `{:error, :roster_frozen}` once `team.roster_locked_at` is
+  set, unless `opts[:override?]` is true.
+
   ⚠️ Not specially guarded: removing the captain themselves. Spec 005 has no
   captain-succession/transfer mechanic (explicitly flagged as unresolved in
   its Edge Cases) — this function treats the captain like any roster member.
   """
-  def remove_player_from_roster(%Team{} = team, %Player{} = player) do
-    Player
-    |> where(id: ^player.id, team_id: ^team.id)
-    |> Repo.update_all(set: [team_id: nil])
-    |> case do
-      {1, _} -> {:ok, Repo.get!(Player, player.id)}
-      {0, _} -> {:error, :not_on_this_team}
+  def remove_player_from_roster(%Team{} = team, %Player{} = player, opts \\ []) do
+    with {:ok, nil} <- check_not_frozen(team, opts) do
+      Player
+      |> where(id: ^player.id, team_id: ^team.id)
+      |> Repo.update_all(set: [team_id: nil])
+      |> case do
+        {1, _} -> {:ok, Repo.get!(Player, player.id)}
+        {0, _} -> {:error, :not_on_this_team}
+      end
     end
+  end
+
+  @doc """
+  Admin override of the roster freeze (spec 005 FR-009, T061) — performs
+  `action` (`:add` or `:remove`) bypassing only the `:check_not_frozen`
+  guard (capacity/duplicate-membership/not-on-this-team checks stay
+  active, since those are correctness invariants, not the freeze policy).
+  Always logs via `Accounts.log_admin_action/4`, regardless of outcome.
+  """
+  def override_roster_change(action, %Team{} = team, %Player{} = player, %Admin{} = admin)
+      when action in [:add, :remove] do
+    result =
+      case action do
+        :add -> add_player_to_roster(team, player, override?: true)
+        :remove -> remove_player_from_roster(team, player, override?: true)
+      end
+
+    log_override(action, team, player, admin, result)
+    result
+  end
+
+  defp log_override(action, team, player, admin, result) do
+    outcome =
+      case result do
+        {:ok, _player} -> "ok"
+        {:error, reason} -> "error: #{inspect(reason)}"
+      end
+
+    Accounts.log_admin_action("override_roster_#{action}", admin, player,
+      new_value: %{"team_id" => team.id, "outcome" => outcome}
+    )
+  end
+
+  @doc """
+  Locks `team_id`'s roster once it has a recorded Team-category match result
+  (spec 005 Assumptions: freeze applies "once the team has at least one
+  recorded Match Result") — called by `Competitions.record_result/3`, not
+  directly. Plain conditional `update_all`, no `Multi` needed: not racy,
+  `match_results`' `unique_index(:fixture_id)` already prevents more than
+  one result per fixture, and the `is_nil` guard makes this naturally
+  idempotent regardless.
+  """
+  def lock_roster(team_id) do
+    Team
+    |> where([t], t.id == ^team_id and is_nil(t.roster_locked_at))
+    |> Repo.update_all(set: [roster_locked_at: DateTime.utc_now() |> DateTime.truncate(:second)])
   end
 
   @doc """

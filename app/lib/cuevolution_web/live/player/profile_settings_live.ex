@@ -20,7 +20,9 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
        page_title: "Profile Settings",
        current_player: player,
        notification_defs: @notification_defs,
-       saved_message: nil
+       saved_message: nil,
+       region_locked?: Accounts.region_locked?(player),
+       regions: Accounts.list_regions()
      )}
   end
 
@@ -38,6 +40,28 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
     end
   end
 
+  def handle_event("change_region", %{"region_id" => region_id}, socket) do
+    case Accounts.change_region(socket.assigns.current_player, region_id) do
+      {:ok, player} ->
+        player = Repo.preload(player, [:region, :preferred_venue, :team])
+
+        {:noreply,
+         assign(socket,
+           current_player: player,
+           saved_message: "Region updated."
+         )}
+
+      {:error, :region_locked} ->
+        {:noreply,
+         socket
+         |> assign(:region_locked?, true)
+         |> put_flash(:error, "Your region is locked — you've already played a match.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not update region.")}
+    end
+  end
+
   defp team_label(nil), do: "No team yet"
   defp team_label(team), do: team.name
 
@@ -46,7 +70,6 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
       {"Username", "@#{player.username}"},
       {"Category", String.capitalize(player.gender)},
       {"Date of birth", Calendar.strftime(player.date_of_birth, "%-d %b %Y")},
-      {"Region", player.region.name},
       {"Preferred venue", preferred_venue_label(player)},
       {"Email", player.email},
       {"Mobile", player.mobile_number},

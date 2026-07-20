@@ -289,6 +289,101 @@ defmodule CuevolutionWeb.AdminComponents do
     """
   end
 
+  @doc """
+  A date input styled to match the design. Relies on the browser's own
+  calendar glyph (rendered by every evergreen browser for `type="date"`,
+  so there's no need to fake one with an overlay — a hidden-native +
+  custom-SVG overlay was tried and dropped because hiding
+  `::-webkit-calendar-picker-indicator` behaves inconsistently across
+  Chrome builds and risked showing both icons at once). The `showPicker()`
+  hook widens the click target to the whole field, not just the icon.
+  """
+  attr :name, :string, required: true
+  attr :id, :string, required: true
+  attr :value, :string, default: ""
+  attr :class, :string, default: nil
+
+  def date_field(assigns) do
+    ~H"""
+    <input
+      type="date"
+      id={@id}
+      name={@name}
+      value={@value}
+      phx-hook=".AdminDatePicker"
+      class={[
+        "w-full cursor-pointer rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950",
+        @class
+      ]}
+    />
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".AdminDatePicker">
+      export default {
+        mounted() {
+          this.onClick = () => {
+            if (typeof this.el.showPicker === "function") {
+              try {
+                this.el.showPicker()
+              } catch (_error) {
+                // no-op — e.g. picker already open, or unsupported in this state
+              }
+            }
+          }
+          this.el.addEventListener("click", this.onClick)
+        },
+        destroyed() {
+          this.el.removeEventListener("click", this.onClick)
+        }
+      }
+    </script>
+    """
+  end
+
+  @doc "A 30-minute-interval time picker (design calls for fixed slots, not a free-text native time input)."
+  attr :name, :string, required: true
+  attr :id, :string, required: true
+  attr :value, :string, default: ""
+  attr :class, :string, default: nil
+
+  def time_select(assigns) do
+    assigns = assign(assigns, :options, time_options())
+
+    ~H"""
+    <div class="relative">
+      <svg
+        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ink-400"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 3" />
+      </svg>
+      <select
+        id={@id}
+        name={@name}
+        class={[
+          "w-full cursor-pointer rounded-lg border border-ink-300 bg-white py-2 pl-8 pr-2.5 text-[13px] text-ink-950",
+          @class
+        ]}
+      >
+        <option value="" selected={@value in [nil, ""]}>--:--</option>
+        <option :for={t <- @options} value={t} selected={t == @value}>{t}</option>
+      </select>
+    </div>
+    """
+  end
+
+  defp time_options do
+    for h <- 0..23, m <- [0, 30] do
+      hh = String.pad_leading(Integer.to_string(h), 2, "0")
+      mm = String.pad_leading(Integer.to_string(m), 2, "0")
+      "#{hh}:#{mm}"
+    end
+  end
+
   attr :id, :string, default: "admin-flash-group"
   attr :flash, :map, required: true
 

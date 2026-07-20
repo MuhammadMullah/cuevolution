@@ -30,6 +30,13 @@
       options={Enum.map(@regions, &{&1.name, &1.id})}
       class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
     />
+    <.input
+      field={@filter_form[:stage_id]}
+      type="select"
+      prompt="All stages"
+      options={Enum.map(@stages, &{&1.name, &1.id})}
+      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+    />
   </.form>
 
   <div class="mb-2.5 font-mono text-[13px] text-ink-500">
@@ -55,6 +62,7 @@
         </div>
         <div class="text-[12.5px] text-ink-400">{row.sub}</div>
       </div>
+      <PlayerComponents.stage_badge :if={row.stage} stage={row.stage.name} />
     </.link>
   </div>
   <div

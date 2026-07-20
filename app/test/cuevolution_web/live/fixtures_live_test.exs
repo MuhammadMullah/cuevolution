@@ -76,7 +76,21 @@ defmodule CuevolutionWeb.FixturesLiveTest do
       )
 
     venue = insert(:venue, name: "Nairobi Sports Club", region_id: region.id)
-    {:ok, round} = Competitions.create_round(%{stage_id: grassroots.id, name: "Round 1"})
+
+    {:ok, group} =
+      Competitions.create_group(%{
+        stage_id: grassroots.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Pool A"
+      })
+
+    Competitions.assign_to_group(mine, group)
+    Competitions.assign_to_group(theirs, group)
+
+    {:ok, round} =
+      Competitions.create_round(%{stage_id: grassroots.id, group_id: group.id, name: "Round 1"})
 
     row = %{
       "category" => "male",

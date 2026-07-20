@@ -31,7 +31,198 @@
     </button>
   </div>
 
-  <div class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
-    No fixtures in this list.
+  <div class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]", @tab != "unplayed" && "hidden"]}>
+    <div
+      id="unplayed-fixtures"
+      phx-update="stream"
+      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div
+        :for={{dom_id, fixture} <- @streams.unplayed}
+        id={dom_id}
+        phx-click="select_fixture"
+        phx-value-id={fixture.id}
+        class={[
+          "cursor-pointer border-b border-ink-100 px-4.5 py-3.5 text-[14px] last:border-0 hover:bg-ink-50",
+          @selected_unplayed && @selected_unplayed.id == fixture.id && "bg-red-50"
+        ]}
+      >
+        <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
+        <div class="text-[12.5px] text-ink-500">{fixture.venue.name}</div>
+      </div>
+    </div>
+    <div :if={@unplayed_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
+      No unplayed fixtures.
+    </div>
+
+    <div
+      :if={@selected_unplayed}
+      class="rounded-2xl border border-ink-200 bg-white p-4.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <h2 class="mb-3 text-[14.5px] font-bold text-ink-950">Record result</h2>
+      <.form for={@result_form} phx-submit="record_result" class="flex flex-col gap-2.5">
+        <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
+          <input
+            type="radio"
+            name="result[winner_participation_id]"
+            value={@selected_unplayed.participant_a_id}
+            required
+          />
+          {Competitions.participant_name(@selected_unplayed.participant_a)} wins
+        </label>
+        <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
+          <input
+            type="radio"
+            name="result[winner_participation_id]"
+            value={@selected_unplayed.participant_b_id}
+          />
+          {Competitions.participant_name(@selected_unplayed.participant_b)} wins
+        </label>
+        <div class="flex items-center gap-2">
+          <input
+            type="number"
+            name="result[participant_a_frames]"
+            placeholder="A frames (optional)"
+            class="w-1/2 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+          />
+          <input
+            type="number"
+            name="result[participant_b_frames]"
+            placeholder="B frames (optional)"
+            class="w-1/2 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+          />
+        </div>
+        <button
+          type="submit"
+          class="mt-1.5 rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
+        >
+          Save result
+        </button>
+      </.form>
+    </div>
+  </div>
+
+  <div class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_400px]", @tab != "played" && "hidden"]}>
+    <div
+      id="played-fixtures"
+      phx-update="stream"
+      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div
+        :for={{dom_id, fixture} <- @streams.played}
+        id={dom_id}
+        phx-click="select_played"
+        phx-value-id={fixture.id}
+        class={[
+          "cursor-pointer border-b border-ink-100 px-4.5 py-3.5 text-[14px] last:border-0 hover:bg-ink-50",
+          @selected_played && @selected_played.id == fixture.id && "bg-red-50"
+        ]}
+      >
+        <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
+        <div class="text-[12.5px] text-ink-500">
+          Winner: {Competitions.participant_name(fixture.result.winner_participation)}
+        </div>
+      </div>
+    </div>
+    <div :if={@played_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
+      No played fixtures yet.
+    </div>
+
+    <div
+      :if={@selected_played}
+      class="flex flex-col gap-4 rounded-2xl border border-ink-200 bg-white p-4.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div>
+        <h2 class="mb-2 text-[14.5px] font-bold text-ink-950">Correct result</h2>
+        <div class="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">
+          Correcting this result may affect standings and any stage advancement already made from it — review before saving.
+        </div>
+        <.form for={@correction_form} phx-submit="correct_result" class="flex flex-col gap-2.5">
+          <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
+            <input
+              type="radio"
+              name="result[winner_participation_id]"
+              value={@selected_played.participant_a_id}
+              checked={
+                @correction_form[:winner_participation_id].value ==
+                  @selected_played.participant_a_id
+              }
+            />
+            {Competitions.participant_name(@selected_played.participant_a)} wins
+          </label>
+          <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
+            <input
+              type="radio"
+              name="result[winner_participation_id]"
+              value={@selected_played.participant_b_id}
+              checked={
+                @correction_form[:winner_participation_id].value ==
+                  @selected_played.participant_b_id
+              }
+            />
+            {Competitions.participant_name(@selected_played.participant_b)} wins
+          </label>
+          <button
+            type="submit"
+            class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Save correction
+          </button>
+        </.form>
+      </div>
+
+      <div :if={points_eligible?(@selected_played)} class="border-t border-ink-100 pt-3.5">
+        <h2 class="mb-2 text-[14.5px] font-bold text-ink-950">Cuevo Points</h2>
+        <div
+          :for={{_id, %{participant: participant, entry: entry, total: total}} <- @points_forms}
+          class="mb-3"
+        >
+          <div class="mb-1 flex items-center justify-between text-[13.5px] font-semibold text-ink-950">
+            <span>{Competitions.participant_name(participant)}</span>
+            <span class="font-mono text-[12.5px] text-ink-500">total: {total}</span>
+          </div>
+          <form
+            :if={is_nil(entry)}
+            id={"record-points-#{participant.id}"}
+            phx-submit="record_points"
+            class="flex items-center gap-2"
+          >
+            <input type="hidden" name="participant_id" value={participant.id} />
+            <input
+              type="number"
+              name="points"
+              placeholder="Points"
+              class="w-24 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+            />
+            <button
+              type="submit"
+              class="rounded-full bg-ink-950 px-3.5 py-[7px] text-[13px] font-semibold text-white hover:bg-ink-900"
+            >
+              Add
+            </button>
+          </form>
+          <form
+            :if={entry}
+            id={"correct-points-#{participant.id}"}
+            phx-submit="correct_points"
+            class="flex items-center gap-2"
+          >
+            <input type="hidden" name="entry_id" value={entry.id} />
+            <input
+              type="number"
+              name="points"
+              value={entry.points}
+              class="w-24 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+            />
+            <button
+              type="submit"
+              class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              Correct
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </AdminComponents.app_shell>

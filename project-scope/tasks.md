@@ -199,10 +199,12 @@ This isn't a workaround — it's the honest shape of the dependency graph. Two c
 
 ### 5b. Groups & knockout brackets (spec 006)
 
-- **T072** [P] `create_groups` (`stage_id`, `region_id`, `name`), `create_group_memberships` (indexed both `group_id` and `stage_participation_id`), `create_knockout_brackets` (Regional-only, `group_id`).
+> **Correction (post-Plan-1/2 feedback)**: Knockout brackets do NOT belong to Regional groups — they only exist at Circuit/Finals, one per stage+category, unrelated to groups. Grassroots groups are venue-scoped (not region-scoped); Regional groups are region-scoped; both are also category-scoped (a dimension T072 originally missed). Group size (8) and advancer-count (2-3) are admin-configurable per stage+category via a new `stage_group_configs` table, not hardcoded. See `plan-1b-format-correction.md` for the corrective migration/schema/context work layered on top of T072-T076 (already shipped) rather than rewriting them in place.
+
+- **T072** [P] `create_groups` (`stage_id`, `region_id`, `name`), `create_group_memberships` (indexed both `group_id` and `stage_participation_id`), `create_knockout_brackets` (Regional-only, `group_id`). ~~Superseded — see correction note above.~~
 - **T073** [P] Factories for groups/memberships/brackets.
 - **T074** [Test→Impl] `Competitions.assign_to_group/2`.
-- **T075** [Test→Impl] Grassroots grouping produces no bracket; Regional grouping produces an available, initially-empty bracket (FR-003/FR-004).
+- **T075** [Test→Impl] Grassroots grouping produces no bracket; Regional grouping produces an available, initially-empty bracket (FR-003/FR-004). ~~Superseded — Regional never produces a bracket; brackets are Circuit/Finals stage+category only, created independently of group creation.~~
 - **T076** [P] Functional LiveView: `GroupManagementLive`.
 
 ### 5c. Draws / Fixtures (spec 007)
@@ -226,8 +228,8 @@ This isn't a workaround — it's the honest shape of the dependency graph. Two c
 - **T090** [Test→Impl] `Competitions.record_result/2` + duplicate-result rejection (FR-007, T086's index).
 - **T091** [Test→Impl] `Competitions.correct_result/2` — captures `prior_value`, logs via `Accounts.log_admin_action/4`, surfaces the downstream-advancement warning (US4 scenario 3).
 - **T092** [Test→Impl] **`StandingsCalculator`** — the FR-013 tiebreaker cascade, pure/DB-free module. This deserves the most exhaustive test coverage in the codebase since it decides who's eliminated from the tournament: one test per tiebreaker level — clean win-count ordering; wins-tied resolved by head-to-head; head-to-head-tied resolved by frame differential; frame-differential-tied resolved by total frames; fully-tied case flagged for admin resolution rather than silently guessed.
-- **T093** [Test→Impl] `Competitions.group_standings/1` (wraps T092 with real query data).
-- **T094** [Test→Impl] `Competitions.regional_top_8/1` — fewer-than-8-entrants case and boundary-tie case (both via T092).
+- **T093** [Test→Impl] `Competitions.group_standings/1` (wraps T092 with real query data) — applies at both Grassroots and Regional now.
+- **T094** [Test→Impl] `Competitions.top_advancers/1` (renamed from `regional_top_8/1` — generalized to both Grassroots and Regional, cutoff N read from `Competitions.group_config/2`'s `advancer_count`, not hardcoded to 8) — fewer-entrants-than-N case and boundary-tie case (both via T092). Circuit/Finals get a separate `advance_knockout_round/1`-style helper instead (bracket winner advancement, not group standings — see `plan-1b-format-correction.md`/`plan-3-results-points.md`).
 - **T095** [Test→Impl] `Competitions.record_points/2` + `correct_points/2` (mirrors T090/T091).
 - **T096** [Test→Impl] `Competitions.points_total/1` — live `SUM`, never cached; explicit test that a correction immediately reflects with no stale double-counting (SC-006).
 - **T097** [Test→Impl] Team-category frame-to-points allocation (FR-012) — per-frame-participant and/or per-team points, both modes tested.

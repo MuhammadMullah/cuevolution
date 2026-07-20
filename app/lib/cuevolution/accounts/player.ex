@@ -114,6 +114,61 @@ defmodule Cuevolution.Accounts.Player do
     |> validate_inclusion(:notification_preference, @notification_preferences)
   end
 
+  @doc "Updates just the region (spec 003 US3) — caller (`Accounts.change_region/2`) enforces the region-lock before calling this."
+  def region_changeset(player, attrs) do
+    player
+    |> cast(attrs, [:region_id])
+    |> validate_required([:region_id])
+    |> foreign_key_constraint(:region_id)
+  end
+
+  @doc """
+  Clears PII and marks `player` anonymized (spec 010 FR-004/FR-007).
+  Placeholder `email`/`mobile_number`/`username` are derived from the
+  player's own id to stay unique without a DB round-trip; `location` gets a
+  fixed placeholder since it's `NOT NULL` but carries no uniqueness
+  constraint.
+  """
+  def anonymize_changeset(player) do
+    id_fragment = String.slice(player.id, 0, 8)
+
+    player
+    |> cast(
+      %{
+        first_name: "Former",
+        last_name: "Player",
+        email: "anonymized-#{id_fragment}@cuevolution.invalid",
+        mobile_number: "+000000#{id_fragment}",
+        profile_picture_path: nil,
+        location: "Anonymized",
+        username: "former-player-#{id_fragment}",
+        anonymized_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      },
+      [
+        :first_name,
+        :last_name,
+        :email,
+        :mobile_number,
+        :profile_picture_path,
+        :location,
+        :username,
+        :anonymized_at
+      ]
+    )
+    |> validate_required([
+      :first_name,
+      :last_name,
+      :email,
+      :mobile_number,
+      :location,
+      :username,
+      :anonymized_at
+    ])
+    |> unique_constraint(:username, name: :players_lower_username_index)
+    |> unique_constraint(:email, name: :players_lower_email_index)
+    |> unique_constraint(:mobile_number)
+  end
+
   defp validate_age(changeset) do
     case get_field(changeset, :date_of_birth) do
       nil ->

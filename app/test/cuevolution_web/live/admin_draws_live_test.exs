@@ -4,6 +4,7 @@ defmodule CuevolutionWeb.AdminDrawsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Repo
@@ -63,12 +64,28 @@ defmodule CuevolutionWeb.AdminDrawsLiveTest do
 
     venue = insert(:venue, name: "Nakuru Sports Club", region_id: region.id)
 
+    {:ok, group} =
+      Competitions.create_group(%{
+        stage_id: grassroots.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Pool A"
+      })
+
+    Competitions.assign_to_group(pa, group)
+    Competitions.assign_to_group(pb, group)
+
     conn = log_in_admin(conn)
     {:ok, view, _html} = live(conn, ~p"/admin/draws")
 
+    view |> element("button", "+ New round") |> render_click()
+
     html =
       view
-      |> form("form[phx-submit='create_round']", round: %{"name" => "Round 1"})
+      |> form("form[phx-submit='create_round']",
+        round: %{"name" => "Round 1", "group_id" => group.id}
+      )
       |> render_submit()
 
     assert html =~ "Round 1"
@@ -122,31 +139,49 @@ defmodule CuevolutionWeb.AdminDrawsLiveTest do
     player_a = insert(:player, region_id: region.id, gender: "male", first_name: "Jonah")
     player_b = insert(:player, region_id: region.id, gender: "male", first_name: "Amina")
 
-    # Only player_a/player_b get a real StageParticipation — a 3rd player
-    # exists but was never registered for this stage, so selecting them
-    # will fail resolution inside `enter_fixtures/2`.
-    insert(:stage_participation,
-      stage_id: grassroots.id,
-      region_id: region.id,
-      category: "male",
-      player_id: player_a.id
-    )
+    # Only player_a/player_b get a real StageParticipation (and group
+    # membership) — a 3rd player exists but was never registered for this
+    # stage, so selecting them will fail resolution inside `enter_fixtures/2`.
+    pa =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player_a.id
+      )
 
-    insert(:stage_participation,
-      stage_id: grassroots.id,
-      region_id: region.id,
-      category: "male",
-      player_id: player_b.id
-    )
+    pb =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player_b.id
+      )
 
     unregistered = insert(:player, region_id: region.id, gender: "male", first_name: "Ghost")
     venue = insert(:venue, name: "Nakuru Sports Club", region_id: region.id)
 
+    {:ok, group} =
+      Competitions.create_group(%{
+        stage_id: grassroots.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Pool A"
+      })
+
+    Competitions.assign_to_group(pa, group)
+    Competitions.assign_to_group(pb, group)
+
     conn = log_in_admin(conn)
     {:ok, view, _html} = live(conn, ~p"/admin/draws")
 
+    view |> element("button", "+ New round") |> render_click()
+
     view
-    |> form("form[phx-submit='create_round']", round: %{"name" => "Round 1"})
+    |> form("form[phx-submit='create_round']",
+      round: %{"name" => "Round 1", "group_id" => group.id}
+    )
     |> render_submit()
 
     # Row 0: valid pairing.
@@ -200,7 +235,7 @@ defmodule CuevolutionWeb.AdminDrawsLiveTest do
     html = view |> element("button", "Save round & notify players") |> render_click()
 
     assert html =~ "Saved 1 fixture; 1 row(s) had errors"
-    assert html =~ "isn&#39;t registered for this stage/category"
+    assert html =~ "isn&#39;t a member of this round&#39;s group"
 
     assert Repo.aggregate(Fixture, :count) == 1
   end

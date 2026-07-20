@@ -42,6 +42,9 @@ defmodule CuevolutionWeb.TeamDashboardLive do
 
             {:error, :roster_full} ->
               put_flash(socket, :error, "The roster is full (max 8).")
+
+            {:error, :roster_frozen} ->
+              put_flash(socket, :error, "The roster is frozen — this team has already played.")
           end
 
         {:noreply, load_team(socket)}
@@ -50,12 +53,20 @@ defmodule CuevolutionWeb.TeamDashboardLive do
 
   def handle_event("remove_player", %{"id" => id}, socket) do
     player = Repo.get!(Player, id)
-    {:ok, _player} = Teams.remove_player_from_roster(socket.assigns.team, player)
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Player removed from the roster.")
-     |> load_team()}
+    socket =
+      case Teams.remove_player_from_roster(socket.assigns.team, player) do
+        {:ok, _player} ->
+          put_flash(socket, :info, "Player removed from the roster.")
+
+        {:error, :roster_frozen} ->
+          put_flash(socket, :error, "The roster is frozen — this team has already played.")
+
+        {:error, :not_on_this_team} ->
+          put_flash(socket, :error, "That player isn't on this team.")
+      end
+
+    {:noreply, load_team(socket)}
   end
 
   defp find_player_by_username(username) do

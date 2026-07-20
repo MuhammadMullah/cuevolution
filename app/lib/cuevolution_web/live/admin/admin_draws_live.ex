@@ -20,7 +20,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
 
   def mount(_params, _session, socket) do
     stages = Competitions.list_stages()
-    stage = List.first(stages)
+    new_round_stage = List.first(stages)
 
     {:ok,
      socket
@@ -29,24 +29,22 @@ defmodule CuevolutionWeb.AdminDrawsLive do
        venues: Venues.list_venues(%{}),
        categories: @categories,
        stages: stages,
-       stage: stage,
-       rounds: Competitions.list_rounds_for_stage(stage.id),
+       rounds: Competitions.list_rounds(),
        round: nil,
+       new_round_stage: new_round_stage,
        new_round_form: to_form(%{}, as: :round),
-       has_entered_fixtures: false
+       has_entered_fixtures: false,
+       show_new_round: false
      )
      |> assign(:next_id, 1)
      |> assign(:rows, [blank_row(0)])
+     |> load_round_context_options()
      |> stream(:entered_fixtures, [])}
   end
 
-  def handle_event("select_stage", %{"id" => id}, socket) do
-    stage = Enum.find(socket.assigns.stages, &(&1.id == id))
-
+  def handle_event("select_round", %{"id" => ""}, socket) do
     {:noreply,
      socket
-     |> assign(:stage, stage)
-     |> assign(:rounds, Competitions.list_rounds_for_stage(stage.id))
      |> assign(:round, nil)
      |> assign(:has_entered_fixtures, false)
      |> stream(:entered_fixtures, [], reset: true)}
@@ -63,19 +61,43 @@ defmodule CuevolutionWeb.AdminDrawsLive do
      |> stream(:entered_fixtures, fixtures, reset: true)}
   end
 
-  def handle_event("create_round", %{"round" => %{"name" => name}}, socket) do
-    case Competitions.create_round(%{stage_id: socket.assigns.stage.id, name: name}) do
-      {:ok, round} ->
-        {:noreply,
-         socket
-         |> assign(:rounds, Competitions.list_rounds_for_stage(socket.assigns.stage.id))
-         |> assign(:round, round)
-         |> assign(:new_round_form, to_form(%{}, as: :round))
-         |> assign(:has_entered_fixtures, false)
-         |> stream(:entered_fixtures, [], reset: true)}
+  def handle_event("toggle_new_round", _params, socket) do
+    {:noreply, assign(socket, :show_new_round, not socket.assigns.show_new_round)}
+  end
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, :new_round_form, to_form(changeset, as: :round))}
+  def handle_event("select_new_round_stage", %{"id" => id}, socket) do
+    stage = Enum.find(socket.assigns.stages, &(&1.id == id))
+
+    {:noreply,
+     socket
+     |> assign(:new_round_stage, stage)
+     |> load_round_context_options()}
+  end
+
+  def handle_event("create_round", %{"round" => params}, socket) do
+    case round_attrs(socket, params) do
+      {:ok, attrs} ->
+        case Competitions.create_round(attrs) do
+          {:ok, round} ->
+            rounds = Competitions.list_rounds()
+            round = Enum.find(rounds, &(&1.id == round.id))
+
+            {:noreply,
+             socket
+             |> assign(:rounds, rounds)
+             |> assign(:round, round)
+             |> assign(:new_round_form, to_form(%{}, as: :round))
+             |> assign(:has_entered_fixtures, false)
+             |> assign(:show_new_round, false)
+             |> stream(:entered_fixtures, [], reset: true)}
+
+          {:error, changeset} ->
+            {:noreply, assign(socket, :new_round_form, to_form(changeset, as: :round))}
+        end
+
+      {:error, :group_required} ->
+        {:noreply,
+         put_flash(socket, :error, "Select a group first — create one on the Groups page.")}
     end
   end
 
@@ -191,6 +213,39 @@ defmodule CuevolutionWeb.AdminDrawsLive do
     end
   end
 
+  # Grassroots/Regional rounds attach to an already-created group
+  # (GroupManagementLive); Circuit/Finals rounds attach to a knockout
+  # bracket, one per category, auto-created on first use.
+  defp group_stage?(%{name: name}), do: name in ["Grassroots", "Regional"]
+
+  defp load_round_context_options(socket) do
+    if group_stage?(socket.assigns.new_round_stage) do
+      assign(
+        socket,
+        :round_groups,
+        Competitions.list_groups_for_stage(socket.assigns.new_round_stage.id)
+      )
+    else
+      assign(socket, :round_groups, [])
+    end
+  end
+
+  defp round_attrs(socket, %{"name" => name} = params) do
+    stage = socket.assigns.new_round_stage
+
+    if group_stage?(stage) do
+      case params["group_id"] do
+        nil -> {:error, :group_required}
+        "" -> {:error, :group_required}
+        group_id -> {:ok, %{stage_id: stage.id, group_id: group_id, name: name}}
+      end
+    else
+      category = params["category"] || "male"
+      bracket = Competitions.ensure_knockout_bracket(stage.id, category)
+      {:ok, %{stage_id: stage.id, knockout_bracket_id: bracket.id, name: name}}
+    end
+  end
+
   defp apply_save_results(socket, attempted_rows, results) do
     {successes, error_rows, socket} =
       attempted_rows
@@ -256,10 +311,16 @@ defmodule CuevolutionWeb.AdminDrawsLive do
   defp format_row_error({:participant_a, :participant_not_in_stage}),
     do: "Participant A isn't registered for this stage/category."
 
+  defp format_row_error({:participant_a, :participant_not_in_group}),
+    do: "Participant A isn't a member of this round's group."
+
   defp format_row_error({:participant_a, :participant_required}), do: "Select participant A."
 
   defp format_row_error({:participant_b, :participant_not_in_stage}),
     do: "Participant B isn't registered for this stage/category."
+
+  defp format_row_error({:participant_b, :participant_not_in_group}),
+    do: "Participant B isn't a member of this round's group."
 
   defp format_row_error({:participant_b, :participant_required}), do: "Select participant B."
 
@@ -407,4 +468,6 @@ defmodule CuevolutionWeb.AdminDrawsLive do
     eat = Competitions.fixture_time_in_eat(fixture)
     Calendar.strftime(eat, "%b %-d, %Y · %H:%M")
   end
+
+  defp round_label(round), do: "#{round.stage.name} — #{round.name}"
 end
