@@ -31,16 +31,16 @@ config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Test
 # the console-printing stub (see test/test_helper.exs for its default stub).
 config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.SmsAdapterMock
 
-# TwilioAdapter isn't the configured :sms_adapter in test (the Mox mock
-# above is), but it still has its own direct unit tests, routed through a
-# Mox mock of the client seam (ex_twilio uses HTTPoison directly, with no
-# pluggable test transport, unlike Req/Req.Test).
-config :ex_twilio, account_sid: "test_account_sid", auth_token: "test_auth_token"
-config :cuevolution, :twilio, from: "+15005550006"
+# AfricasTalkingAdapter isn't the configured :sms_adapter in test (the Mox
+# mock above is), but it still has its own direct unit tests — route its
+# Req calls through Req.Test instead of the network.
+config :cuevolution, :africastalking,
+  api_key: "test_api_key",
+  username: "sandbox",
+  sender_id: "CUEVO"
 
-config :cuevolution,
-       :twilio_client,
-       Cuevolution.Notifications.SmsAdapter.TwilioAdapter.Client.Mock
+config :cuevolution, :africastalking_req_options,
+  plug: {Req.Test, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter}
 
 # :profile_picture_storage isn't set here — it stays the Storage.Local
 # default (writes under this app's own priv/static), so registration_live's

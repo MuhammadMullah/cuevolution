@@ -169,29 +169,25 @@ if config_env() == :prod do
     adapter: Swoosh.Adapters.Postmark,
     api_key: postmark_api_key
 
-  # ## Configuring SMS (Twilio)
-  twilio_account_sid =
-    System.get_env("TWILIO_ACCOUNT_SID") ||
+  # ## Configuring SMS (Africa's Talking)
+  africastalking_api_key =
+    System.get_env("AFRICASTALKING_API_KEY") ||
       raise """
-      environment variable TWILIO_ACCOUNT_SID is missing.
-      Find it in your Twilio Console dashboard.
+      environment variable AFRICASTALKING_API_KEY is missing.
+      Find it under Settings > API Key in your Africa's Talking dashboard.
       """
 
-  twilio_auth_token =
-    System.get_env("TWILIO_AUTH_TOKEN") ||
+  africastalking_username =
+    System.get_env("AFRICASTALKING_USERNAME") ||
       raise """
-      environment variable TWILIO_AUTH_TOKEN is missing.
-      Find it in your Twilio Console dashboard.
+      environment variable AFRICASTALKING_USERNAME is missing.
+      This is your live app's username (not "sandbox") in production.
       """
 
-  twilio_from_number =
-    System.get_env("TWILIO_FROM_NUMBER") ||
-      raise """
-      environment variable TWILIO_FROM_NUMBER is missing.
-      This must be a phone number you own in your Twilio account.
-      """
+  config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter
 
-  config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.TwilioAdapter
-  config :ex_twilio, account_sid: twilio_account_sid, auth_token: twilio_auth_token
-  config :cuevolution, :twilio, from: twilio_from_number
+  config :cuevolution, :africastalking,
+    api_key: africastalking_api_key,
+    username: africastalking_username,
+    sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
 end
