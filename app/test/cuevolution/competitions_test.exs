@@ -8,6 +8,26 @@ defmodule Cuevolution.CompetitionsTest do
 
   defp stage(name), do: Repo.get_by!(Stage, name: name)
 
+  defp circuit_fixture(category) do
+    circuit = stage("Circuit")
+    bracket = Competitions.ensure_knockout_bracket(circuit.id, category)
+    participant_a = insert(:stage_participation, stage_id: circuit.id, category: category)
+    participant_b = insert(:stage_participation, stage_id: circuit.id, category: category)
+
+    {:ok, round} =
+      Competitions.create_round(%{
+        stage_id: circuit.id,
+        knockout_bracket_id: bracket.id,
+        name: "Round of 4"
+      })
+
+    insert(:fixture,
+      round_id: round.id,
+      participant_a_id: participant_a.id,
+      participant_b_id: participant_b.id
+    )
+  end
+
   describe "list_stages/0" do
     test "returns all 4 seeded stages in pipeline order" do
       assert Enum.map(Competitions.list_stages(), & &1.name) == [
@@ -996,7 +1016,7 @@ defmodule Cuevolution.CompetitionsTest do
 
   describe "standings_for_category/1" do
     test "ranks participants by Cuevo Points, zero-point participants sink to the bottom" do
-      fixture = insert(:fixture)
+      fixture = circuit_fixture("male")
       admin = insert(:admin)
 
       {:ok, result} =
@@ -1010,16 +1030,101 @@ defmodule Cuevolution.CompetitionsTest do
           "points" => 5
         })
 
-      fixture = Repo.preload(fixture, [:participant_a, :participant_b])
-      category = fixture.participant_a.category
-
-      standings = Competitions.standings_for_category(category)
+      standings = Competitions.standings_for_category("male")
       a = Enum.find(standings, &(&1.id == fixture.participant_a_id))
       b = Enum.find(standings, &(&1.id == fixture.participant_b_id))
 
       assert a.points == 5
       assert b.points == 0
       assert a.rank < b.rank
+    end
+
+    test "excludes Grassroots/Regional participants — standings only cover Circuit/Finals" do
+      grassroots_p =
+        insert(:stage_participation, stage_id: stage("Grassroots").id, category: "male")
+
+      regional_p =
+        insert(:stage_participation, stage_id: stage("Regional").id, category: "male")
+
+      circuit_p = insert(:stage_participation, stage_id: stage("Circuit").id, category: "male")
+
+      standings = Competitions.standings_for_category("male")
+      ids = Enum.map(standings, & &1.id)
+
+      refute grassroots_p.id in ids
+      refute regional_p.id in ids
+      assert circuit_p.id in ids
+    end
+
+    test "marks Circuit participants advancing when ranked within the Finals capacity for their category" do
+      circuit = stage("Circuit")
+      finals = stage("Finals")
+      admin = insert(:admin)
+
+      config = Competitions.capacity_config(finals.id, "male")
+      {:ok, _} = Competitions.update_capacity_config(config, %{"capacity_limit" => 2})
+
+      fixture = circuit_fixture("male")
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      p1 = insert(:stage_participation, stage_id: circuit.id, category: "male")
+      p2 = insert(:stage_participation, stage_id: circuit.id, category: "male")
+      p3 = insert(:stage_participation, stage_id: circuit.id, category: "male")
+
+      Competitions.record_points(result, admin, %{"participant_id" => p1.id, "points" => 10})
+      Competitions.record_points(result, admin, %{"participant_id" => p2.id, "points" => 5})
+      Competitions.record_points(result, admin, %{"participant_id" => p3.id, "points" => 1})
+
+      standings = Competitions.standings_for_category("male")
+      by_id = Map.new(standings, &{&1.id, &1})
+
+      assert by_id[p1.id].advancing
+      assert by_id[p2.id].advancing
+      refute by_id[p3.id].advancing
+      refute by_id[fixture.participant_a_id].advancing
+    end
+
+    test "Finals participants are never marked advancing — there is no next stage" do
+      finals = stage("Finals")
+      admin = insert(:admin)
+      bracket = Competitions.ensure_knockout_bracket(finals.id, "male")
+
+      participant_a = insert(:stage_participation, stage_id: finals.id, category: "male")
+      participant_b = insert(:stage_participation, stage_id: finals.id, category: "male")
+
+      {:ok, round} =
+        Competitions.create_round(%{
+          stage_id: finals.id,
+          knockout_bracket_id: bracket.id,
+          name: "Final"
+        })
+
+      fixture =
+        insert(:fixture,
+          round_id: round.id,
+          participant_a_id: participant_a.id,
+          participant_b_id: participant_b.id
+        )
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => participant_a.id
+        })
+
+      {:ok, _entry} =
+        Competitions.record_points(result, admin, %{
+          "participant_id" => participant_a.id,
+          "points" => 20
+        })
+
+      standings = Competitions.standings_for_category("male")
+      row = Enum.find(standings, &(&1.id == participant_a.id))
+
+      refute row.advancing
     end
   end
 end

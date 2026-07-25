@@ -42,6 +42,7 @@ defmodule Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter do
   defp url_for(_username), do: @live_url
 
   defp maybe_put_sender_id(params, nil), do: params
+  defp maybe_put_sender_id(params, ""), do: params
   defp maybe_put_sender_id(params, sender_id), do: Map.put(params, :from, sender_id)
 
   defp request(url, api_key, params) do

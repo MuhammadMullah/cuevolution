@@ -116,9 +116,11 @@
           <span class="min-w-[140px] text-[14.5px] font-semibold text-ink-950">
             {config.category}
           </span>
-          <.input
-            field={@config_form[:capacity_limit]}
+          <input
             type="number"
+            name={@config_form[:capacity_limit].name}
+            id={@config_form[:capacity_limit].id}
+            value={@config_form[:capacity_limit].value}
             class="w-24 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
           />
           <button
@@ -180,17 +182,21 @@
             </span>
             <label class="flex items-center gap-1.5 text-[13px] text-ink-500">
               Group size
-              <.input
-                field={@group_config_form[:group_size]}
+              <input
                 type="number"
+                name={@group_config_form[:group_size].name}
+                id={@group_config_form[:group_size].id}
+                value={@group_config_form[:group_size].value}
                 class="w-20 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
               />
             </label>
             <label class="flex items-center gap-1.5 text-[13px] text-ink-500">
               Advance top
-              <.input
-                field={@group_config_form[:advancer_count]}
+              <input
                 type="number"
+                name={@group_config_form[:advancer_count].name}
+                id={@group_config_form[:advancer_count].id}
+                value={@group_config_form[:advancer_count].value}
                 class="w-20 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
               />
             </label>

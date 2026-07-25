@@ -86,4 +86,30 @@ defmodule Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapterTest do
     assert {:error, :missing_africastalking_credentials} =
              AfricasTalkingAdapter.send("+254712345678", "Hi")
   end
+
+  test "omits the sender id instead of sending from=\"\" when it's blank (e.g. an unset docker-compose env var)" do
+    original = Application.get_env(:cuevolution, :africastalking)
+
+    Application.put_env(:cuevolution, :africastalking,
+      username: "sandbox",
+      api_key: "test_api_key",
+      sender_id: ""
+    )
+
+    on_exit(fn -> Application.put_env(:cuevolution, :africastalking, original) end)
+
+    Req.Test.stub(AfricasTalkingAdapter, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      params = URI.decode_query(body)
+      refute Map.has_key?(params, "from")
+
+      Req.Test.json(conn, %{
+        "SMSMessageData" => %{
+          "Recipients" => [%{"statusCode" => 101, "status" => "Success"}]
+        }
+      })
+    end)
+
+    assert {:ok, _body} = AfricasTalkingAdapter.send("+254712345678", "Hi")
+  end
 end

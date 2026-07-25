@@ -27,7 +27,7 @@ defmodule CuevolutionWeb.StandingsLive do
        stage_filter: "All",
        tabs: @tabs,
        regions: Enum.map(Accounts.list_regions(), & &1.name),
-       stages: Enum.map(Competitions.list_stages(), & &1.name)
+       stages: ["Circuit", "Finals"]
      )
      |> load_standings()}
   end

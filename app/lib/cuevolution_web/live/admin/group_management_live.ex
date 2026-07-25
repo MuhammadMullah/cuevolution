@@ -36,7 +36,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
        region: region,
        category: List.first(@categories),
        venue: nil,
-       form: to_form(%{}, as: :group)
+       form: to_form(%{}, as: :group),
+       open_group_ids: MapSet.new()
      )
      |> load_venues()
      |> load_groups()
@@ -102,6 +103,17 @@ defmodule CuevolutionWeb.GroupManagementLive do
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :group))}
     end
+  end
+
+  def handle_event("toggle_group", %{"id" => id}, socket) do
+    open_group_ids =
+      if MapSet.member?(socket.assigns.open_group_ids, id) do
+        MapSet.delete(socket.assigns.open_group_ids, id)
+      else
+        MapSet.put(socket.assigns.open_group_ids, id)
+      end
+
+    {:noreply, assign(socket, :open_group_ids, open_group_ids)}
   end
 
   def handle_event(

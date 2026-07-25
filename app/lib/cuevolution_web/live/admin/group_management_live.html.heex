@@ -92,34 +92,69 @@
   </form>
 
   <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-    <AdminComponents.card :for={group <- @groups}>
-      <h2 class="mb-2.5 text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
-      <div class="mb-3.5 flex flex-col gap-1.5">
-        <div
-          :for={membership <- group.group_memberships}
-          class="rounded-[9px] bg-ink-50 px-3 py-2 text-[13.5px] font-semibold text-ink-950"
-        >
-          {participant_name(membership.stage_participation)}
-        </div>
-        <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
-          No members yet.
-        </div>
-      </div>
-
-      <form
-        :if={@unassigned != []}
-        phx-change="assign_to_group"
-        phx-value-group_id={group.id}
+    <div
+      :for={group <- @groups}
+      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <button
+        type="button"
+        phx-click="toggle_group"
+        phx-value-id={group.id}
+        class="flex w-full items-center justify-between gap-2 px-5 py-[18px] text-left sm:px-[22px]"
       >
-        <select
-          name="participation_id"
-          class="w-full rounded-full border border-ink-300 bg-white px-3.5 py-2 text-[13px] text-ink-950"
+        <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
+        <div class="flex shrink-0 items-center gap-2">
+          <span class="rounded-full bg-ink-100 px-2 py-0.5 text-[11.5px] font-semibold text-ink-700">
+            {length(group.group_memberships)}
+          </span>
+          <svg
+            class={[
+              "size-4 shrink-0 text-ink-400 transition-transform",
+              MapSet.member?(@open_group_ids, group.id) && "rotate-180"
+            ]}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </div>
+      </button>
+
+      <div
+        :if={MapSet.member?(@open_group_ids, group.id)}
+        class="border-t border-ink-100 px-5 pb-5 pt-3.5 sm:px-[22px] sm:pb-[22px]"
+      >
+        <div class="mb-3.5 flex flex-col gap-1.5">
+          <div
+            :for={membership <- group.group_memberships}
+            class="rounded-[9px] bg-ink-50 px-3 py-2 text-[13.5px] font-semibold text-ink-950"
+          >
+            {participant_name(membership.stage_participation)}
+          </div>
+          <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
+            No members yet.
+          </div>
+        </div>
+
+        <form
+          :if={@unassigned != []}
+          phx-change="assign_to_group"
+          phx-value-group_id={group.id}
         >
-          <option value="">+ Add member…</option>
-          <option :for={p <- @unassigned} value={p.id}>{participant_name(p)}</option>
-        </select>
-      </form>
-    </AdminComponents.card>
+          <select
+            name="participation_id"
+            class="w-full rounded-full border border-ink-300 bg-white px-3.5 py-2 text-[13px] text-ink-950"
+          >
+            <option value="">+ Add member…</option>
+            <option :for={p <- @unassigned} value={p.id}>{participant_name(p)}</option>
+          </select>
+        </form>
+      </div>
+    </div>
   </div>
   <div
     :if={@groups == []}

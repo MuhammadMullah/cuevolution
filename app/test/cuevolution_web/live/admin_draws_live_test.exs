@@ -203,13 +203,21 @@ defmodule CuevolutionWeb.AdminDrawsLiveTest do
     |> element("button[phx-value-id='#{venue.id}'][phx-value-field='venue']")
     |> render_click()
 
-    # Row 1: participant A is unregistered for this stage.
+    # Row 1: participant A is unregistered for this stage/group. The
+    # suggestion dropdown itself is now scoped to the round's group (spec
+    # 007 FR-011), so typing "Ghost" here wouldn't ever surface them as an
+    # option — dispatch the underlying `select_field` event directly to
+    # simulate a stale/forced selection and exercise the server-side
+    # `participant_not_in_group` guard.
     view |> element("button", "+ Add row") |> render_click()
-    view |> element("#draw-row-1-a") |> render_keyup(%{"key" => "h", "value" => "Ghost"})
 
-    view
-    |> element("button[phx-value-id='#{unregistered.id}'][phx-value-field='a']")
-    |> render_click()
+    render_click(view, "select_field", %{
+      "row" => "1",
+      "field" => "a",
+      "id" => unregistered.id,
+      "name" => "Ghost",
+      "kind" => "player"
+    })
 
     view |> element("#draw-row-1-b") |> render_keyup(%{"key" => "a", "value" => "Amina"})
 

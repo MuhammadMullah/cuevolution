@@ -240,6 +240,15 @@ defmodule CuevolutionWeb.AdminComponents do
   whichever one fires first; see the "Enter never fired" bug this replaced).
   Purely a UI primitive: the owning LiveView computes suggestions and
   interprets the resulting `*_id`/`*_kind`.
+
+  The dropdown is `position: fixed`, positioned by JS off the input's own
+  `getBoundingClientRect()` (see `.AdminFieldSuggestionsPosition` below) —
+  it lives inside a fixture-entry table row wrapped in an
+  `overflow-x-auto` scroller (needed for the table's horizontal scroll on
+  narrow screens), and a plain `position: absolute` dropdown gets clipped
+  by that scroller's implied `overflow-y: auto` (CSS's overflow-x/-y are
+  coupled: setting one axis to a non-`visible` value forces the other away
+  from `visible` too) instead of floating over the rest of the page.
   """
   attr :row_id, :integer, required: true
   attr :field, :string, required: true, doc: "one of \"a\", \"b\", \"venue\""
@@ -268,7 +277,9 @@ defmodule CuevolutionWeb.AdminComponents do
       />
       <div
         :if={@suggestions != []}
-        class="mt-1 overflow-hidden rounded-lg border border-ink-200 bg-white shadow-sm"
+        id={"draw-row-#{@row_id}-#{@field}-suggestions"}
+        phx-hook=".AdminFieldSuggestionsPosition"
+        class="fixed z-30 max-h-56 overflow-y-auto rounded-lg border border-ink-200 bg-white shadow-lg"
       >
         <button
           :for={s <- @suggestions}
@@ -285,6 +296,30 @@ defmodule CuevolutionWeb.AdminComponents do
           <span class="ml-1 text-ink-400">{s.sub}</span>
         </button>
       </div>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".AdminFieldSuggestionsPosition">
+        export default {
+          mounted() {
+            this.reposition = () => {
+              const input = this.el.previousElementSibling
+              if (!input) return
+              const rect = input.getBoundingClientRect()
+              this.el.style.left = `${rect.left}px`
+              this.el.style.top = `${rect.bottom + 4}px`
+              this.el.style.width = `${rect.width}px`
+            }
+            this.reposition()
+            window.addEventListener("scroll", this.reposition, true)
+            window.addEventListener("resize", this.reposition)
+          },
+          updated() {
+            this.reposition()
+          },
+          destroyed() {
+            window.removeEventListener("scroll", this.reposition, true)
+            window.removeEventListener("resize", this.reposition)
+          }
+        }
+      </script>
     </div>
     """
   end

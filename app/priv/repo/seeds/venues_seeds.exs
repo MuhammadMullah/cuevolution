@@ -17,7 +17,9 @@ defmodule Cuevolution.Seeds.Venues do
       "Kapande Pool Club (Wilson)",
       "Jamlok Sport Bar (Sabaki)",
       "Mongolian (Rongai)",
-      "Wallets (Utawala)"
+      "Wallets (Utawala)",
+      "Loft Lounge (Kilimani)",
+      "Prestige Pool Club (Westlands)"
     ],
     "Nairobi B" => [
       "Kasarani Pool Club (Kasarani)",
@@ -26,18 +28,26 @@ defmodule Cuevolution.Seeds.Venues do
       "Eaglers (Kariobangi)",
       "Quiver Eastlands",
       "Sindicate (Mirema Drive)",
-      "Jazlin (Ruai)"
+      "Jazlin (Ruai)",
+      "Buruburu Sports Club (Buruburu)",
+      "Embakasi Arena (Embakasi)"
     ],
     "Eastern" => [
       "Waves (Kitui)",
-      "Rack City (Kitengela)"
+      "Rack City (Kitengela)",
+      "Machakos Sports Club (Machakos)",
+      "Kalamba Pool Bar (Machakos)",
+      "Sultan Palace (Kitui)",
+      "Makueni Social Hall (Wote)"
     ],
     "Coast" => [
       "Kingston Beach Resort (Nyali)",
       "Mingles (Nyali)",
       "Masai Nyali",
       "Makuli (Makupa)",
-      "Screenshot (Mtwapa)"
+      "Screenshot (Mtwapa)",
+      "Nyali Cinemax Lounge (Nyali)",
+      "Malindi Beach Club (Malindi)"
     ],
     "Nyanza & Western" => [
       "Canopy (Kisumu)",
@@ -45,7 +55,9 @@ defmodule Cuevolution.Seeds.Venues do
       "Berlin Lounge (Kisumu)",
       "Komeko (Kisumu)",
       "Wayside (Kisumu)",
-      "Zero 7 (Kakamega)"
+      "Zero 7 (Kakamega)",
+      "Bungoma Social Hall (Bungoma)",
+      "Homa Bay Pool Club (Homa Bay)"
     ],
     "North Rift" => [
       "Tamasha Lounge (Eldoret)",
@@ -53,17 +65,26 @@ defmodule Cuevolution.Seeds.Venues do
       "Timber XO (Eldoret)",
       "Foxys",
       "Olympia",
-      "Chill Spot"
+      "Chill Spot",
+      "Kitale Sports Club (Kitale)",
+      "Kapsabet Arena (Kapsabet)"
     ],
     "South Rift" => [
       "Space Next Door",
       "Chillis",
       "Laikis (Narok)",
       "Tunnel (Litein)",
-      "Mara Vegas (Narok)"
+      "Mara Vegas (Narok)",
+      "Nakuru Pool Palace (Nakuru)",
+      "Kericho Golf Hotel (Kericho)"
     ],
     "Central" => [
-      "Aquatic (Meru)"
+      "Aquatic (Meru)",
+      "Nyeri Green Hills (Nyeri)",
+      "Muranga Social Hall (Muranga)",
+      "Thika Road Pool Club (Thika)",
+      "Nanyuki Sports Club (Nanyuki)",
+      "Embu Pool Lounge (Embu)"
     ]
   }
 

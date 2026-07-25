@@ -174,7 +174,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
     rows =
       Enum.map(socket.assigns.rows, fn row ->
         if row.id == row_id do
-          update_field_query(row, field, query, socket.assigns.venues)
+          update_field_query(row, field, query, socket.assigns.venues, socket.assigns.round)
         else
           row
         end
@@ -355,27 +355,27 @@ defmodule CuevolutionWeb.AdminDrawsLive do
   defp apply_selection(row, "venue", s),
     do: %{row | venue: s.name, venue_id: s.id, venue_suggestions: [], error: nil}
 
-  defp update_field_query(row, "a", query, _venues),
+  defp update_field_query(row, "a", query, _venues, round),
     do: %{
       row
       | a: query,
         a_id: nil,
         a_kind: nil,
-        a_suggestions: participant_suggestions(row.category, query),
+        a_suggestions: participant_suggestions(round, row.category, query),
         error: nil
     }
 
-  defp update_field_query(row, "b", query, _venues),
+  defp update_field_query(row, "b", query, _venues, round),
     do: %{
       row
       | b: query,
         b_id: nil,
         b_kind: nil,
-        b_suggestions: participant_suggestions(row.category, query),
+        b_suggestions: participant_suggestions(round, row.category, query),
         error: nil
     }
 
-  defp update_field_query(row, "venue", query, venues),
+  defp update_field_query(row, "venue", query, venues, _round),
     do: %{
       row
       | venue: query,
@@ -384,15 +384,27 @@ defmodule CuevolutionWeb.AdminDrawsLive do
         error: nil
     }
 
-  defp participant_suggestions(_category, ""), do: []
+  defp participant_suggestions(_round, _category, ""), do: []
 
-  defp participant_suggestions(category, query) when category in ["male", "female"] do
+  # Grassroots/Regional rounds are pinned to a group (see
+  # `group_stage?/1`/`restrict_to_group/2`) — narrow suggestions to that
+  # group's members instead of the whole stage/category, so admins can't
+  # pick a pairing that `Competitions.enter_fixtures/2` would reject anyway.
+  defp participant_suggestions(%{group_id: group_id}, _category, query)
+       when not is_nil(group_id) do
+    group_id |> Competitions.search_group_members(query) |> Enum.map(&group_member_suggestion/1)
+  end
+
+  defp participant_suggestions(_round, category, query) when category in ["male", "female"] do
     category |> Accounts.search_players(query) |> Enum.map(&player_suggestion/1)
   end
 
-  defp participant_suggestions("team", query) do
+  defp participant_suggestions(_round, "team", query) do
     %{name: query} |> Teams.list_teams_filtered() |> Enum.take(6) |> Enum.map(&team_suggestion/1)
   end
+
+  defp group_member_suggestion(%{player_id: nil, team: team}), do: team_suggestion(team)
+  defp group_member_suggestion(%{player: player}), do: player_suggestion(player)
 
   defp venue_suggestions(_venues, ""), do: []
 

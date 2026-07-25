@@ -5,10 +5,34 @@ defmodule CuevolutionWeb.StandingsLiveTest do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.Stage
 
   defp log_in_player(conn, player) do
     token = Accounts.generate_player_session_token(player)
     conn |> init_test_session(%{}) |> put_session(:player_token, token)
+  end
+
+  # standings only ever cover Circuit/Finals — `insert(:fixture)` cycles
+  # across all 4 stages, so tests asserting a fixture's participant shows
+  # up in standings need to pin it to Circuit explicitly.
+  defp circuit_fixture(category \\ "male") do
+    circuit = Cuevolution.Repo.get_by!(Stage, name: "Circuit")
+    bracket = Competitions.ensure_knockout_bracket(circuit.id, category)
+    participant_a = insert(:stage_participation, stage_id: circuit.id, category: category)
+    participant_b = insert(:stage_participation, stage_id: circuit.id, category: category)
+
+    {:ok, round} =
+      Competitions.create_round(%{
+        stage_id: circuit.id,
+        knockout_bracket_id: bracket.id,
+        name: "Round of 4"
+      })
+
+    insert(:fixture,
+      round_id: round.id,
+      participant_a_id: participant_a.id,
+      participant_b_id: participant_b.id
+    )
   end
 
   test "redirects anonymous visitors to login", %{conn: conn} do
@@ -79,7 +103,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
 
   test "shows a ranked participant with real Cuevo Points", %{conn: conn} do
     player = insert(:player)
-    fixture = insert(:fixture)
+    fixture = circuit_fixture()
     admin = insert(:admin)
 
     {:ok, result} =
@@ -110,7 +134,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
   test "a points change from another process live-updates a connected StandingsLive session",
        %{conn: conn} do
     player = insert(:player)
-    fixture = insert(:fixture)
+    fixture = circuit_fixture()
     admin = insert(:admin)
     participant = Cuevolution.Repo.preload(fixture, :participant_a).participant_a
 

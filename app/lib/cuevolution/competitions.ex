@@ -263,6 +263,36 @@ defmodule Cuevolution.Competitions do
     do: where(query, [g], g.venue_id == ^venue_id)
 
   @doc """
+  Members of `group_id` matching `query` by player name/username or team
+  name — backs the admin Draws page's participant suggestions for a
+  Grassroots/Regional round, which spec 007 FR-011 restricts pairings to
+  the round's group (`restrict_to_group/2` enforces the same scope at save
+  time; this just narrows the live-search dropdown to match).
+  """
+  def search_group_members(group_id, query) do
+    pattern = "%" <> escape_like_pattern(query) <> "%"
+
+    from(gm in GroupMembership,
+      join: p in StageParticipation,
+      on: p.id == gm.stage_participation_id,
+      left_join: player in assoc(p, :player),
+      left_join: team in assoc(p, :team),
+      where: gm.group_id == ^group_id,
+      where:
+        ilike(fragment("? || ' ' || ?", player.first_name, player.last_name), ^pattern) or
+          ilike(player.username, ^pattern) or
+          ilike(team.name, ^pattern),
+      order_by: [asc: player.first_name, asc: team.name],
+      limit: 6,
+      select: p
+    )
+    |> Repo.all()
+    |> Repo.preload([:player, team: [:region, :roster]])
+  end
+
+  defp escape_like_pattern(value), do: String.replace(value, ~w(% _), fn c -> "\\" <> c end)
+
+  @doc """
   Participations in `stage_id`/`region_id`/`category` not yet in any group
   for that stage — the GroupManagementLive "unassigned" pool.
   """
@@ -947,20 +977,33 @@ defmodule Cuevolution.Competitions do
     Repo.all(from e in CuevoPointsEntry, where: e.match_result_id == ^match_result_id)
   end
 
+  @standings_stages ["Circuit", "Finals"]
+
   @doc """
-  Ranked public standings for `category` (spec 009) — every current
-  participant in that category, ordered by Cuevo Points descending with a
-  stable secondary sort by name for ties. Participants with zero points
-  (not yet at Circuit stage) are included and sink to the bottom rather
-  than being omitted (spec 009 Assumptions: public visibility of stage
-  progress is part of the platform's value).
+  Ranked public standings for `category` — participants currently at
+  Circuit or Finals, ordered by Cuevo Points descending with a stable
+  secondary sort by name for ties. Cuevo Points are only ever earned from
+  knockout matches at those two stages (`record_points/3` is only reachable
+  from a Circuit/Finals `MatchResult`), and neither stage is region-scoped
+  (single bracket per category, spec 006), so this is one overall ranking —
+  Grassroots/Regional participants haven't entered the points-earning phase
+  yet and are intentionally excluded rather than padding the table with
+  permanent zeros.
+
+  Each row also carries `advancing: boolean` — true when the participant is
+  ranked (by points, within their *current* stage's own cohort — a Finals
+  entrant's rank shouldn't be diluted by every Circuit entrant chasing the
+  same table) inside the capacity the admin set for the next stage
+  (`StageCapacityConfig`, e.g. "top 64 males advance Circuit → Finals").
+  Finals has no next stage, so its entrants are never marked advancing.
   """
   def standings_for_category(category) do
     points = points_by_participant()
     win_loss = win_loss_by_participant()
 
     StageParticipation
-    |> where([p], p.category == ^category)
+    |> join(:inner, [p], s in assoc(p, :stage))
+    |> where([p, s], p.category == ^category and s.name in ^@standings_stages)
     |> preload([:player, :team, :region, :stage])
     |> Repo.all()
     |> Enum.map(fn participation ->
@@ -972,15 +1015,48 @@ defmodule Cuevolution.Competitions do
         initials: participant_initials(participation),
         region: participation.region.name,
         stage: participation.stage.name,
+        stage_id: participation.stage_id,
         played: stats.played,
         won: stats.won,
         lost: stats.played - stats.won,
         points: Map.get(points, participation.id, 0)
       }
     end)
+    |> mark_advancing(category)
     |> Enum.sort_by(&{-&1.points, &1.name})
     |> Enum.with_index(1)
-    |> Enum.map(fn {row, rank} -> Map.put(row, :rank, rank) end)
+    |> Enum.map(fn {row, rank} -> row |> Map.put(:rank, rank) |> Map.delete(:stage_id) end)
+  end
+
+  defp mark_advancing(rows, category) do
+    caps =
+      rows
+      |> Enum.map(& &1.stage_id)
+      |> Enum.uniq()
+      |> Map.new(&{&1, next_stage_capacity(&1, category)})
+
+    rows
+    |> Enum.group_by(& &1.stage_id)
+    |> Enum.flat_map(fn {stage_id, stage_rows} ->
+      cap = Map.fetch!(caps, stage_id)
+
+      stage_rows
+      |> Enum.sort_by(&{-&1.points, &1.name})
+      |> Enum.with_index(1)
+      |> Enum.map(fn {row, stage_rank} ->
+        Map.put(row, :advancing, not is_nil(cap) and stage_rank <= cap)
+      end)
+    end)
+  end
+
+  defp next_stage_capacity(stage_id, category) do
+    with %Stage{} = stage <- Repo.get(Stage, stage_id),
+         %Stage{} = next <- next_stage(stage),
+         %StageCapacityConfig{capacity_limit: limit} <- capacity_config(next.id, category) do
+      limit
+    else
+      _ -> nil
+    end
   end
 
   defp points_by_participant do

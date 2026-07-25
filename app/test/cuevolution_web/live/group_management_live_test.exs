@@ -72,6 +72,12 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     |> form("form[phx-submit='create_group']", group: %{"name" => "Pool A"})
     |> render_submit()
 
+    group = Repo.get_by!(Cuevolution.Competitions.Group, name: "Pool A")
+
+    # Group cards are collapsed by default — expand it to reach the
+    # "+ Add member…" form inside.
+    view |> element("button[phx-value-id='#{group.id}']") |> render_click()
+
     html =
       view
       |> form("form[phx-value-group_id]", %{"participation_id" => participation.id})
