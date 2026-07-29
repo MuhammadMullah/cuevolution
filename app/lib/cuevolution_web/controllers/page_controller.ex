@@ -30,4 +30,8 @@ defmodule CuevolutionWeb.PageController do
       render(conn, :home, partners: Enum.take(@partners, @max_partners))
     end
   end
+
+  def tos(conn, _params) do
+    render(conn, :tos)
+  end
 end

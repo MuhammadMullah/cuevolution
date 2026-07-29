@@ -1,0 +1,163 @@
+<PlayerComponents.flash_group flash={@flash} />
+
+<div class="min-h-screen bg-ink-25 font-sans text-ink-700 antialiased">
+  <!-- nav -->
+  <header class="bg-ink-950">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-2 px-5 py-4 sm:px-8 sm:py-5">
+      <a href={~p"/"}>
+        <img
+          src={~p"/images/cuevolution-logo-white.png"}
+          alt="Cuevolution"
+          class="h-5 w-auto shrink-0 sm:h-6"
+        />
+      </a>
+      <a
+        href={~p"/register"}
+        onclick="window.close()"
+        class="text-sm font-semibold text-ink-300 hover:text-white"
+      >
+        Back to registration
+      </a>
+    </div>
+  </header>
+
+  <div class="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
+    <PlayerComponents.eyebrow class="mb-3">Terms of Service</PlayerComponents.eyebrow>
+    <h1 class="mb-1 text-2xl font-bold tracking-tight text-ink-950 sm:text-[32px]">
+      SportPesa National Pool Circuit
+    </h1>
+    <p class="mb-10 text-base text-ink-500">Competition Format &amp; Qualification Rules</p>
+
+    <div class="flex flex-col gap-9">
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">1. Competition Structure</h2>
+        <p class="mb-3 text-[15px] leading-relaxed text-ink-700">
+          The SportPesa National Pool Circuit shall be conducted in four (4) stages:
+        </p>
+        <ul class="mb-3 list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>Grassroots Qualifiers</li>
+          <li>Regional Championships</li>
+          <li>National Circuit Events</li>
+          <li>National Finals</li>
+        </ul>
+        <p class="text-[15px] leading-relaxed text-ink-700">
+          Only players who qualify through each respective stage shall be eligible to advance.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">2. Grassroots Qualifiers</h2>
+        <ul class="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>Grassroots Qualifiers shall be hosted at accredited Cuevolution venues.</li>
+          <li>Each venue must register a minimum of 32 players for the event to be sanctioned.</li>
+          <li>Players shall compete in a Round Robin (Group Stage) format.</li>
+          <li>The top players from each group shall advance to the knockout stage where applicable.</li>
+          <li>Players shall earn Cuevo Ranking Points based on their finishing position.</li>
+          <li>Top performers shall qualify for the regionals.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">3. Regional Championships</h2>
+        <ul class="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>
+            Regional Championships shall feature qualified players from accredited grassroots venues within the designated region.
+          </li>
+          <li>Competition shall begin with a Round Robin (Group Stage) followed by a Knockout Stage.</li>
+          <li>Players shall continue earning Cuevo Ranking Points based on their final position.</li>
+          <li>
+            The prescribed number of top finishers from each region shall qualify for the National Circuit Events.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">4. National Circuit Events</h2>
+        <ul class="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>National Circuit Events shall be contested exclusively by qualified players.</li>
+          <li>All Circuit Events shall be played in a Single Elimination (Knockout) format.</li>
+          <li>Players shall earn Cuevo Ranking Points according to their finishing position.</li>
+          <li>
+            Ranking points accumulated across all Circuit Events shall determine qualification for the National Finals.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">5. National Finals</h2>
+        <ul class="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>
+            Qualification for the National Finals shall be based on the official Cuevo Rankings at the conclusion of the Circuit season.
+          </li>
+          <li>The qualified players shall compete in a Single Elimination (Knockout) format.</li>
+          <li>The winner shall be crowned the SportPesa National Pool Champion.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">6. Cuevo Ranking Points</h2>
+        <p class="mb-3 text-[15px] leading-relaxed text-ink-700">
+          The Cuevo Ranking System shall be the official player rating system throughout the season.
+        </p>
+        <p class="mb-3 text-[15px] leading-relaxed text-ink-700">Ranking points shall determine:</p>
+        <ul class="mb-3 list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>Qualification from Grassroots to Regionals.</li>
+          <li>Qualification from Regionals to Circuit Events.</li>
+          <li>Qualification for the National Finals.</li>
+          <li>The official National Player Rankings.</li>
+        </ul>
+        <p class="text-[15px] leading-relaxed text-ink-700">
+          Only officially sanctioned Cuevolution events shall award Cuevo Ranking Points.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">
+          7. Tie-Break Criteria (Group Stages)
+        </h2>
+        <p class="mb-3 text-[15px] leading-relaxed text-ink-700">
+          Where two or more players finish level on points during the Grassroots or Regional Group Stage, the following shall apply:
+        </p>
+        <ol class="list-decimal space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>Head-to-head result.</li>
+          <li>Match win percentage.</li>
+          <li>Frame (rack) difference.</li>
+          <li>Total frames won.</li>
+          <li>Play-off match, where necessary.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">8. Official Rankings</h2>
+        <ul class="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-700">
+          <li>Official Cuevo Rankings shall be updated after every sanctioned event.</li>
+          <li>Only rankings published by Cuevolution shall be recognised for qualification purposes.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">9. Competition Integrity</h2>
+        <p class="text-[15px] leading-relaxed text-ink-700">
+          Cuevolution reserves the right to amend qualification numbers, tournament formats or schedules where necessary in the best interests of the competition. Any amendments shall be communicated through official league channels before the event.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="mb-2.5 text-lg font-bold tracking-tight text-ink-950">10. Fair Play &amp; Conduct</h2>
+        <p class="text-[15px] leading-relaxed text-ink-700">
+          All participants are expected to uphold the highest standards of sportsmanship and professionalism throughout the competition. Any player found guilty of misconduct, cheating, match-fixing or bringing the league into disrepute shall be subject to disciplinary action, including suspension or disqualification from the SportPesa National Pool Circuit.
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <footer class="flex flex-wrap items-center justify-between gap-4 bg-ink-950 px-5 py-7 sm:px-8">
+    <img
+      src={~p"/images/cuevolution-logo-white.png"}
+      alt="Cuevolution"
+      class="h-[18px] w-auto opacity-90"
+    />
+    <div class="text-[12.5px] text-ink-500">© 2026 Cuevolution. All rights reserved.</div>
+  </footer>
+</div>

@@ -31,6 +31,7 @@ defmodule CuevolutionWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/legal/tos", PageController, :tos
 
     live_session :player_guest do
       live "/register", RegistrationLive, :new
