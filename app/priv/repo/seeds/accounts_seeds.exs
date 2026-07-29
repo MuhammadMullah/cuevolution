@@ -126,7 +126,15 @@ defmodule Cuevolution.Seeds.Accounts do
     {players, participations} =
       ns
       |> Enum.map(
-        &build_player(&1, venues, regions_by_id, grassroots_stage_id, hashed_password, now, joined_at)
+        &build_player(
+          &1,
+          venues,
+          regions_by_id,
+          grassroots_stage_id,
+          hashed_password,
+          now,
+          joined_at
+        )
       )
       |> Enum.unzip()
 
@@ -136,7 +144,15 @@ defmodule Cuevolution.Seeds.Accounts do
     end)
   end
 
-  defp build_player(n, venues, regions_by_id, grassroots_stage_id, hashed_password, now, joined_at) do
+  defp build_player(
+         n,
+         venues,
+         regions_by_id,
+         grassroots_stage_id,
+         hashed_password,
+         now,
+         joined_at
+       ) do
     venue = Enum.at(venues, rem(n - 1, length(venues)))
     region = Map.fetch!(regions_by_id, venue.region_id)
     gender = if rem(n, 2) == 0, do: "male", else: "female"
@@ -146,7 +162,7 @@ defmodule Cuevolution.Seeds.Accounts do
     last_name = Enum.at(@surnames, :erlang.phash2({n, :last}, length(@surnames)))
     age = 18 + :erlang.phash2({n, :age}, 33)
     day_offset = :erlang.phash2({n, :day}, 365)
-    date_of_birth = Date.utc_today() |> Date.add(-((age * 365) + day_offset))
+    date_of_birth = Date.utc_today() |> Date.add(-(age * 365 + day_offset))
     player_id = Ecto.UUID.generate()
 
     player = %{
