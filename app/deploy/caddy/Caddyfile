@@ -6,10 +6,10 @@
 # deploy/app/.env (see deploy/README.md) — that's what makes each app
 # reachable by name on the shared "web" network.
 
-staging.cuevolutionke.com {
+staging.sportpesapool.ke {
 	reverse_proxy cuevolution-staging:4000
 }
 
-cuevolutionke.com {
+sportpesapool.ke {
 	reverse_proxy cuevolution-production:4000
 }

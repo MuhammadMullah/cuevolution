@@ -5,8 +5,8 @@ front of two independent app+database stacks:
 
 | Branch    | Workflow                                   | Environment  | Domain                       |
 | --------- | ------------------------------------------- | ------------ | ------------------------------ |
-| `develop` | `.github/workflows/deploy-staging.yml`      | `staging`    | `staging.cuevolutionke.com`  |
-| `main`    | `.github/workflows/deploy-production.yml`   | `production` | `cuevolutionke.com`          |
+| `develop` | `.github/workflows/deploy-staging.yml`      | `staging`    | `staging.sportpesapool.ke`  |
+| `main`    | `.github/workflows/deploy-production.yml`   | `production` | `sportpesapool.ke`          |
 
 Every pull request (regardless of target branch) also runs `.github/workflows/ci.yml`
 — format check, `mix compile --warnings-as-errors`, `mix credo --strict`,
@@ -66,8 +66,8 @@ it can request certificates).
    docker network create web
    ```
 
-4. **Point DNS** for both `staging.cuevolutionke.com` and the bare
-   `cuevolutionke.com` at the server's IP — required before Caddy can
+4. **Point DNS** for both `staging.sportpesapool.ke` and the bare
+   `sportpesapool.ke` at the server's IP — required before Caddy can
    obtain Let's Encrypt certificates for either. For the apex domain
    specifically, make sure it has **only** that one A record — a
    registrar's default parking/forwarding records left in place alongside

@@ -49,7 +49,7 @@ defmodule CuevolutionWeb.AdminComponents do
             alt="Cuevolution"
           />
           <div class="font-mono text-xs font-medium tracking-[0.12em] text-ink-400">
-            admin.cuevolutionke.com
+            admin.sportpesapool.ke
           </div>
         </div>
         <div class="rounded-[20px] border border-[#2a2942] bg-ink-900 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] sm:p-9">
