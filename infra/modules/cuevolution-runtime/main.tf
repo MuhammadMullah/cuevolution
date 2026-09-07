@@ -147,6 +147,12 @@ resource "google_service_account_iam_member" "github_cloud_build_act_as" {
   member             = "serviceAccount:${google_service_account.github_deployer.email}"
 }
 
+resource "google_service_account_iam_member" "github_cloud_build_token_creator" {
+  service_account_id = google_service_account.cloud_build.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
 resource "google_service_account_iam_member" "github_wif_user" {
   service_account_id = google_service_account.github_deployer.name
   role               = "roles/iam.workloadIdentityUser"
