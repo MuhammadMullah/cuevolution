@@ -97,6 +97,12 @@ resource "google_project_iam_member" "github_cloud_build_submitter" {
   member  = "serviceAccount:${google_service_account.github_deployer.email}"
 }
 
+resource "google_project_iam_member" "github_project_viewer" {
+  project = var.project_id
+  role    = "roles/viewer"
+  member  = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
 resource "google_project_iam_member" "github_service_usage_consumer" {
   project = var.project_id
   role    = "roles/serviceusage.serviceUsageConsumer"
