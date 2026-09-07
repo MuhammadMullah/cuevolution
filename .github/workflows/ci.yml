@@ -7,3 +7,26 @@ on:
 jobs:
   test:
     uses: ./.github/workflows/test.yml
+
+  terraform:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra
+
+      - name: Initialize staging configuration
+        run: terraform -chdir=infra/envs/staging init -backend=false
+
+      - name: Validate staging configuration
+        run: terraform -chdir=infra/envs/staging validate
+
+      - name: Initialize production configuration
+        run: terraform -chdir=infra/envs/production init -backend=false
+
+      - name: Validate production configuration
+        run: terraform -chdir=infra/envs/production validate

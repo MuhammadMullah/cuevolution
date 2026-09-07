@@ -1,5 +1,5 @@
 defmodule Cuevolution.Accounts.ProfilePicture.Storage.Local do
-  @moduledoc "Dev/test default — writes under this app's own priv/static/uploads, served by Plug.Static. Never used in production (see Storage.S3)."
+  @moduledoc "Dev/test default — writes under this app's own priv/static/uploads, served by Plug.Static. Never used in production (see Storage.GCS)."
   @behaviour Cuevolution.Accounts.ProfilePicture.Storage
 
   @impl true

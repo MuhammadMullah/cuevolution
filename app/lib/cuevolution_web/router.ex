@@ -44,6 +44,12 @@ defmodule CuevolutionWeb.Router do
     delete "/logout", PlayerSessionController, :delete
   end
 
+  scope "/health", CuevolutionWeb do
+    get "/live", HealthController, :live
+    get "/startup", HealthController, :startup
+    get "/readiness", HealthController, :readiness
+  end
+
   scope "/", CuevolutionWeb do
     pipe_through [:browser, :player_required]
 

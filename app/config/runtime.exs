@@ -24,67 +24,73 @@ config :cuevolution, CuevolutionWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 if config_env() == :prod do
+  secret_values =
+    case System.get_env("CUEVOLUTION_SECRETS_JSON") do
+      nil -> %{}
+      json -> Jason.decode!(json)
+    end
+
+  secret = fn name -> Map.get(secret_values, name) || System.get_env(name) end
+
   database_url =
-    System.get_env("DATABASE_URL") ||
+    secret.("DATABASE_URL") ||
       raise """
       environment variable DATABASE_URL is missing.
       For example: ecto://USER:PASS@HOST/DATABASE
       """
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+  db_ssl = System.get_env("DB_SSL", "true") in ~w(true 1)
+
+  db_ssl_opts =
+    if db_ssl do
+      [verify: :verify_peer, cacerts: :public_key.cacerts_get()]
+    else
+      []
+    end
 
   config :cuevolution, Cuevolution.Repo,
-    # ssl: true,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
-    socket_options: maybe_ipv6
+    socket_options: maybe_ipv6,
+    ssl: db_ssl,
+    ssl_opts: db_ssl_opts
 
-  # ## Configuring profile picture storage (AWS S3)
+  # ## Configuring profile picture storage
   #
   # A Mix release's own priv/static lives inside the release's versioned
   # directory, replaced wholesale on every deploy — anything written there
-  # (Storage.Local, the dev/test default) doesn't survive a redeploy. S3 is
-  # a real object store instead — see Cuevolution.Accounts.ProfilePicture.Storage.S3.
-  # The bucket is private; reads go through presigned URLs, not a public
-  # endpoint, so there's no "Endpoint"/host to configure here — just the
-  # standard AWS credentials, region, and bucket name.
-  aws_access_key_id =
-    System.get_env("AWS_ACCESS_KEY_ID") ||
-      raise """
-      environment variable AWS_ACCESS_KEY_ID is missing.
-      From the IAM user/role with access to the S3 bucket.
-      """
+  # (Storage.Local, the dev/test default) doesn't survive a redeploy. GCS is
+  # the production object store; the bucket remains private and reads use
+  # short-lived V4 signed URLs.
+  case System.get_env("PROFILE_PICTURE_STORAGE", "gcs") do
+    "gcs" ->
+      gcs_bucket =
+        System.get_env("GCS_BUCKET") ||
+          raise "GCS_BUCKET is required when PROFILE_PICTURE_STORAGE=gcs"
 
-  aws_secret_access_key =
-    System.get_env("AWS_SECRET_ACCESS_KEY") ||
-      raise """
-      environment variable AWS_SECRET_ACCESS_KEY is missing.
-      From the same IAM credentials as AWS_ACCESS_KEY_ID.
-      """
+      signing_service_account =
+        System.get_env("GCS_SIGNING_SERVICE_ACCOUNT") ||
+          raise "GCS_SIGNING_SERVICE_ACCOUNT is required when PROFILE_PICTURE_STORAGE=gcs"
 
-  aws_region =
-    System.get_env("AWS_REGION") ||
-      raise """
-      environment variable AWS_REGION is missing.
-      E.g. "eu-west-1" — must match the region the bucket was created in.
-      """
+      config :cuevolution,
+             :profile_picture_storage,
+             Cuevolution.Accounts.ProfilePicture.Storage.GCS
 
-  s3_bucket =
-    System.get_env("S3_BUCKET") ||
-      raise """
-      environment variable S3_BUCKET is missing.
-      The bucket name — see deploy/README.md for the IAM policy it needs.
-      """
+      config :cuevolution, :gcs,
+        bucket: gcs_bucket,
+        signing_service_account: signing_service_account
 
-  config :cuevolution, :profile_picture_storage, Cuevolution.Accounts.ProfilePicture.Storage.S3
-  config :cuevolution, :s3, bucket: s3_bucket
+    "local" ->
+      config :cuevolution,
+             :profile_picture_storage,
+             Cuevolution.Accounts.ProfilePicture.Storage.Local
 
-  config :ex_aws,
-    access_key_id: aws_access_key_id,
-    secret_access_key: aws_secret_access_key,
-    region: aws_region
+    storage ->
+      raise "unsupported PROFILE_PICTURE_STORAGE=#{storage}; expected gcs or local"
+  end
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
@@ -92,7 +98,7 @@ if config_env() == :prod do
   # to check this value into version control, so we use an environment
   # variable instead.
   secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
+    secret.("SECRET_KEY_BASE") ||
       raise """
       environment variable SECRET_KEY_BASE is missing.
       You can generate one by calling: mix phx.gen.secret
@@ -145,49 +151,53 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # MAIL_FROM_ADDRESS must be a verified Sender Signature in Postmark (an
-  # individually verified address, or any address on a verified/DKIM'd
-  # sending domain) — Postmark rejects sends from anything else.
-  mail_from_address =
-    System.get_env("MAIL_FROM_ADDRESS") ||
-      raise """
-      environment variable MAIL_FROM_ADDRESS is missing.
-      Must be a verified Sender Signature in Postmark — see Cuevolution.Mailer
-      config in config/runtime.exs.
-      """
+  case System.get_env("MAIL_PROVIDER", "postmark") do
+    "postmark" ->
+      mail_from_address =
+        System.get_env("MAIL_FROM_ADDRESS") ||
+          raise "MAIL_FROM_ADDRESS is required when MAIL_PROVIDER=postmark"
 
-  postmark_api_key =
-    System.get_env("POSTMARK_API_KEY") ||
-      raise """
-      environment variable POSTMARK_API_KEY is missing.
-      The Server API Token from the Postmark server's API Tokens tab.
-      """
+      postmark_api_key =
+        secret.("POSTMARK_API_KEY") ||
+          raise "POSTMARK_API_KEY is required when MAIL_PROVIDER=postmark"
 
-  config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
+      config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
 
-  config :cuevolution, Cuevolution.Mailer,
-    adapter: Swoosh.Adapters.Postmark,
-    api_key: postmark_api_key
+      config :cuevolution, Cuevolution.Mailer,
+        adapter: Swoosh.Adapters.Postmark,
+        api_key: postmark_api_key
+
+    "local" ->
+      config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Local
+
+    provider ->
+      raise "unsupported MAIL_PROVIDER=#{provider}; expected postmark or local"
+  end
 
   # ## Configuring SMS (Africa's Talking)
-  africastalking_api_key =
-    System.get_env("AFRICASTALKING_API_KEY") ||
-      raise """
-      environment variable AFRICASTALKING_API_KEY is missing.
-      Find it under Settings > API Key in your Africa's Talking dashboard.
-      """
+  case System.get_env("SMS_PROVIDER", "africastalking") do
+    "africastalking" ->
+      africastalking_api_key =
+        secret.("AFRICASTALKING_API_KEY") ||
+          raise "AFRICASTALKING_API_KEY is required when SMS_PROVIDER=africastalking"
 
-  africastalking_username =
-    System.get_env("AFRICASTALKING_USERNAME") ||
-      raise """
-      environment variable AFRICASTALKING_USERNAME is missing.
-      This is your live app's username (not "sandbox") in production.
-      """
+      africastalking_username =
+        secret.("AFRICASTALKING_USERNAME") ||
+          raise "AFRICASTALKING_USERNAME is required when SMS_PROVIDER=africastalking"
 
-  config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter
+      config :cuevolution,
+             :sms_adapter,
+             Cuevolution.Notifications.SmsAdapter.AfricasTalkingAdapter
 
-  config :cuevolution, :africastalking,
-    api_key: africastalking_api_key,
-    username: africastalking_username,
-    sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
+      config :cuevolution, :africastalking,
+        api_key: africastalking_api_key,
+        username: africastalking_username,
+        sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
+
+    "stub" ->
+      config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.StubAdapter
+
+    provider ->
+      raise "unsupported SMS_PROVIDER=#{provider}; expected africastalking or stub"
+  end
 end

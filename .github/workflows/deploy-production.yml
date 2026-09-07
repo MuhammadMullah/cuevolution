@@ -14,75 +14,34 @@ jobs:
     uses: ./.github/workflows/test.yml
 
   build-and-deploy:
-    name: Build image, push to GHCR, deploy over SSH
+    name: Build image and deploy to Cloud Run
     needs: test
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
-      packages: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
       - name: Compute image reference
         id: image
         run: |
-          repo_lower=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "ref=ghcr.io/${repo_lower}:production-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "floating=ghcr.io/${repo_lower}:production" >> "$GITHUB_OUTPUT"
+          echo "ref=africa-south1-docker.pkg.dev/${{ secrets.GCP_PRODUCTION_PROJECT_ID }}/cuevolution-images/cuevolution:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: ./app
-          push: true
-          tags: |
-            ${{ steps.image.outputs.ref }}
-            ${{ steps.image.outputs.floating }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # app/deploy/app/docker-compose.yml is the source of truth for this
-      # environment's app+db stack — re-synced on every deploy so
-      # server-side config never silently drifts from what's committed.
-      # The shared Caddy reverse proxy (app/deploy/caddy/) is server-level
-      # infra, deployed once per deploy/README.md, not touched here.
-      # /opt/cuevolution-production/.env lives only on the server and is
-      # never touched here except for the IMAGE= line, updated below.
-      - name: Copy compose file to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "app/deploy/app/docker-compose.yml"
-          target: "/opt/cuevolution-production"
-          strip_components: 3
-
-      - name: Pull image, migrate, restart
-        uses: appleboy/ssh-action@v1
-        env:
-          IMAGE_REF: ${{ steps.image.outputs.ref }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          envs: IMAGE_REF
-          script: |
-            set -euo pipefail
-            cd /opt/cuevolution-production
-            sed -i "s|^IMAGE=.*|IMAGE=${IMAGE_REF}|" .env
-            docker compose --env-file .env pull
-            docker compose --env-file .env run --rm app bin/migrate
-            docker compose --env-file .env up -d --remove-orphans
-            docker image prune -f
+      - name: Build and deploy with Cloud Build
+        run: |
+          gcloud builds submit . \
+            --config=cloudbuild.yaml \
+            --project="${{ secrets.GCP_PRODUCTION_PROJECT_ID }}" \
+            --service-account="projects/${{ secrets.GCP_PRODUCTION_PROJECT_ID }}/serviceAccounts/cuevolution-production-cb@${{ secrets.GCP_PRODUCTION_PROJECT_ID }}.iam.gserviceaccount.com" \
+            --substitutions="_IMAGE_TAG=${{ steps.image.outputs.ref }},_REGION=africa-south1,_MIGRATION_JOB=cuevolution-production-migrate,_WEB_SERVICE=cuevolution-production-web,_WORKER_SERVICE=cuevolution-production-worker"

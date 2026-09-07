@@ -1,0 +1,59 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - app/Dockerfile
+      - -t
+      - ${_IMAGE_TAG}
+      - app
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGE_TAG}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        digest="$$(gcloud artifacts docker images describe "${_IMAGE_TAG}" \
+          --format='value(image_summary.digest)')"
+        image_ref="$${_IMAGE_TAG%:*}@$${digest}"
+
+        gcloud run jobs update "${_MIGRATION_JOB}" \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --image="$${image_ref}" \
+          --quiet
+
+        gcloud run jobs execute "${_MIGRATION_JOB}" \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --wait \
+          --quiet
+
+        gcloud run services update "${_WEB_SERVICE}" \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --image="$${image_ref}" \
+          --quiet
+
+        gcloud run services update "${_WORKER_SERVICE}" \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --image="$${image_ref}" \
+          --quiet
+
+        url="$$(gcloud run services describe "${_WEB_SERVICE}" \
+          --project="${PROJECT_ID}" \
+          --region="${_REGION}" \
+          --format='value(status.url)')"
+        curl --fail --silent --show-error "$${url}/health/readiness"
+
+images:
+  - ${_IMAGE_TAG}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

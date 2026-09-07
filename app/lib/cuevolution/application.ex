@@ -7,17 +7,27 @@ defmodule Cuevolution.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
+    base_children = [
       CuevolutionWeb.Telemetry,
       Cuevolution.Repo,
       {DNSCluster, query: Application.get_env(:cuevolution, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cuevolution.PubSub},
-      {Oban, Application.fetch_env!(:cuevolution, Oban)},
       # Start a worker by calling: Cuevolution.Worker.start_link(arg)
       # {Cuevolution.Worker, arg},
       # Start to serve requests, typically the last entry
       CuevolutionWeb.Endpoint
     ]
+
+    children =
+      if System.get_env("OBAN_ENABLED", "true") in ~w(true 1) do
+        List.insert_at(
+          base_children,
+          4,
+          {Oban, Application.fetch_env!(:cuevolution, Oban)}
+        )
+      else
+        base_children
+      end
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

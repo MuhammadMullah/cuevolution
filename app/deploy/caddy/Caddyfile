@@ -11,5 +11,7 @@ staging.sportpesapool.ke {
 }
 
 sportpesapool.ke {
-	reverse_proxy cuevolution-production:4000
+	handle {
+		reverse_proxy cuevolution-production:4000
+	}
 }

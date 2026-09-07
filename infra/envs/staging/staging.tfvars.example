@@ -1,0 +1,10 @@
+# Copy to staging.tfvars; this file must not be committed with real values.
+project_id                = "cuevolution-staging"
+region                    = "africa-south1"
+image                     = "africa-south1-docker.pkg.dev/cuevolution-staging/cuevolution-images/cuevolution@sha256:REPLACE_WITH_IMAGE_DIGEST"
+cloud_sql_connection_name = "cuevolution-staging:africa-south1:REPLACE_WITH_INSTANCE_NAME"
+storage_bucket            = "REPLACE_WITH_STAGING_GCS_BUCKET_NAME"
+mail_provider             = "local"
+sms_provider              = "stub"
+mail_from_address         = "notifications@cuevolution.test"
+africastalking_sender_id  = ""

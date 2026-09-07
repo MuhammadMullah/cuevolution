@@ -1,4 +1,9 @@
-# Deployment
+# Legacy deployment reference
+
+> This document describes the retired single-server Docker/Caddy deployment.
+> The active deployment is Cloud Run managed by Terraform in `infra/` and
+> GitHub Actions. Profile pictures now use private GCS buckets and V4 signed
+> URLs; follow `infra/README.md` for the current setup.
 
 One Debian server hosting both environments, one shared reverse proxy in
 front of two independent app+database stacks:
@@ -81,8 +86,10 @@ it can request certificates).
    ```
 
    Copy `app/deploy/caddy/docker-compose.yml`, `app/deploy/caddy/Caddyfile`,
-   and `app/deploy/caddy/.env.example` (as `.env`, filled in) from this
-   repo to `/opt/caddy` on the server, then:
+   `app/deploy/caddy/.env.example` (as `.env`, filled in), and the
+   `app/deploy/caddy/social-protection-tools/` directory (see above — the
+   compose file mounts it, so it must exist) from this repo to `/opt/caddy`
+   on the server, then:
 
    ```
    cd /opt/caddy
@@ -116,6 +123,11 @@ it can request certificates).
 
      Generate an access key for that IAM user (Security credentials →
      Access keys) and note the bucket's region — both go in `.env` below.
+
+     The same least-privilege policy applies when the app runs on Cloud Run:
+     keep the bucket private and grant each environment only `s3:PutObject`
+     and `s3:GetObject` on its own `arn:aws:s3:::<bucket-name>/*` path. Do
+     not grant bucket-wide administration, delete, or public-read access.
 
    - **Set up Postmark** (sends over Postmark's HTTPS API, not SMTP — SMTP
      hit a wall of issues on this host: port `587` was blocked outright at

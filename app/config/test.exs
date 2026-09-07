@@ -44,20 +44,16 @@ config :cuevolution, :africastalking_req_options,
 
 # :profile_picture_storage isn't set here — it stays the Storage.Local
 # default (writes under this app's own priv/static), so registration_live's
-# upload test doesn't need any network mocking. Storage.S3 has its own
-# direct unit tests, routed through a Mox mock of the request seam
-# (ex_aws uses hackney directly, with no pluggable test transport) — its
-# url/1 needs no mocking at all, since presigning is local computation.
-config :cuevolution, :s3, bucket: "test-bucket"
-
-config :ex_aws,
-  access_key_id: "test_access_key_id",
-  secret_access_key: "test_secret",
-  region: "us-east-1"
+# The production GCS backend has its own direct unit tests, routed through
+# Mox seams for upload and IAM signing; the default profile-picture tests use
+# Storage.Local and do not contact the network.
+config :cuevolution, :gcs,
+  bucket: "test-bucket",
+  signing_service_account: "cuevolution-web@test-project.iam.gserviceaccount.com"
 
 config :cuevolution,
-       :s3_requester,
-       Cuevolution.Accounts.ProfilePicture.Storage.S3.Requester.Mock
+       :gcs_requester,
+       Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester.Mock
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

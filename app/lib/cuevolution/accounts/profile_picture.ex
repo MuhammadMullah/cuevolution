@@ -3,7 +3,7 @@ defmodule Cuevolution.Accounts.ProfilePicture do
   Resizes and stores a player's uploaded profile picture (design-system.md
   §10): the original upload is never stored — only a re-encoded derivative
   capped at a fixed maximum dimension. Where the result ends up (local
-  disk in dev/test, AWS S3 in production) is decided by the configured
+  disk in dev/test, Google Cloud Storage in production) is decided by the configured
   `Storage` backend — see `Cuevolution.Accounts.ProfilePicture.Storage`.
   """
 
@@ -16,7 +16,7 @@ defmodule Cuevolution.Accounts.ProfilePicture do
   larger), re-encodes it as JPEG, and hands the bytes to the configured
   storage backend under `players/filename_base.jpg`. Returns the storage
   **key** to persist on the player record — never a URL. In production
-  the bucket is private, so a displayable URL is a short-lived presigned
+  the bucket is private, so a displayable URL is a short-lived signed
   one generated fresh by `url/1`, not something that can be stored once
   and reused.
   """
