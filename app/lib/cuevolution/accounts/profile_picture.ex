@@ -7,6 +7,8 @@ defmodule Cuevolution.Accounts.ProfilePicture do
   `Storage` backend — see `Cuevolution.Accounts.ProfilePicture.Storage`.
   """
 
+  require Logger
+
   alias Cuevolution.Accounts.ProfilePicture.Storage
 
   @max_dimension 512
@@ -33,14 +35,28 @@ defmodule Cuevolution.Accounts.ProfilePicture do
 
     result =
       case storage().put(key, File.read!(tmp_path), "image/jpeg") do
-        :ok -> {:ok, key}
-        {:error, reason} -> {:error, reason}
+        :ok ->
+          {:ok, key}
+
+        {:error, reason} = error ->
+          Logger.error("profile picture storage upload failed",
+            key: key,
+            reason: inspect(reason)
+          )
+
+          error
       end
 
     File.rm(tmp_path)
     result
   rescue
-    error -> {:error, error}
+    error ->
+      Logger.error("profile picture processing failed",
+        filename_base: filename_base,
+        error: Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      {:error, error}
   end
 
   @doc "Turns a stored key (from `store/2`) back into something a browser can load. `nil` in, `nil` out — players without a photo."

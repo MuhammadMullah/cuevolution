@@ -1,6 +1,8 @@
 defmodule CuevolutionWeb.RegistrationLive do
   use CuevolutionWeb, :live_view
 
+  require Logger
+
   import Ecto.Query
 
   alias Cuevolution.Accounts
@@ -203,8 +205,16 @@ defmodule CuevolutionWeb.RegistrationLive do
     results =
       consume_uploaded_entries(socket, :photo, fn %{path: path}, entry ->
         case ProfilePicture.store(path, entry.uuid) do
-          {:ok, key} -> {:ok, key}
-          {:error, _reason} -> {:postpone, :error}
+          {:ok, key} ->
+            {:ok, key}
+
+          {:error, reason} ->
+            Logger.error("profile picture upload failed during registration",
+              entry_uuid: entry.uuid,
+              reason: inspect(reason)
+            )
+
+            {:postpone, :error}
         end
       end)
 
