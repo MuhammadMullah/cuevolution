@@ -15,6 +15,10 @@ resource "google_project_service" "required" {
   disable_on_destroy = false
 }
 
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
 resource "google_artifact_registry_repository" "images" {
   project       = var.project_id
   location      = var.region
@@ -97,6 +101,22 @@ resource "google_project_iam_member" "github_service_usage_consumer" {
   project = var.project_id
   role    = "roles/serviceusage.serviceUsageConsumer"
   member  = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+resource "google_project_iam_member" "cloud_build_service_agent" {
+  project = var.project_id
+  role    = "roles/cloudbuild.serviceAgent"
+  member  = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service.required["cloudbuild.googleapis.com"]]
+}
+
+resource "google_project_iam_member" "cloud_build_service_usage_consumer" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service.required["cloudbuild.googleapis.com"]]
 }
 
 resource "google_project_iam_member" "cloud_build_artifact_writer" {
