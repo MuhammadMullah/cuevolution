@@ -48,7 +48,7 @@ jobs:
         run: |
           gcloud builds submit . \
             --config=cloudbuild.yaml \
+            --default-buckets-behavior=legacy-bucket \
             --project=cuevolution-staging \
-            --gcs-source-staging-dir=gs://cuevolution-staging-cloudbuild-source/source \
             --service-account=projects/cuevolution-staging/serviceAccounts/cuevolution-staging-cb@cuevolution-staging.iam.gserviceaccount.com \
             --substitutions="_IMAGE_TAG=${{ steps.image.outputs.ref }},_REGION=africa-south1,_MIGRATION_JOB=cuevolution-staging-migrate,_WEB_SERVICE=cuevolution-staging-web,_WORKER_SERVICE=cuevolution-staging-worker"
