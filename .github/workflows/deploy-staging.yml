@@ -34,6 +34,11 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Verify Google Cloud identity
+        run: |
+          gcloud auth list --filter=status:ACTIVE --format='value(account)'
+          gcloud config get-value project
+
       - name: Compute image reference
         id: image
         run: |
