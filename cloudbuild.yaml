@@ -57,7 +57,10 @@ steps:
           --project="$${GCP_PROJECT}" \
           --region="$${REGION}" \
           --format='value(status.url)')"
-        curl --fail --silent --show-error "$${url}/health/readiness"
+        token="$$(gcloud auth print-identity-token --audiences="$${url}")"
+        curl --fail --silent --show-error \
+          --header "Authorization: Bearer $${token}" \
+          "$${url}/health/readiness"
 
 images:
   - ${_IMAGE_TAG}

@@ -25,9 +25,27 @@ config :cuevolution, CuevolutionWeb.Endpoint,
 
 if config_env() == :prod do
   secret_values =
-    case System.get_env("CUEVOLUTION_SECRETS_JSON") do
-      nil -> %{}
-      json -> Jason.decode!(json)
+    case System.get_env("CUEVOLUTION_SECRETS_FILE") do
+      nil ->
+        case System.get_env("CUEVOLUTION_SECRETS_JSON") do
+          nil -> %{}
+          json -> Jason.decode!(json)
+        end
+
+      path ->
+        case File.read(path) do
+          {:ok, json} ->
+            Jason.decode!(json)
+
+          {:error, :enoent} ->
+            case System.get_env("CUEVOLUTION_SECRETS_JSON") do
+              nil -> %{}
+              json -> Jason.decode!(json)
+            end
+
+          {:error, reason} ->
+            raise "unable to read CUEVOLUTION_SECRETS_FILE=#{path}: #{inspect(reason)}"
+        end
     end
 
   secret = fn name -> Map.get(secret_values, name) || System.get_env(name) end

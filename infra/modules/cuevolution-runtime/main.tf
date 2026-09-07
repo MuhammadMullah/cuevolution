@@ -220,6 +220,12 @@ resource "google_service_account_iam_member" "cloud_build_worker_act_as" {
   member             = "serviceAccount:${google_service_account.cloud_build.email}"
 }
 
+resource "google_service_account_iam_member" "cloud_build_self_token_creator" {
+  service_account_id = google_service_account.cloud_build.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.cloud_build.email}"
+}
+
 resource "google_service_account_iam_member" "github_cloud_build_act_as" {
   service_account_id = google_service_account.cloud_build.name
   role               = "roles/iam.serviceAccountUser"
@@ -322,6 +328,7 @@ locals {
   common_env = {
     DB_SSL                   = "false"
     PHX_SERVER               = "true"
+    CUEVOLUTION_SECRETS_FILE = "/secrets/application.json"
     PROFILE_PICTURE_STORAGE  = "gcs"
     GCS_BUCKET               = var.storage_bucket
     GCS_SIGNING_SERVICE_ACCOUNT = google_service_account.web.email
@@ -364,6 +371,17 @@ resource "google_cloud_run_v2_service" "web" {
       }
     }
 
+    volumes {
+      name = "secrets"
+      secret {
+        secret = google_secret_manager_secret.application[var.application_secrets_secret_id].id
+        items {
+          version = "latest"
+          path    = "application.json"
+        }
+      }
+    }
+
     containers {
       image   = var.image
       command = ["/app/bin/cuevolution"]
@@ -379,6 +397,11 @@ resource "google_cloud_run_v2_service" "web" {
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
+      }
+
+      volume_mounts {
+        name       = "secrets"
+        mount_path = "/secrets"
       }
 
       dynamic "env" {
@@ -413,6 +436,14 @@ resource "google_cloud_run_v2_service" "web" {
   ]
 }
 
+resource "google_cloud_run_v2_service_iam_member" "cloud_build_web_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.web.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.cloud_build.email}"
+}
+
 resource "google_cloud_run_v2_service" "worker" {
   name                = "cuevolution-${var.environment}-worker"
   project             = var.project_id
@@ -436,6 +467,17 @@ resource "google_cloud_run_v2_service" "worker" {
       }
     }
 
+    volumes {
+      name = "secrets"
+      secret {
+        secret = google_secret_manager_secret.application[var.application_secrets_secret_id].id
+        items {
+          version = "latest"
+          path    = "application.json"
+        }
+      }
+    }
+
     containers {
       image   = var.image
       command = ["/app/bin/cuevolution"]
@@ -452,6 +494,11 @@ resource "google_cloud_run_v2_service" "worker" {
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
+      }
+
+      volume_mounts {
+        name       = "secrets"
+        mount_path = "/secrets"
       }
 
       dynamic "env" {
@@ -502,6 +549,17 @@ resource "google_cloud_run_v2_job" "migrate" {
         }
       }
 
+      volumes {
+        name = "secrets"
+        secret {
+          secret = google_secret_manager_secret.application[var.application_secrets_secret_id].id
+          items {
+            version = "latest"
+            path    = "application.json"
+          }
+        }
+      }
+
       containers {
         image   = var.image
         command = ["/app/bin/migrate"]
@@ -516,6 +574,11 @@ resource "google_cloud_run_v2_job" "migrate" {
         volume_mounts {
           name       = "cloudsql"
           mount_path = "/cloudsql"
+        }
+
+        volume_mounts {
+          name       = "secrets"
+          mount_path = "/secrets"
         }
 
         dynamic "env" {
