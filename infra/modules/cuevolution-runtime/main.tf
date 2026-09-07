@@ -353,6 +353,7 @@ resource "google_cloud_run_v2_service" "web" {
   project             = var.project_id
   location            = var.region
   deletion_protection = true
+  invoker_iam_disabled = true
   ingress             = "INGRESS_TRAFFIC_ALL"
 
   template {
