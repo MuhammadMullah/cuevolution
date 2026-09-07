@@ -30,6 +30,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          project_id: cuevolution-staging
 
       - uses: google-github-actions/setup-gcloud@v2
 
