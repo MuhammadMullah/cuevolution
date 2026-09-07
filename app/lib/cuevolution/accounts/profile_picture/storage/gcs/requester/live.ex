@@ -12,7 +12,7 @@ defmodule Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester.Live do
 
     with {:ok, token} <- access_token(),
          {:ok, response} <-
-           Req.put(url,
+           Req.post(url,
              body: body,
              headers: [
                {"authorization", "Bearer #{token}"},
