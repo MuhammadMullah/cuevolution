@@ -4,7 +4,7 @@ module "cuevolution" {
   project_id                 = var.project_id
   region                     = var.region
   environment                = "production"
-  github_repository          = "muhammadmullah/cuevolution"
+  github_repository          = "MuhammadMullah/cuevolution"
   image                      = var.image
   cloud_sql_connection_name  = var.cloud_sql_connection_name
   application_secrets_secret_id = "cuevolution-production-application-secrets"
