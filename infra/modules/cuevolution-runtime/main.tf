@@ -103,6 +103,12 @@ resource "google_project_iam_member" "github_project_viewer" {
   member  = "serviceAccount:${google_service_account.github_deployer.email}"
 }
 
+resource "google_storage_bucket_iam_member" "github_cloud_build_source_uploader" {
+  bucket = "${var.project_id}_cloudbuild"
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
 resource "google_project_iam_member" "github_service_usage_consumer" {
   project = var.project_id
   role    = "roles/serviceusage.serviceUsageConsumer"
