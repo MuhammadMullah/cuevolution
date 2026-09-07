@@ -103,6 +103,47 @@ resource "google_project_iam_member" "github_service_usage_consumer" {
   member  = "serviceAccount:${google_service_account.github_deployer.email}"
 }
 
+# `gcloud builds submit` uploads the local source tarball as the invoking
+# principal, not the Cloud Build service account. The auto-created default
+# staging bucket (`<project>_cloudbuild`) grants access via legacy bucket
+# ACLs to project editors/owners only, which the least-privilege deployer
+# service account is not, so uploads are forbidden. Manage an explicit
+# staging bucket instead and grant the deployer object access on it.
+resource "google_storage_bucket" "cloudbuild_source" {
+  project                     = var.project_id
+  name                        = "${var.project_id}-cloudbuild-source"
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = true
+
+  lifecycle_rule {
+    condition {
+      age = 7
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  depends_on = [google_project_service.required["storage.googleapis.com"]]
+}
+
+resource "google_storage_bucket_iam_member" "github_cloudbuild_source_object_user" {
+  bucket = google_storage_bucket.cloudbuild_source.name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+resource "google_storage_bucket_iam_member" "cloud_build_agent_source_object_viewer" {
+  bucket = google_storage_bucket.cloudbuild_source.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+
+  depends_on = [google_project_service.required["cloudbuild.googleapis.com"]]
+}
+
 resource "google_project_iam_member" "cloud_build_service_agent" {
   project = var.project_id
   role    = "roles/cloudbuild.serviceAgent"
