@@ -117,7 +117,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
 resource "google_service_account" "github_deployer" {
   project      = var.project_id
-  account_id   = "cuevolution-${var.environment}-deployer"
+  account_id   = "cuevolution-${var.environment == "production" ? "prod" : var.environment}-deployer"
   display_name = "Cuevolution ${var.environment} GitHub deployer"
 }
 
@@ -320,6 +320,8 @@ resource "google_secret_manager_secret" "application" {
   for_each  = var.secret_ids
   project   = var.project_id
   secret_id = each.value
+
+  depends_on = [google_project_service.required["secretmanager.googleapis.com"]]
 
   replication {
     auto {}
