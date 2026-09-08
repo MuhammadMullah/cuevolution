@@ -169,27 +169,32 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  case System.get_env("MAIL_PROVIDER", "postmark") do
-    "postmark" ->
+  case System.get_env("MAIL_PROVIDER", "local") do
+    "smtp_relay" ->
       mail_from_address =
         System.get_env("MAIL_FROM_ADDRESS") ||
-          raise "MAIL_FROM_ADDRESS is required when MAIL_PROVIDER=postmark"
-
-      postmark_api_key =
-        secret.("POSTMARK_API_KEY") ||
-          raise "POSTMARK_API_KEY is required when MAIL_PROVIDER=postmark"
+          raise "MAIL_FROM_ADDRESS is required when MAIL_PROVIDER=smtp_relay"
 
       config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
 
       config :cuevolution, Cuevolution.Mailer,
-        adapter: Swoosh.Adapters.Postmark,
-        api_key: postmark_api_key
+        adapter: Swoosh.Adapters.SMTP,
+        relay: System.get_env("SMTP_RELAY", "smtp-relay.gmail.com"),
+        port: 587,
+        tls: :always,
+        auth: :never,
+        tls_options: [
+          versions: [~c"tlsv1.2", ~c"tlsv1.3"],
+          verify: :verify_peer,
+          cacerts: :public_key.cacerts_get(),
+          server_name_indication: ~c"smtp-relay.gmail.com"
+        ]
 
     "local" ->
       config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Local
 
     provider ->
-      raise "unsupported MAIL_PROVIDER=#{provider}; expected postmark or local"
+      raise "unsupported MAIL_PROVIDER=#{provider}; expected smtp_relay or local"
   end
 
   # ## Configuring SMS (Africa's Talking)

@@ -75,7 +75,6 @@ version before deploying a Cloud Run revision:
 {
   "DATABASE_URL": "ecto://...",
   "SECRET_KEY_BASE": "...",
-  "POSTMARK_API_KEY": "...",
   "AFRICASTALKING_API_KEY": "...",
   "AFRICASTALKING_USERNAME": "..."
 }
@@ -92,6 +91,9 @@ gcloud secrets versions add cuevolution-staging-application-secrets \
 The application reads `CUEVOLUTION_SECRETS_JSON` once at boot. It still accepts
 individual environment variables as a local-development fallback, but the
 Terraform-managed Cloud Run services use the single JSON secret.
+
+The `smtp_relay_static_ip` Terraform output is the public Cloud NAT address to
+allow in Google Workspace SMTP relay settings for the corresponding environment.
 
 ## Importing existing staging resources
 

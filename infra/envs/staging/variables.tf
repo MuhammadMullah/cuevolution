@@ -23,7 +23,7 @@ variable "storage_bucket" {
 
 variable "mail_provider" {
   type    = string
-  default = "local"
+  default = "smtp_relay"
 }
 
 variable "sms_provider" {

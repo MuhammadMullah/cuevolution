@@ -6,6 +6,10 @@ output "worker_service_account" {
   value = module.cuevolution.worker_service_account
 }
 
+output "smtp_relay_static_ip" {
+  value = module.cuevolution.smtp_relay_static_ip
+}
+
 output "artifact_registry" {
   value = module.cuevolution.artifact_registry
 }

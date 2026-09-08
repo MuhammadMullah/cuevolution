@@ -14,6 +14,10 @@ output "worker_service_name" {
   value = google_cloud_run_v2_service.worker.name
 }
 
+output "smtp_relay_static_ip" {
+  value = google_compute_address.smtp_relay.address
+}
+
 output "migration_job_name" {
   value = google_cloud_run_v2_job.migrate.name
 }

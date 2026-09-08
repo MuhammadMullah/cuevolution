@@ -40,8 +40,7 @@ config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Local
 
 # The "from" address baked into every outgoing email (see
 # Cuevolution.Notifications.Emails) — overridden in config/runtime.exs for
-# prod to a real SES-verified sending identity (SES rejects sends from an
-# unverified address/domain).
+# production to a Google Workspace sending identity.
 config :cuevolution, :mail_from, {"Cuevolution", "notifications@cuevolution.test"}
 
 # SMS provider selection is deferred (spec 002 Assumptions) — the stub

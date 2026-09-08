@@ -7,6 +7,7 @@ resource "google_project_service" "required" {
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
+    "compute.googleapis.com",
     "storage.googleapis.com"
   ])
 
@@ -17,6 +18,53 @@ resource "google_project_service" "required" {
 
 data "google_project" "current" {
   project_id = var.project_id
+}
+
+resource "google_compute_network" "runtime" {
+  project                 = var.project_id
+  name                    = "cuevolution-${var.environment}-runtime"
+  auto_create_subnetworks = false
+
+  depends_on = [google_project_service.required["compute.googleapis.com"]]
+}
+
+resource "google_compute_subnetwork" "runtime" {
+  project                  = var.project_id
+  name                     = "cuevolution-${var.environment}-runtime"
+  ip_cidr_range            = "10.20.0.0/26"
+  region                   = var.region
+  network                  = google_compute_network.runtime.id
+  private_ip_google_access = true
+}
+
+resource "google_compute_address" "smtp_relay" {
+  project      = var.project_id
+  name         = "cuevolution-${var.environment}-smtp-relay"
+  region       = var.region
+  address_type = "EXTERNAL"
+  network_tier = "PREMIUM"
+}
+
+resource "google_compute_router" "runtime" {
+  project = var.project_id
+  name    = "cuevolution-${var.environment}-runtime"
+  region  = var.region
+  network = google_compute_network.runtime.id
+}
+
+resource "google_compute_router_nat" "runtime" {
+  project                            = var.project_id
+  name                               = "cuevolution-${var.environment}-runtime"
+  router                             = google_compute_router.runtime.name
+  region                             = var.region
+  nat_ip_allocate_option             = "MANUAL_ONLY"
+  nat_ips                            = [google_compute_address.smtp_relay.self_link]
+  source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+
+  subnetwork {
+    name                    = google_compute_subnetwork.runtime.id
+    source_ip_ranges_to_nat = ["ALL_IP_RANGES"]
+  }
 }
 
 resource "google_artifact_registry_repository" "images" {
@@ -326,19 +374,19 @@ locals {
 
 locals {
   common_env = {
-    DB_SSL                   = "false"
-    PHX_SERVER               = "true"
-    CUEVOLUTION_SECRETS_FILE = "/secrets/application.json"
-    PROFILE_PICTURE_STORAGE  = "gcs"
-    GCS_BUCKET               = var.storage_bucket
+    DB_SSL                      = "false"
+    PHX_SERVER                  = "true"
+    PROFILE_PICTURE_STORAGE     = "gcs"
+    GCS_BUCKET                  = var.storage_bucket
     GCS_SIGNING_SERVICE_ACCOUNT = google_service_account.web.email
-    PHX_HOST                 = var.phx_host
-    MAIL_PROVIDER            = var.mail_provider
-    SMS_PROVIDER             = var.sms_provider
-    MAIL_FROM_ADDRESS        = var.mail_from_address
-    AFRICASTALKING_SENDER_ID = var.africastalking_sender_id
-    OBAN_ENABLED             = "true"
-    POOL_SIZE                = "5"
+    PHX_HOST                    = var.phx_host
+    MAIL_PROVIDER               = var.mail_provider
+    SMS_PROVIDER                = var.sms_provider
+    MAIL_FROM_ADDRESS           = var.mail_from_address
+    MAIL_DEPLOYMENT_VERSION     = "smtp-relay-v2"
+    AFRICASTALKING_SENDER_ID    = var.africastalking_sender_id
+    OBAN_ENABLED                = "true"
+    POOL_SIZE                   = "5"
   }
 
   web_env = merge(local.common_env, { OBAN_ENABLED = "false" })
@@ -349,12 +397,12 @@ locals {
 }
 
 resource "google_cloud_run_v2_service" "web" {
-  name                = "cuevolution-${var.environment}-web"
-  project             = var.project_id
-  location            = var.region
-  deletion_protection = true
+  name                 = "cuevolution-${var.environment}-web"
+  project              = var.project_id
+  location             = var.region
+  deletion_protection  = true
   invoker_iam_disabled = true
-  ingress             = "INGRESS_TRAFFIC_ALL"
+  ingress              = "INGRESS_TRAFFIC_ALL"
 
   template {
     service_account                  = google_service_account.web.email
@@ -369,17 +417,6 @@ resource "google_cloud_run_v2_service" "web" {
       name = "cloudsql"
       cloud_sql_instance {
         instances = [var.cloud_sql_connection_name]
-      }
-    }
-
-    volumes {
-      name = "secrets"
-      secret {
-        secret = google_secret_manager_secret.application[var.application_secrets_secret_id].id
-        items {
-          version = "latest"
-          path    = "application.json"
-        }
       }
     }
 
@@ -398,11 +435,6 @@ resource "google_cloud_run_v2_service" "web" {
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
-      }
-
-      volume_mounts {
-        name       = "secrets"
-        mount_path = "/secrets"
       }
 
       dynamic "env" {
@@ -456,6 +488,15 @@ resource "google_cloud_run_v2_service" "worker" {
     service_account                  = google_service_account.worker.email
     max_instance_request_concurrency = 80
 
+    vpc_access {
+      egress = "ALL_TRAFFIC"
+
+      network_interfaces {
+        network    = google_compute_network.runtime.id
+        subnetwork = google_compute_subnetwork.runtime.id
+      }
+    }
+
     scaling {
       min_instance_count = var.worker_min_instances
       max_instance_count = var.worker_max_instances
@@ -465,17 +506,6 @@ resource "google_cloud_run_v2_service" "worker" {
       name = "cloudsql"
       cloud_sql_instance {
         instances = [var.cloud_sql_connection_name]
-      }
-    }
-
-    volumes {
-      name = "secrets"
-      secret {
-        secret = google_secret_manager_secret.application[var.application_secrets_secret_id].id
-        items {
-          version = "latest"
-          path    = "application.json"
-        }
       }
     }
 
@@ -495,11 +525,6 @@ resource "google_cloud_run_v2_service" "worker" {
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
-      }
-
-      volume_mounts {
-        name       = "secrets"
-        mount_path = "/secrets"
       }
 
       dynamic "env" {
@@ -550,17 +575,6 @@ resource "google_cloud_run_v2_job" "migrate" {
         }
       }
 
-      volumes {
-        name = "secrets"
-        secret {
-          secret = google_secret_manager_secret.application[var.application_secrets_secret_id].id
-          items {
-            version = "latest"
-            path    = "application.json"
-          }
-        }
-      }
-
       containers {
         image   = var.image
         command = ["/app/bin/migrate"]
@@ -575,11 +589,6 @@ resource "google_cloud_run_v2_job" "migrate" {
         volume_mounts {
           name       = "cloudsql"
           mount_path = "/cloudsql"
-        }
-
-        volume_mounts {
-          name       = "secrets"
-          mount_path = "/secrets"
         }
 
         dynamic "env" {
