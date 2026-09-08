@@ -75,6 +75,8 @@ version before deploying a Cloud Run revision:
 {
   "DATABASE_URL": "ecto://...",
   "SECRET_KEY_BASE": "...",
+  "SMTP_USERNAME": "admin@cuevolutionke.com",
+  "SMTP_PASSWORD": "<Google app password>",
   "AFRICASTALKING_API_KEY": "...",
   "AFRICASTALKING_USERNAME": "..."
 }

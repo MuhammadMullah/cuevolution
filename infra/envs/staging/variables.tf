@@ -23,7 +23,7 @@ variable "storage_bucket" {
 
 variable "mail_provider" {
   type    = string
-  default = "smtp_relay"
+  default = "smtp_auth"
 }
 
 variable "sms_provider" {

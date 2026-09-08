@@ -10,7 +10,7 @@ module "cuevolution" {
   application_secrets_secret_id = "cuevolution-production-application-secrets"
   storage_bucket             = var.storage_bucket
   phx_host                   = "sportpesapool.ke"
-  mail_provider              = "smtp_relay"
+  mail_provider              = "smtp_auth"
   sms_provider               = "africastalking"
   mail_from_address          = var.mail_from_address
   africastalking_sender_id   = var.africastalking_sender_id
