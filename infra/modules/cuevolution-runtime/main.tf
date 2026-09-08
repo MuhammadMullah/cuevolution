@@ -389,7 +389,7 @@ locals {
     POOL_SIZE                   = "5"
   }
 
-  web_env = merge(local.common_env, { OBAN_ENABLED = "false" })
+  web_env = merge(local.common_env, { OBAN_ENABLED = "true" })
   worker_env = merge(local.common_env, {
     GCS_SIGNING_SERVICE_ACCOUNT = google_service_account.worker.email
   })
