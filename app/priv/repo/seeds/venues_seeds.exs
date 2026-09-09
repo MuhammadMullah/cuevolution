@@ -19,7 +19,11 @@ defmodule Cuevolution.Seeds.Venues do
       "Mongolian (Rongai)",
       "Wallets (Utawala)",
       "Loft Lounge (Kilimani)",
-      "Prestige Pool Club (Westlands)"
+      "Prestige Pool Club (Westlands)",
+      "Bambustic Billiards Arena",
+      "Qbash Lounge",
+      "8ball Pool Arena",
+      "Emtumo Lounge"
     ],
     "Nairobi B" => [
       "Kasarani Pool Club (Kasarani)",
@@ -30,7 +34,10 @@ defmodule Cuevolution.Seeds.Venues do
       "Sindicate (Mirema Drive)",
       "Jazlin (Ruai)",
       "Buruburu Sports Club (Buruburu)",
-      "Embakasi Arena (Embakasi)"
+      "Embakasi Arena (Embakasi)",
+      "Thome Pool Club",
+      "Bluesprings Pool Club",
+      "Vibe City (Eastleigh)"
     ],
     "Eastern" => [
       "Waves (Kitui)",
@@ -47,7 +54,9 @@ defmodule Cuevolution.Seeds.Venues do
       "Makuli (Makupa)",
       "Screenshot (Mtwapa)",
       "Nyali Cinemax Lounge (Nyali)",
-      "Malindi Beach Club (Malindi)"
+      "Malindi Beach Club (Malindi)",
+      "Savannah Pool Club",
+      "Manyatta Lounge (Diani)"
     ],
     "Nyanza & Western" => [
       "Canopy (Kisumu)",
@@ -84,7 +93,8 @@ defmodule Cuevolution.Seeds.Venues do
       "Muranga Social Hall (Muranga)",
       "Thika Road Pool Club (Thika)",
       "Nanyuki Sports Club (Nanyuki)",
-      "Embu Pool Lounge (Embu)"
+      "Embu Pool Lounge (Embu)",
+      "Emirates Place (Limuru)"
     ]
   }
 
