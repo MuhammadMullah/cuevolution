@@ -7,9 +7,9 @@ defmodule CuevolutionWeb.PageController do
 
   @partners [
     %{
-      name: "SportPesa",
-      logo: "partner-1.jpeg",
-      tile_class: "bg-ink-950",
+      name: "Cuevolution",
+      logo: "cuevolution-logo.png",
+      tile_class: "bg-white",
       img_class: "h-9 w-auto object-contain"
     },
     %{
