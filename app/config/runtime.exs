@@ -186,6 +186,7 @@ if config_env() == :prod do
         tls_options: [
           versions: [:"tlsv1.2", :"tlsv1.3"],
           verify: :verify_peer,
+          depth: 5,
           cacerts: :public_key.cacerts_get(),
           server_name_indication: ~c"smtp-relay.gmail.com"
         ]
@@ -216,6 +217,7 @@ if config_env() == :prod do
         tls_options: [
           versions: [:"tlsv1.2", :"tlsv1.3"],
           verify: :verify_peer,
+          depth: 5,
           cacerts: :public_key.cacerts_get(),
           server_name_indication: ~c"smtp.gmail.com"
         ]
