@@ -8,7 +8,7 @@ defmodule CuevolutionWeb.PageController do
   @partners [
     %{
       name: "Cuevolution",
-      logo: "SP-pool-blue-logo.png",
+      logo: "cuevolution-logo.png",
       tile_class: "bg-white",
       img_class: "h-11 w-auto object-contain"
     },
