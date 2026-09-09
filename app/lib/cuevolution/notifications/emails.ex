@@ -28,12 +28,12 @@ defmodule Cuevolution.Notifications.Emails do
     first_name = esc(player.first_name)
 
     base(player)
-    |> subject("Welcome to Cuevolution!")
+    |> subject("Welcome to Sportpesa National Pool League!")
     |> html_body(
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
       <p style="margin:0 0 16px;">
-        Your Cuevolution account is ready — you're officially part of Kenya's pool circuit.
+        Your Sportpesa National Pool League account is ready — you're officially part of Kenya's pool circuit.
       </p>
       <p style="margin:0 0 16px;">Here's what happens next:</p>
       <ul style="margin:0 0 16px;padding-left:20px;">
@@ -50,14 +50,14 @@ defmodule Cuevolution.Notifications.Emails do
           for you.
         </li>
       </ul>
-      #{button("Log In to Cuevolution", url("/login"))}
+      #{button("Log In", url("/login"))}
       <p style="margin:24px 0 0;">See you at the table!</p>
       """)
     )
     |> text_body("""
     Hi #{player.first_name},
 
-    Your Cuevolution account is ready — you're officially part of Kenya's pool circuit.
+    Your Sportpesa National Pool League account is ready — you're officially part of Kenya's pool circuit.
 
     Here's what happens next:
     - Join or start a team — team play is optional, but it's the fastest way into league fixtures.
@@ -143,12 +143,12 @@ defmodule Cuevolution.Notifications.Emails do
     first_name = esc(player.first_name)
 
     base(player)
-    |> subject("Reset your Cuevolution password")
+    |> subject("Reset your password")
     |> html_body(
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
       <p style="margin:0 0 16px;">
-        We got a request to reset your Cuevolution password. Click below to choose a new one —
+        We got a request to reset your password. Click below to choose a new one —
         this link expires in 20 minutes.
       </p>
       #{button("Reset My Password", url)}
@@ -161,7 +161,7 @@ defmodule Cuevolution.Notifications.Emails do
     |> text_body("""
     Hi #{player.first_name},
 
-    We got a request to reset your Cuevolution password. Use the link below to choose a new
+    We got a request to reset your password. Use the link below to choose a new
     one — it expires in 20 minutes.
 
     #{url}
@@ -254,8 +254,8 @@ defmodule Cuevolution.Notifications.Emails do
                 Arial,sans-serif;">
                 <tr>
                   <td class="email-header" style="background-color:#{@ink};padding:24px 32px;text-align:center;">
-                    <img src="#{url("/images/cuevolution-logo-white.png")}" alt="Cuevolution"
-                      height="28" style="height:28px;display:inline-block;border:0;">
+                    <img src="#{url("/images/SP-pool-blue-logo-white.png")}" alt="Cuevolution"
+                      height="36" style="height:36px;display:inline-block;border:0;">
                   </td>
                 </tr>
                 <tr>
@@ -266,8 +266,8 @@ defmodule Cuevolution.Notifications.Emails do
                 <tr>
                   <td class="email-footer" style="padding:20px 32px;background-color:#{@body_bg};text-align:center;
                     font-size:12px;color:#{@text_muted};">
-                    © #{Date.utc_today().year} Cuevolution. All rights reserved.<br>
-                    You're receiving this email because you have an account on Cuevolution.
+                    © #{Date.utc_today().year} Sportpesa National Pool League. All rights reserved.<br>
+                    You're receiving this email because you have an account on Sportpesa National Pool League.
                   </td>
                 </tr>
               </table>

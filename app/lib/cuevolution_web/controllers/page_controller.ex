@@ -8,9 +8,9 @@ defmodule CuevolutionWeb.PageController do
   @partners [
     %{
       name: "Cuevolution",
-      logo: "cuevolution-logo.png",
+      logo: "SP-pool-blue-logo.png",
       tile_class: "bg-white",
-      img_class: "h-9 w-auto object-contain"
+      img_class: "h-11 w-auto object-contain"
     },
     %{
       name: "Kenya Pool Billiard Federation",

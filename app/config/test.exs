@@ -11,7 +11,8 @@ config :cuevolution, Cuevolution.Repo,
   hostname: "localhost",
   database: "cuevolution_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  pool_size: System.schedulers_online() * 2,
+  queue_target: 5000
 
 # Oban jobs are enqueued but never auto-processed in test; assert on them
 # explicitly with Oban.Testing instead.

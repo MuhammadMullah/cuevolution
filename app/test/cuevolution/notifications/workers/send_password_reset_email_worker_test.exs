@@ -15,7 +15,7 @@ defmodule Cuevolution.Notifications.Workers.SendPasswordResetEmailWorkerTest do
              })
 
     assert_email_sent(fn email ->
-      email.subject == "Reset your Cuevolution password" and
+      email.subject == "Reset your password" and
         {"#{player.first_name} #{player.last_name}", player.email} in email.to and
         email.html_body =~ "https://cuevolution.test/reset-password/abc123"
     end)

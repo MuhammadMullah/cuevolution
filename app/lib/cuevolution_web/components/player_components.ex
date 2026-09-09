@@ -552,8 +552,8 @@ defmodule CuevolutionWeb.PlayerComponents do
       <header class="sticky top-0 z-20 border-b border-ink-200 bg-ink-25/90 backdrop-blur">
         <div class="mx-auto flex h-[62px] max-w-5xl items-center gap-5 px-4 sm:px-7">
           <img
-            src={~p"/images/cuevolution-logo.png"}
-            class="h-8 w-auto shrink-0"
+            src={~p"/images/SP-pool-blue-logo.png"}
+            class="h-10 w-auto shrink-0"
             alt="Cuevolution"
           />
 
@@ -646,7 +646,7 @@ defmodule CuevolutionWeb.PlayerComponents do
     ~H"""
     <div class="bg-auth-pattern flex min-h-screen flex-col items-center px-5 py-12 font-sans text-ink-700 antialiased sm:py-16">
       <.flash_group flash={@flash} />
-      <img src={~p"/images/cuevolution-logo.png"} class="mb-7 h-10 w-auto" alt="Cuevolution" />
+      <img src={~p"/images/SP-pool-blue-logo.png"} class="mb-7 h-18 w-auto" alt="Cuevolution" />
       <div class={[
         "w-full rounded-2xl border border-ink-200 bg-white p-6 shadow-md sm:p-9",
         @max_width
