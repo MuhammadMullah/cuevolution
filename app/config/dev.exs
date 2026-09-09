@@ -102,4 +102,4 @@ config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.AfricasT
 config :cuevolution, :africastalking,
   api_key: System.get_env("AFRICASTALKING_API_KEY"),
   username: System.get_env("AFRICASTALKING_USERNAME", "sandbox"),
-  sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
+  sender_id: System.get_env("AFRICASTALKING_SENDER_ID", "Cuevolution")

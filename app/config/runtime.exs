@@ -247,7 +247,7 @@ if config_env() == :prod do
       config :cuevolution, :africastalking,
         api_key: africastalking_api_key,
         username: africastalking_username,
-        sender_id: System.get_env("AFRICASTALKING_SENDER_ID")
+        sender_id: System.get_env("AFRICASTALKING_SENDER_ID", "Cuevolution")
 
     "stub" ->
       config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.StubAdapter

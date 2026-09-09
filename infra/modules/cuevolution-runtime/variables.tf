@@ -48,7 +48,7 @@ variable "mail_from_address" {
 
 variable "africastalking_sender_id" {
   type    = string
-  default = ""
+  default = "Cuevolution"
 }
 
 variable "web_min_instances" {
