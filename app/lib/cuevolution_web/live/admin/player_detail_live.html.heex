@@ -9,7 +9,7 @@
   <div class="mb-5 flex items-center gap-4 rounded-2xl bg-ink-950 px-6 py-6 text-white">
     <PlayerComponents.avatar
       name={"#{@player.first_name} #{@player.last_name}"}
-      src={@player.profile_picture_path}
+      src={ProfilePicture.url(@player.profile_picture_path)}
       size="size-14"
       class="text-lg"
     />

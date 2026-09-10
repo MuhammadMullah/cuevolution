@@ -4,6 +4,7 @@ defmodule CuevolutionWeb.PlayerDetailLive do
   import Ecto.Query
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.ProfilePicture
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Notifications.Notification
   alias Cuevolution.Repo

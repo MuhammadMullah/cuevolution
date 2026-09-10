@@ -214,7 +214,7 @@ defmodule CuevolutionWeb.RegistrationLive do
               reason: inspect(reason)
             )
 
-            {:postpone, :error}
+            {:ok, :error}
         end
       end)
 

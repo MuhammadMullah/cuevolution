@@ -7,6 +7,7 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.ProfilePicture
   alias Cuevolution.Competitions
   alias Cuevolution.Teams
   alias CuevolutionWeb.AdminComponents
@@ -105,7 +106,7 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
       kind: :player,
       name: "#{player.first_name} #{player.last_name}",
       avatar_name: "#{player.first_name} #{player.last_name}",
-      avatar_src: player.profile_picture_path,
+      avatar_src: ProfilePicture.url(player.profile_picture_path),
       sub: "Player · #{player.region.name} · @#{player.username}",
       stage: Map.get(stage_lookup, player.id),
       anonymized: !is_nil(player.anonymized_at),
