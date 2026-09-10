@@ -33,7 +33,7 @@ defmodule Cuevolution.Notifications.Emails do
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
       <p style="margin:0 0 16px;">
-        Your Sportpesa National Pool League account is ready — you're officially part of Kenya's pool circuit.
+        Your Sportpesa National Pool League account is ready. You're officially part of Kenya's pool circuit.
       </p>
       <p style="margin:0 0 16px;">Here's what happens next:</p>
       <ul style="margin:0 0 16px;padding-left:20px;">
@@ -57,7 +57,7 @@ defmodule Cuevolution.Notifications.Emails do
     |> text_body("""
     Hi #{player.first_name},
 
-    Your Sportpesa National Pool League account is ready — you're officially part of Kenya's pool circuit.
+    Your Sportpesa National Pool League account is ready, and you're officially part of Kenya's pool circuit.
 
     Here's what happens next:
     - Join or start a team — team play is optional, but it's the fastest way into league fixtures.
