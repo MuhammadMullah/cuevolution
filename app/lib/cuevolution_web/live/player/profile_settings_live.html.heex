@@ -1,90 +1,362 @@
 <PlayerComponents.app_shell current_player={@current_player} active={:profile} flash={@flash}>
-  <div class="mb-7 flex flex-wrap items-center gap-4">
+  <div class="mb-7 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
     <PlayerComponents.avatar
       name={"#{@current_player.first_name} #{@current_player.last_name}"}
       src={ProfilePicture.url(@current_player.profile_picture_path)}
       size="size-[66px]"
       class="text-2xl"
     />
-    <div class="min-w-[200px] flex-1">
+    <div class="min-w-0 flex-1">
       <h1 class="mb-0.5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">
         {@current_player.first_name} {@current_player.last_name}
       </h1>
-      <div class="font-mono text-sm text-ink-400">
+      <div class="break-words font-mono text-sm text-ink-400">
         @{@current_player.username} · {team_label(@current_player.team)}
       </div>
     </div>
     <.link
       href={~p"/logout"}
       method="delete"
-      class="shrink-0 cursor-pointer rounded-full border border-ink-300 bg-white px-5 py-2.5 font-sans text-sm font-semibold text-ink-950 hover:bg-ink-100"
+      class="w-full cursor-pointer rounded-full border border-ink-300 bg-white px-5 py-2.5 font-sans text-sm font-semibold text-ink-950 hover:bg-ink-100 sm:w-auto"
     >
       Sign out
     </.link>
   </div>
 
-  <div class="grid gap-4.5 sm:grid-cols-2">
-    <PlayerComponents.card>
-      <h2 class="mb-4 text-[15px] font-bold tracking-tight text-ink-950">Personal details</h2>
-      <div
-        :for={{label, value} <- profile_rows(@current_player)}
-        class="flex items-center justify-between gap-3 border-b border-ink-100 py-2.5 last:border-b-0"
+  <div class="grid gap-4.5 sm:grid-cols-[minmax(170px,200px)_minmax(0,1fr)] sm:items-start">
+    <nav class="grid grid-cols-2 gap-1.5 rounded-2xl border border-ink-200 bg-white p-1.5 shadow-sm sm:flex sm:flex-col">
+      <.link
+        patch={~p"/profile"}
+        class={[
+          "flex min-w-0 items-center justify-center gap-2.5 rounded-xl px-3 py-2.5 text-center text-sm font-semibold sm:justify-start sm:px-3.5",
+          @live_action == :profile && "bg-red-50 text-red-700",
+          @live_action != :profile && "text-ink-500 hover:bg-ink-100 hover:text-ink-950"
+        ]}
       >
-        <span class="text-sm text-ink-500">{label}</span>
-        <span class="text-right text-sm font-semibold text-ink-950">{value}</span>
-      </div>
-      <div :if={@region_locked?} class="pb-0.5 pt-3.5">
-        <div class="flex items-center gap-2 text-[13px] text-ink-500">
-          <span class="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-ink-500">
-            LOCKED
-          </span>
-          <span>Your region can't be changed — you've already played a match.</span>
-        </div>
-        <div class="mt-1.5 text-sm font-semibold text-ink-950">{@current_player.region.name}</div>
-      </div>
-      <div :if={not @region_locked?} class="pb-0.5 pt-3.5">
-        <div class="mb-1.5 flex items-center gap-2 text-[13px] text-ink-500">
-          <span class="shrink-0 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-red-700">
-            EDITABLE
-          </span>
-          <span>You can still change your region — you haven't played a match yet.</span>
-        </div>
-        <form phx-change="change_region" class="flex items-center gap-2">
-          <select
-            name="region_id"
-            class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
-          >
-            <option
-              :for={region <- @regions}
-              value={region.id}
-              selected={region.id == @current_player.region_id}
-            >
-              {region.name}
-            </option>
-          </select>
-        </form>
-      </div>
-    </PlayerComponents.card>
+        <.icon name="hero-user" class="size-4.5" /> Profile
+      </.link>
+      <.link
+        patch={~p"/profile/settings"}
+        class={[
+          "flex min-w-0 items-center justify-center gap-2.5 rounded-xl px-3 py-2.5 text-center text-sm font-semibold sm:justify-start sm:px-3.5",
+          @live_action == :settings && "bg-red-50 text-red-700",
+          @live_action != :settings && "text-ink-500 hover:bg-ink-100 hover:text-ink-950"
+        ]}
+      >
+        <.icon name="hero-cog-6-tooth" class="size-4.5" /> Settings
+      </.link>
+      <button
+        type="button"
+        phx-click="open_deactivate_modal"
+        class="col-span-2 flex min-w-0 items-center justify-center gap-2.5 rounded-xl px-3 py-2.5 text-center text-sm font-semibold text-red-600 hover:bg-red-50 sm:col-span-1 sm:justify-start sm:px-3.5 sm:text-left"
+      >
+        <.icon name="hero-trash" class="size-4.5" /> Deactivate account
+      </button>
+    </nav>
 
-    <PlayerComponents.card>
-      <h2 class="mb-1 text-[15px] font-bold tracking-tight text-ink-950">Notifications</h2>
-      <p class="mb-4 text-[13.5px] text-ink-500">
-        How you receive confirmations and draw alerts.
-      </p>
-      <div class="flex flex-col gap-2.5">
-        <PlayerComponents.option_card
-          :for={{value, label, desc} <- @notification_defs}
-          selected={@current_player.notification_preference == value}
-          phx-click="set_notification_preference"
-          phx-value-choice={value}
-        >
-          <div class="text-[15px] font-semibold text-ink-950">{label}</div>
-          <div class="mt-0.5 text-[13px] text-ink-500">{desc}</div>
-        </PlayerComponents.option_card>
-      </div>
-      <div :if={@saved_message} class="mt-3.5 text-[13px] font-semibold text-green-600">
+    <div class="min-w-0">
+      <div
+        :if={@saved_message}
+        class="mb-4 rounded-xl border border-green-100 bg-green-50 px-4 py-2.5 text-[13px] font-semibold text-green-700"
+      >
         ✓ {@saved_message}
       </div>
-    </PlayerComponents.card>
+
+      <div :if={@live_action == :profile} class="flex flex-col gap-4.5">
+        <PlayerComponents.card>
+          <.form
+            id="personal-details-form"
+            for={@personal_details_form}
+            phx-change="validate_personal_details"
+            phx-submit="save_personal_details"
+          >
+            <div class="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 class="text-[15px] font-bold tracking-tight text-ink-950">Personal details</h2>
+              <button
+                :if={not @editing_personal_details?}
+                type="button"
+                phx-click="toggle_personal_edit"
+                class="w-full cursor-pointer rounded-full border border-ink-300 bg-white px-4 py-1.5 text-[13px] font-semibold text-ink-950 hover:bg-ink-100 sm:w-auto"
+              >
+                Update profile
+              </button>
+              <div
+                :if={@editing_personal_details?}
+                class="flex w-full items-center justify-end gap-2 sm:w-auto"
+              >
+                <button
+                  type="button"
+                  phx-click="toggle_personal_edit"
+                  class="cursor-pointer rounded-full px-3 py-1.5 text-[13px] font-semibold text-ink-500 hover:text-ink-950"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="shrink-0 cursor-pointer rounded-full bg-ink-950 px-4 py-1.5 text-[13px] font-semibold text-ink-25 hover:bg-ink-900"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+
+            <div :if={not @editing_personal_details?}>
+              <div
+                :for={{label, value} <- profile_rows(@current_player)}
+                class="flex flex-col items-start gap-1 border-b border-ink-100 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              >
+                <span class="text-sm text-ink-500">{label}</span>
+                <span class="break-words text-left text-sm font-semibold text-ink-950 sm:text-right">
+                  {value}
+                </span>
+              </div>
+            </div>
+
+            <div :if={@editing_personal_details?}>
+              <% {username_variant, username_msg} =
+                username_hint(@personal_details_form.params["username"], @current_player) %>
+              <PlayerComponents.input
+                field={@personal_details_form[:username]}
+                label="Username"
+                hint={username_msg}
+                hint_variant={username_variant}
+              />
+              <div class="flex flex-col items-start gap-1 border-b border-ink-100 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <span class="text-sm text-ink-500">Category</span>
+                <span class="text-left text-sm font-semibold text-ink-950 sm:text-right">
+                  {String.capitalize(@current_player.gender)}
+                </span>
+              </div>
+              <PlayerComponents.input
+                field={@personal_details_form[:date_of_birth]}
+                type="date"
+                label="Date of birth"
+                hint={age_hint(@personal_details_form.params["date_of_birth"])}
+                max={Date.to_iso8601(Date.utc_today())}
+              />
+              <div class="flex flex-col items-start gap-1 border-b border-ink-100 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <span class="text-sm text-ink-500">Email</span>
+                <span class="text-left text-sm font-semibold text-ink-950 sm:text-right">
+                  {@current_player.email}
+                </span>
+              </div>
+              <div class="flex flex-col items-start gap-1 border-b border-ink-100 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <span class="text-sm text-ink-500">Mobile</span>
+                <span class="text-left text-sm font-semibold text-ink-950 sm:text-right">
+                  {@current_player.mobile_number}
+                </span>
+              </div>
+              <PlayerComponents.input field={@personal_details_form[:location]} label="Town" />
+            </div>
+          </.form>
+        </PlayerComponents.card>
+
+        <PlayerComponents.card>
+          <h2 class="mb-1 text-[15px] font-bold tracking-tight text-ink-950">Region & venue</h2>
+          <p class="mb-4 text-[13.5px] text-ink-500">Where you play your matches.</p>
+
+          <div :if={@region_locked?}>
+            <div class="mb-3.5 flex flex-col items-start gap-2 text-[13px] text-ink-500 sm:flex-row sm:items-center">
+              <span class="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-ink-500">
+                LOCKED
+              </span>
+              <span>Your region can't be changed — you've already played a match.</span>
+            </div>
+            <div class="mb-4 flex flex-col items-start gap-1 border-b border-ink-100 pb-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <span class="text-sm text-ink-500">Region</span>
+              <span class="text-left text-sm font-semibold text-ink-950 sm:text-right">
+                {@current_player.region.name}
+              </span>
+            </div>
+            <label class="mb-1.5 block text-sm font-semibold text-ink-700">Preferred venue</label>
+            <form phx-change="change_venue">
+              <select
+                name="venue_id"
+                class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+              >
+                <option
+                  :for={venue <- @region_venues}
+                  value={venue.id}
+                  selected={venue.id == @current_player.preferred_venue_id}
+                >
+                  {venue.name}
+                </option>
+              </select>
+            </form>
+          </div>
+
+          <div :if={not @region_locked?}>
+            <div class="mb-3.5 flex flex-col items-start gap-2 text-[13px] text-ink-500 sm:flex-row sm:items-center">
+              <span class="shrink-0 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-red-700">
+                EDITABLE
+              </span>
+              <span>You can still change these because you haven't played a match yet.</span>
+            </div>
+            <form phx-submit="save_location" class="flex flex-col gap-3.5">
+              <div>
+                <label class="mb-1.5 block text-sm font-semibold text-ink-700">Region</label>
+                <select
+                  name="region_id"
+                  phx-change="draft_region"
+                  class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+                >
+                  <option
+                    :for={region <- @regions}
+                    value={region.id}
+                    selected={region.id == @draft_region_id}
+                  >
+                    {region.name}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1.5 block text-sm font-semibold text-ink-700">Venue</label>
+                <select
+                  name="venue_id"
+                  phx-change="draft_venue"
+                  class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+                >
+                  <option :if={@venue_choice_pending?} value="">Select a venue…</option>
+                  <option
+                    :for={venue <- @region_venues}
+                    value={venue.id}
+                    selected={venue.id == @draft_venue_id}
+                  >
+                    {venue.name}
+                  </option>
+                </select>
+                <p
+                  :if={@venue_choice_pending?}
+                  class="mt-1.5 font-mono text-[12.5px] text-ink-500"
+                >
+                  Pick a venue in your new region to save.
+                </p>
+              </div>
+              <PlayerComponents.button
+                type="submit"
+                variant="secondary"
+                class="w-full sm:w-auto"
+                disabled={@venue_choice_pending? && @draft_venue_id in [nil, ""]}
+              >
+                Save changes
+              </PlayerComponents.button>
+            </form>
+          </div>
+        </PlayerComponents.card>
+      </div>
+
+      <div :if={@live_action == :settings} class="flex flex-col gap-4.5">
+        <PlayerComponents.card>
+          <h2 class="mb-1 text-[15px] font-bold tracking-tight text-ink-950">Password</h2>
+          <p class="mb-4 text-[13.5px] text-ink-500">
+            Must be 8-15 characters, with an uppercase letter, a number, and a special character.
+          </p>
+          <.form
+            id="profile-password-form"
+            for={@password_form}
+            phx-submit="update_password"
+            class="max-w-sm"
+          >
+            <PlayerComponents.input
+              field={@password_form[:current_password]}
+              type="password"
+              label="Current password"
+              required
+            />
+            <PlayerComponents.input
+              field={@password_form[:password]}
+              type="password"
+              label="New password"
+              required
+            />
+            <PlayerComponents.input
+              field={@password_form[:password_confirmation]}
+              type="password"
+              label="Confirm new password"
+              required
+            />
+            <PlayerComponents.button type="submit" variant="primary" class="w-full sm:w-auto">
+              Update password
+            </PlayerComponents.button>
+          </.form>
+        </PlayerComponents.card>
+
+        <PlayerComponents.card>
+          <h2 class="mb-1 text-[15px] font-bold tracking-tight text-ink-950">Notifications</h2>
+          <p class="mb-4 text-[13.5px] text-ink-500">
+            How you receive confirmations and draw alerts.
+          </p>
+          <div class="flex flex-col gap-2.5">
+            <PlayerComponents.option_card
+              :for={{value, label, desc} <- @notification_defs}
+              selected={@current_player.notification_preference == value}
+              phx-click="set_notification_preference"
+              phx-value-choice={value}
+            >
+              <div class="text-[15px] font-semibold text-ink-950">{label}</div>
+              <div class="mt-0.5 text-[13px] text-ink-500">{desc}</div>
+            </PlayerComponents.option_card>
+          </div>
+        </PlayerComponents.card>
+      </div>
+    </div>
+  </div>
+
+  <div
+    :if={@deactivate_modal_open?}
+    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-950/50 px-4 py-4 sm:items-center sm:py-8"
+    phx-click-away="close_deactivate_modal"
+  >
+    <div class="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:max-h-[calc(100dvh-4rem)] sm:p-6">
+      <h2 class="mb-2 text-lg font-bold tracking-tight text-ink-950">Deactivate your account</h2>
+      <p class="mb-4 text-[13.5px] leading-relaxed text-ink-500">
+        This permanently clears your personal details (name, email, mobile, username) and signs you out everywhere. Historical results and points remain intact. This can't be undone.
+      </p>
+
+      <div
+        :if={@deactivate_warnings != []}
+        class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-[15px] py-[13px]"
+      >
+        <ul class="m-0 list-disc pl-[18px] text-[13px] leading-relaxed text-amber-800">
+          <li :if={:captain in @deactivate_warnings}>
+            You captain a team — deactivating does not reassign the captaincy.
+          </li>
+          <li :if={:pending_fixtures in @deactivate_warnings}>
+            You have a fixture with no result recorded yet.
+          </li>
+        </ul>
+      </div>
+
+      <form phx-change="validate_deactivate_confirmation" phx-submit="deactivate_account">
+        <label class="mb-1.5 block text-sm font-semibold text-ink-700">
+          Type <span class="font-mono font-bold text-red-600">{@deactivate_phrase}</span>
+          to confirm
+        </label>
+        <input
+          type="text"
+          name="confirmation"
+          value={@deactivate_confirmation_text}
+          autocomplete="off"
+          autofocus
+          class="mb-5 w-full rounded-md border border-ink-300 bg-white px-3.5 py-2.5 font-sans text-[15px] text-ink-950 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+        />
+        <div class="flex flex-col gap-2.5 sm:flex-row">
+          <button
+            type="button"
+            phx-click="close_deactivate_modal"
+            class="flex-1 cursor-pointer rounded-full border border-ink-300 bg-white px-5 py-2.5 text-sm font-semibold text-ink-950 hover:bg-ink-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={@deactivate_confirmation_text != @deactivate_phrase}
+            class="flex-1 cursor-pointer rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
+          >
+            Deactivate
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </PlayerComponents.app_shell>

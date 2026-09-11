@@ -324,6 +324,18 @@ defmodule CuevolutionWeb.RegistrationLive do
     end
   end
 
+  defp other_venue_hint(nil, _region_id), do: {"neutral", nil}
+  defp other_venue_hint("", _region_id), do: {"neutral", nil}
+  defp other_venue_hint(_name, nil), do: {"neutral", nil}
+
+  defp other_venue_hint(name, region_id) do
+    if Venues.venue_name_taken_in_region?(region_id, name) do
+      {"danger", "#{name} is already on the list — select it above instead"}
+    else
+      {"neutral", nil}
+    end
+  end
+
   defp upload_error_message(:too_large), do: "That photo is too large (max 8MB)."
   defp upload_error_message(:not_accepted), do: "Please upload a JPG or PNG."
   defp upload_error_message(:too_many_files), do: "Only one photo is allowed."

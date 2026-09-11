@@ -205,6 +205,38 @@ defmodule Cuevolution.AccountsTest do
       assert "has already been taken" in errors_on(changeset).mobile_number
       refute Repo.get_by(Cuevolution.Accounts.Player, username: attrs.username)
     end
+
+    test "rejects an 'Other' venue name that already exists as a real venue in the region", %{
+      attrs: attrs
+    } do
+      insert(:venue, region_id: attrs.region_id, name: "Cue Sports Pool")
+      dup_attrs = %{attrs | other_venue_name: "cue sports pool"}
+
+      assert {:error, changeset} = Accounts.register_player(dup_attrs)
+
+      assert "is already a listed venue — please select it instead of entering it as \"Other\"" in errors_on(
+               changeset
+             ).other_venue_name
+
+      refute Repo.get_by(Cuevolution.Accounts.Player, username: attrs.username)
+    end
+
+    test "allows an 'Other' venue name that matches a venue in a different region", %{
+      attrs: attrs
+    } do
+      other_region = build(:region)
+      insert(:venue, region_id: other_region.id, name: "Cue Sports Pool")
+      dup_attrs = %{attrs | other_venue_name: "Cue Sports Pool"}
+
+      assert {:ok, _player} = Accounts.register_player(dup_attrs)
+    end
+
+    test "allows an 'Other' venue name that only matches a deactivated venue", %{attrs: attrs} do
+      insert(:venue, region_id: attrs.region_id, name: "Cue Sports Pool", active: false)
+      dup_attrs = %{attrs | other_venue_name: "Cue Sports Pool"}
+
+      assert {:ok, _player} = Accounts.register_player(dup_attrs)
+    end
   end
 
   describe "update_notification_preference/2" do
@@ -489,6 +521,54 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "update_personal_details/2" do
+    test "updates username, date of birth, and town" do
+      player = insert(:player, username: "oldname", location: "Mombasa")
+
+      assert {:ok, updated} =
+               Accounts.update_personal_details(player, %{
+                 "username" => "newname",
+                 "date_of_birth" => "1990-05-15",
+                 "location" => "Kisumu"
+               })
+
+      assert updated.username == "newname"
+      assert updated.date_of_birth == ~D[1990-05-15]
+      assert updated.location == "Kisumu"
+    end
+
+    test "rejects a username already taken by another player" do
+      insert(:player, username: "takenname")
+      player = insert(:player, username: "myname")
+
+      assert {:error, changeset} =
+               Accounts.update_personal_details(player, %{"username" => "takenname"})
+
+      assert "has already been taken" in errors_on(changeset).username
+    end
+
+    test "rejects a date of birth under the minimum age" do
+      player = insert(:player)
+      too_young = Date.utc_today() |> Date.add(-365 * 10)
+
+      assert {:error, changeset} =
+               Accounts.update_personal_details(player, %{
+                 "date_of_birth" => Date.to_iso8601(too_young)
+               })
+
+      assert "must be at least 18 years old" in errors_on(changeset).date_of_birth
+    end
+
+    test "does not touch fields it doesn't manage" do
+      player = insert(:player, email: "keep@example.com")
+
+      assert {:ok, updated} =
+               Accounts.update_personal_details(player, %{"location" => "Nakuru"})
+
+      assert updated.email == "keep@example.com"
+    end
+  end
+
   describe "anonymize_warnings/1" do
     test "returns [] for a non-captain player with no pending fixtures" do
       player = insert(:player)
@@ -589,6 +669,41 @@ defmodule Cuevolution.AccountsTest do
 
       original_username = player.username
       {:ok, _anonymized} = Accounts.anonymize_player(player, admin)
+
+      assert {:error, :invalid_credentials} =
+               Accounts.authenticate_player(original_username, "Valid1!Pass")
+    end
+  end
+
+  describe "deactivate_player/1" do
+    test "clears PII and sets anonymized_at, without an admin action log" do
+      player = insert(:player)
+
+      assert {:ok, deactivated} = Accounts.deactivate_player(player)
+
+      assert deactivated.first_name == "Former"
+      assert deactivated.last_name == "Player"
+      assert deactivated.email != player.email
+      assert deactivated.username != player.username
+      assert deactivated.anonymized_at
+
+      refute Repo.get_by(Cuevolution.Accounts.AdminActionLog, entity_id: player.id)
+    end
+
+    test "invalidates every session token for the player" do
+      player = insert(:player)
+      token = Accounts.generate_player_session_token(player)
+
+      assert {:ok, _deactivated} = Accounts.deactivate_player(player)
+
+      refute Accounts.get_player_by_session_token(token)
+    end
+
+    test "login is rejected after deactivation" do
+      player = insert(:player, hashed_password: Bcrypt.hash_pwd_salt("Valid1!Pass"))
+      original_username = player.username
+
+      {:ok, _deactivated} = Accounts.deactivate_player(player)
 
       assert {:error, :invalid_credentials} =
                Accounts.authenticate_player(original_username, "Valid1!Pass")

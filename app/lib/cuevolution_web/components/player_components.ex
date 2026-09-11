@@ -550,14 +550,14 @@ defmodule CuevolutionWeb.PlayerComponents do
     ~H"""
     <div class="flex min-h-screen flex-col bg-ink-25 font-sans text-ink-700 antialiased">
       <header class="sticky top-0 z-20 border-b border-ink-200 bg-ink-25/90 backdrop-blur">
-        <div class="mx-auto flex h-[62px] max-w-5xl items-center gap-5 px-4 sm:px-7">
+        <div class="mx-auto flex h-[62px] max-w-5xl items-center gap-3 px-4 sm:gap-5 sm:px-7">
           <img
             src={~p"/images/SP-pool-blue-logo.png"}
             class="h-10 w-auto shrink-0"
             alt="Cuevolution"
           />
 
-          <nav class="ml-2 flex flex-1 items-stretch gap-5 overflow-x-auto sm:gap-7">
+          <nav class="ml-0 flex min-w-0 flex-1 items-stretch gap-4 overflow-x-auto sm:ml-2 sm:gap-7">
             <.nav_link navigate={~p"/fixtures"} active={@active == :fixtures}>Fixtures</.nav_link>
             <.nav_link navigate={~p"/standings"} active={@active == :standings}>Standings</.nav_link>
             <.nav_link navigate={~p"/team"} active={@active == :team}>My Team</.nav_link>

@@ -39,11 +39,15 @@
       Other
     </PlayerComponents.option_pill>
   </div>
+  <% {other_venue_variant, other_venue_msg} =
+    other_venue_hint(@attrs["other_venue_name"], @attrs["region_id"]) %>
   <PlayerComponents.input
     :if={@attrs["venue_choice"] == "other"}
     field={@form[:other_venue_name]}
     placeholder="Type the venue name"
     class="mt-2"
+    hint={other_venue_msg}
+    hint_variant={other_venue_variant}
   />
   <.field_error field={@form[:preferred_venue_id]} />
 </div>

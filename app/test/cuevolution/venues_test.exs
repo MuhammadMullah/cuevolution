@@ -40,6 +40,44 @@ defmodule Cuevolution.VenuesTest do
     end
   end
 
+  describe "venue_name_taken_in_region?/2" do
+    test "true for an exact, case-insensitive, trimmed match in the region" do
+      nairobi_a = region("nairobi-a")
+      insert(:venue, region_id: nairobi_a.id, name: "Cue Sports Pool")
+
+      assert Venues.venue_name_taken_in_region?(nairobi_a.id, "cue sports pool")
+      assert Venues.venue_name_taken_in_region?(nairobi_a.id, "  Cue Sports Pool  ")
+    end
+
+    test "false for a name that doesn't match any venue in the region" do
+      nairobi_a = region("nairobi-a")
+      insert(:venue, region_id: nairobi_a.id, name: "Cue Sports Pool")
+
+      refute Venues.venue_name_taken_in_region?(nairobi_a.id, "Somewhere Else")
+    end
+
+    test "false for a match that only exists in a different region" do
+      nairobi_a = region("nairobi-a")
+      coast = region("coast")
+      insert(:venue, region_id: coast.id, name: "Cue Sports Pool")
+
+      refute Venues.venue_name_taken_in_region?(nairobi_a.id, "Cue Sports Pool")
+    end
+
+    test "false for a match that only exists on a deactivated venue" do
+      nairobi_a = region("nairobi-a")
+      insert(:venue, region_id: nairobi_a.id, name: "Cue Sports Pool", active: false)
+
+      refute Venues.venue_name_taken_in_region?(nairobi_a.id, "Cue Sports Pool")
+    end
+
+    test "false for a blank name" do
+      nairobi_a = region("nairobi-a")
+      refute Venues.venue_name_taken_in_region?(nairobi_a.id, "")
+      refute Venues.venue_name_taken_in_region?(nairobi_a.id, "   ")
+    end
+  end
+
   describe "list_venues/1" do
     test "returns every venue, including inactive ones, for the admin management view" do
       nairobi_a = region("nairobi-a")

@@ -272,6 +272,13 @@ defmodule Cuevolution.Accounts do
     Competitions.player_has_match_result?(player.id)
   end
 
+  @doc "Updates a player's editable personal details: username, date of birth, town."
+  def update_personal_details(%Player{} = player, attrs) do
+    player
+    |> Player.personal_details_changeset(attrs)
+    |> Repo.update()
+  end
+
   @doc "Updates `player`'s region, rejecting the change once `region_locked?/1` is true (spec 003 US3)."
   def change_region(%Player{} = player, region_id) do
     if region_locked?(player) do
@@ -284,11 +291,45 @@ defmodule Cuevolution.Accounts do
   end
 
   @doc """
-  Warnings the admin must see and explicitly confirm before anonymizing
+  Updates `player`'s preferred venue only, keeping their region unchanged —
+  always allowed, even once `region_locked?/1` is true.
+  """
+  def change_venue(%Player{} = player, venue_id) do
+    player
+    |> Player.venue_changeset(%{preferred_venue_id: venue_id})
+    |> Repo.update()
+  end
+
+  @doc """
+  Updates `player`'s region and preferred venue together, rejecting the
+  change once `region_locked?/1` is true — a venue only makes sense within
+  the region it belongs to, so changing region always requires picking a
+  venue from the new one in the same update.
+  """
+  def change_region_and_venue(%Player{} = player, region_id, venue_id) do
+    if region_locked?(player) do
+      {:error, :region_locked}
+    else
+      player
+      |> Player.region_and_venue_changeset(%{region_id: region_id, preferred_venue_id: venue_id})
+      |> Repo.update()
+    end
+  end
+
+  @doc "Sets a new password for a signed-in player after confirming their current one."
+  def update_player_password(%Player{} = player, attrs) do
+    player
+    |> Player.update_password_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Warnings that must be shown and explicitly confirmed before anonymizing
   `player` (spec 010 FR-007) — `[:captain]` if they captain a team,
   `[:pending_fixtures]` if they have a fixture with no result yet, both,
-  or `[]`. Never blocks — the caller (`PlayerDetailLive`) decides whether
-  to proceed after showing these.
+  or `[]`. Never blocks — the caller (`PlayerDetailLive` for an admin,
+  `ProfileSettingsLive` for a player deactivating their own account) decides
+  whether to proceed after showing these.
   """
   def anonymize_warnings(%Player{} = player) do
     []
@@ -312,6 +353,24 @@ defmodule Cuevolution.Accounts do
     |> Multi.run(:log, fn _repo, %{player: updated} ->
       log_admin_action("anonymize_player", admin, updated)
     end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: player}} -> {:ok, player}
+      {:error, :player, changeset, _changes} -> {:error, changeset}
+    end
+  end
+
+  @doc """
+  Self-service account deactivation: a player anonymizing their own account
+  (same effect as `anonymize_player/2`, minus the admin audit log entry,
+  since no admin is involved) and invalidating every one of their session
+  tokens in the same transaction, so the deactivation immediately signs
+  them out everywhere.
+  """
+  def deactivate_player(%Player{} = player) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:player, Player.anonymize_changeset(player))
+    |> Ecto.Multi.delete_all(:tokens, PlayerToken.by_player_and_contexts_query(player, :all))
     |> Repo.transaction()
     |> case do
       {:ok, %{player: player}} -> {:ok, player}

@@ -56,7 +56,8 @@ defmodule CuevolutionWeb.Router do
     live_session :player_authenticated, on_mount: [{CuevolutionWeb.PlayerAuth, :ensure_player}] do
       live "/fixtures", FixturesLive, :index
       live "/standings", StandingsLive, :index
-      live "/profile", ProfileSettingsLive, :edit
+      live "/profile", ProfileSettingsLive, :profile
+      live "/profile/settings", ProfileSettingsLive, :settings
       live "/team", TeamDashboardLive, :show
       live "/team/new", TeamCreationLive, :new
     end

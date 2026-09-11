@@ -207,6 +207,41 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
     assert html =~ "Type the venue name"
   end
 
+  test "shows a live hint when the Other venue name matches an existing venue", %{conn: conn} do
+    region = build(:region)
+    insert(:venue, region_id: region.id, name: "Cue Sports Pool")
+
+    {:ok, view, _html} = live(conn, ~p"/register")
+    complete_steps_1_and_2(view)
+    choose_region(view, region.id)
+    choose(view, "venue_choice", "other")
+
+    html = fill(view, %{"other_venue_name" => "cue sports pool"})
+    assert html =~ "is already on the list"
+
+    html = fill(view, %{"other_venue_name" => "Somewhere New"})
+    refute html =~ "is already on the list"
+  end
+
+  test "blocks advancing past step 3 with an Other venue name that duplicates a real venue", %{
+    conn: conn
+  } do
+    region = build(:region)
+    insert(:venue, region_id: region.id, name: "Cue Sports Pool")
+
+    {:ok, view, _html} = live(conn, ~p"/register")
+    complete_steps_1_and_2(view)
+    choose_region(view, region.id)
+    choose(view, "venue_choice", "other")
+    fill(view, %{"other_venue_name" => "Cue Sports Pool"})
+
+    html = continue(view)
+
+    assert html =~ "is already a listed venue"
+    assert html =~ "Step 3 of 4"
+    refute Repo.get_by(Player, first_name: "Jane", last_name: "Doe")
+  end
+
   test "the Create account button stays disabled until terms are accepted", %{conn: conn} do
     region = build(:region)
     venue = insert(:venue, region_id: region.id)

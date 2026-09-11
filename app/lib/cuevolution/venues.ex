@@ -17,6 +17,27 @@ defmodule Cuevolution.Venues do
   end
 
   @doc """
+  Whether an active venue named `name` already exists in `region_id`,
+  case-insensitive and whitespace-trimmed — used to stop registration's
+  free-text "Other" venue from creating a duplicate of a venue that's
+  already on the list (spec 004: a region shouldn't end up with both a real
+  `Venue` row and a player's `other_venue_name` naming the same place).
+  """
+  def venue_name_taken_in_region?(region_id, name)
+      when is_binary(region_id) and is_binary(name) do
+    name = name |> String.trim() |> String.downcase()
+
+    name != "" and
+      Repo.exists?(
+        from v in Venue,
+          where: v.region_id == ^region_id and v.active,
+          where: fragment("lower(trim(?))", v.name) == ^name
+      )
+  end
+
+  def venue_name_taken_in_region?(_region_id, _name), do: false
+
+  @doc """
   All venues (active and inactive), optionally filtered by `:region_id`, for
   the admin management view.
   """
