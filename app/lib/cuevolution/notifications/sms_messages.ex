@@ -6,7 +6,7 @@ defmodule Cuevolution.Notifications.SmsMessages do
 
   @doc "Welcome SMS sent right after successful registration."
   def registration_confirmation(player) do
-    "Hi #{player.first_name}, welcome to SportPesa National Pool League! Your account is ready, check standings " <>
+    "Hi #{player.first_name}, welcome to SportPesa National Pool Circuit! Your account is ready, check standings " <>
       "and fixtures any time in the app."
   end
 
@@ -18,13 +18,13 @@ defmodule Cuevolution.Notifications.SmsMessages do
   def fixture_assignment(_player, payload) do
     %{opponent_name: opponent, venue: venue, date: date, time: time} = payload
 
-    "SportPesa National Pool League: You've been drawn vs #{opponent} at #{venue} on #{date} #{time}. Good luck!"
+    "SportPesa National Pool Circuit: You've been drawn vs #{opponent} at #{venue} on #{date} #{time}. Good luck!"
   end
 
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(_player, payload) do
     %{team_name: team_name} = payload
 
-    "SportPesa National Pool League: You've been added to #{team_name}. Check the app for your roster."
+    "SportPesa National Pool Circuit: You've been added to #{team_name}. Check the app for your roster."
   end
 end

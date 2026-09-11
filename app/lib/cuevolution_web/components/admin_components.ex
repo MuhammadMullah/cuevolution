@@ -143,7 +143,7 @@ defmodule CuevolutionWeb.AdminComponents do
               <div class="truncate text-[13.5px] font-semibold text-ink-25">
                 {@current_admin.email}
               </div>
-              <div class="text-xs text-ink-500">League Admin</div>
+              <div class="text-xs text-ink-500">Circuit Admin</div>
             </div>
           </div>
           <.link

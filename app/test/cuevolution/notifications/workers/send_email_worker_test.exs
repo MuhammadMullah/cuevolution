@@ -15,7 +15,7 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorkerTest do
     assert :ok = perform_job(SendEmailWorker, %{"notification_id" => notification.id})
 
     assert_email_sent(
-      subject: "Welcome to Sportpesa National Pool League!",
+      subject: "Welcome to Sportpesa National Pool Circuit!",
       to: [{"#{player.first_name} #{player.last_name}", player.email}]
     )
 

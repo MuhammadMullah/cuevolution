@@ -29,26 +29,25 @@ defmodule Cuevolution.Notifications.Emails do
     first_name = esc(player.first_name)
 
     base(player)
-    |> subject("Welcome to Sportpesa National Pool League!")
+    |> subject("Welcome to Sportpesa National Pool Circuit!")
     |> html_body(
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
       <p style="margin:0 0 16px;">
-        Your Sportpesa National Pool League account is ready. You're officially part of Kenya's pool circuit.
+        Your Sportpesa National Pool Circuit account is ready. You're officially part of Kenya's pool circuit.
       </p>
       <p style="margin:0 0 16px;">Here's what happens next:</p>
       <ul style="margin:0 0 16px;padding-left:20px;">
         <li style="margin-bottom:8px;">
-          <strong>Join or start a team</strong> — team play is optional, but it's the fastest way
-          into league fixtures.
+          <strong>JJoin or start a team</strong>. Team play is optional, but it's the fastest way into circuit fixtures.
         </li>
         <li style="margin-bottom:8px;">
           <strong>Check standings</strong> any time to see how players and teams in your region
           are ranked.
         </li>
         <li style="margin-bottom:8px;">
-          <strong>Watch your inbox</strong> — we'll email you the moment a fixture is published
-          for you.
+          <strong>Watch your inbox.</strong> We'll email you the moment a fixture is published.
+
         </li>
       </ul>
       #{button("Log In", url("/login"))}
@@ -58,12 +57,12 @@ defmodule Cuevolution.Notifications.Emails do
     |> text_body("""
     Hi #{player.first_name},
 
-    Your Sportpesa National Pool League account is ready, and you're officially part of Kenya's pool circuit.
+    Your Sportpesa National Pool Circuit account is ready, and you're officially part of Kenya's pool circuit.
 
     Here's what happens next:
-    - Join or start a team — team play is optional, but it's the fastest way into league fixtures.
+    - Join or start a team — team play is optional, but it's the fastest way into circuit fixtures.
     - Check standings any time to see how players and teams in your region are ranked.
-    - Watch your inbox — we'll email you the moment a fixture is published for you.
+    - Watch your inbox. We'll email you the moment a fixture is published.
 
     Log in any time: #{url("/login")}
 
@@ -305,8 +304,8 @@ defmodule Cuevolution.Notifications.Emails do
                 <tr>
                   <td class="email-footer" style="padding:20px 32px;background-color:#{@body_bg};text-align:center;
                     font-size:12px;color:#{@text_muted};">
-                    © #{Date.utc_today().year} Sportpesa National Pool League. All rights reserved.<br>
-                    You're receiving this email because you have an account on Sportpesa National Pool League.
+                    © #{Date.utc_today().year} Sportpesa National Pool Circuit. All rights reserved.<br>
+                    You're receiving this email because you have an account on Sportpesa National Pool Circuit.
                   </td>
                 </tr>
               </table>
