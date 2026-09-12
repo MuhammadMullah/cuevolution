@@ -71,7 +71,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
 
     {:ok, _view, html} = live(conn, ~p"/standings")
 
-    assert html =~ "Welcome to Cuevolution, #{player.first_name}"
+    assert html =~ "Welcome to Sportpesa National Pool Circuit, #{player.first_name}"
   end
 
   test "does not show the fresh-account banner for a player with a team", %{conn: conn} do
@@ -82,7 +82,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
     conn = log_in_player(conn, captain)
     {:ok, _view, html} = live(conn, ~p"/standings")
 
-    refute html =~ "Welcome to Cuevolution"
+    refute html =~ "Welcome to Sportpesa National Pool Circuit"
   end
 
   test "applying filters still shows the no-standings-yet state, not the no-filter-matches state",
