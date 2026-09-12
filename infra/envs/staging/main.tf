@@ -15,8 +15,8 @@ module "cuevolution" {
   mail_from_address             = var.mail_from_address
   africastalking_sender_id      = var.africastalking_sender_id
   web_min_instances             = 0
-  web_max_instances             = 3
-  worker_min_instances          = 1
+  web_max_instances             = 2
+  worker_min_instances          = 0
   worker_max_instances          = 1
 
   secret_ids = toset([
