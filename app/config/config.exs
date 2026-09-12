@@ -11,12 +11,17 @@ config :cuevolution,
   ecto_repos: [Cuevolution.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
-# Configure Oban
+# Configure Oban. In production only the worker runs queues and plugins; web
+# nodes switch them off at runtime (OBAN_QUEUES in config/runtime.exs).
 config :cuevolution, Oban,
   engine: Oban.Engines.Basic,
   repo: Cuevolution.Repo,
-  plugins: [Oban.Plugins.Pruner],
-  queues: [notifications: 10]
+  plugins: [
+    Oban.Plugins.Pruner,
+    # Rescues jobs left "executing" when an instance restarts mid-job.
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}
+  ],
+  queues: [notifications: 5]
 
 # Configure the endpoint
 config :cuevolution, CuevolutionWeb.Endpoint,
