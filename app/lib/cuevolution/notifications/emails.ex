@@ -15,6 +15,7 @@ defmodule Cuevolution.Notifications.Emails do
   """
   import Swoosh.Email
 
+  alias Cuevolution.Accounts.Admin
   alias CuevolutionWeb.Endpoint
 
   @ink "#0d0c22"
@@ -167,6 +168,44 @@ defmodule Cuevolution.Notifications.Emails do
     #{url}
 
     If you didn't request this, you can safely ignore this email — your password won't change.
+    """)
+  end
+
+  @doc """
+  Sent to a newly invited admin, with a link to set their password and
+  mobile number before they can sign in.
+  """
+  def admin_invitation(%Admin{} = admin, url) do
+    role_label = Admin.role_label(admin.role)
+
+    new()
+    |> to(admin.email)
+    |> from(Application.get_env(:cuevolution, :mail_from))
+    |> subject("You've been invited to the Sportpesa National Pool League admin team")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi,</p>
+      <p style="margin:0 0 16px;">
+        You've been added as a <strong>#{role_label}</strong> on the Sportpesa National Pool
+        League admin team. Set your password and mobile number below to get started —
+        this link expires in 7 days.
+      </p>
+      #{button("Set Up My Account", url)}
+      <p style="margin:24px 0 0;">
+        If you weren't expecting this invitation, you can safely ignore this email.
+      </p>
+      """)
+    )
+    |> text_body("""
+    Hi,
+
+    You've been added as a #{role_label} on the Sportpesa National Pool League admin team.
+
+    Set your password and mobile number to get started — this link expires in 7 days:
+
+    #{url}
+
+    If you weren't expecting this invitation, you can safely ignore this email.
     """)
   end
 

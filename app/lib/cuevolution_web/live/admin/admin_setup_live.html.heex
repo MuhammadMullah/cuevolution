@@ -1,0 +1,102 @@
+<AdminComponents.guest_shell flash={@flash}>
+  <div :if={@stage == :form}>
+    <div class="mb-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-red-300">
+      League Admin
+    </div>
+    <h1 class="mb-1.5 text-2xl font-bold tracking-tight text-ink-25">Set up your account</h1>
+    <p class="mb-6 text-sm leading-relaxed text-ink-400">
+      You've been invited as <strong class="text-ink-200">{Admin.role_label(@admin.role)}</strong>.
+      Choose a password and add your mobile number to continue.
+    </p>
+
+    <.form for={@form} phx-change="validate" phx-submit="complete_setup">
+      <div class="mb-4">
+        <label class="mb-1.5 block text-[13px] font-semibold text-ink-300">Email</label>
+        <div class="w-full rounded-[10px] border border-[#33324a] bg-ink-950/50 px-3.5 py-[11px] text-[15px] text-ink-400">
+          {@admin.email}
+        </div>
+      </div>
+      <div class="mb-4">
+        <label
+          for={@form[:password].id}
+          class="mb-1.5 block text-[13px] font-semibold text-ink-300"
+        >
+          New password
+        </label>
+        <.input
+          field={@form[:password]}
+          type="password"
+          placeholder="••••••••"
+          required
+          class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
+          error_class="border-red-500"
+        />
+      </div>
+      <div class="mb-4">
+        <label
+          for={@form[:password_confirmation].id}
+          class="mb-1.5 block text-[13px] font-semibold text-ink-300"
+        >
+          Confirm password
+        </label>
+        <.input
+          field={@form[:password_confirmation]}
+          type="password"
+          placeholder="••••••••"
+          required
+          class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
+          error_class="border-red-500"
+        />
+      </div>
+      <div class="mb-2">
+        <label
+          for={@form[:mobile_number].id}
+          class="mb-1.5 block text-[13px] font-semibold text-ink-300"
+        >
+          Mobile number
+        </label>
+        <.input
+          field={@form[:mobile_number]}
+          type="tel"
+          placeholder="07XX XXX XXX"
+          required
+          class="w-full rounded-[10px] border border-[#33324a] bg-ink-950 px-3.5 py-[11px] text-[15px] text-ink-25 placeholder:text-ink-500 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/20"
+          error_class="border-red-500"
+        />
+      </div>
+
+      <button
+        type="submit"
+        class="mt-2 w-full cursor-pointer rounded-full bg-red-500 px-6 py-[13px] text-[15px] font-semibold text-white hover:bg-red-600"
+      >
+        Complete setup
+      </button>
+    </.form>
+  </div>
+
+  <div :if={@stage == :invalid} class="text-center">
+    <div class="mx-auto mb-4.5 flex size-[52px] items-center justify-center rounded-full bg-red-500/15 text-2xl text-red-300">
+      !
+    </div>
+    <h1 class="mb-2 text-xl font-bold tracking-tight text-ink-25">Link invalid or expired</h1>
+    <p class="mb-6 text-[15px] leading-relaxed text-ink-400">
+      This invitation link is no longer valid. Ask a super admin to send you a new one.
+    </p>
+  </div>
+
+  <div :if={@stage == :done} class="text-center">
+    <div class="mx-auto mb-4.5 flex size-[52px] items-center justify-center rounded-full bg-green-500/15 text-2xl text-green-400">
+      ✓
+    </div>
+    <h1 class="mb-2 text-xl font-bold tracking-tight text-ink-25">Account ready</h1>
+    <p class="mb-6 text-[15px] leading-relaxed text-ink-400">
+      Your password and mobile number have been saved. Sign in to continue.
+    </p>
+    <.link
+      navigate={~p"/admin/login"}
+      class="block w-full cursor-pointer rounded-full bg-red-500 px-6 py-[13px] text-center text-[15px] font-semibold text-white hover:bg-red-600"
+    >
+      Back to sign in
+    </.link>
+  </div>
+</AdminComponents.guest_shell>

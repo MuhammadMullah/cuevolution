@@ -68,6 +68,7 @@ defmodule CuevolutionWeb.Router do
 
     live_session :admin_guest do
       live "/login", AdminLoginLive, :new
+      live "/setup/:token", AdminSetupLive, :new
     end
 
     post "/login", AdminSessionController, :create
@@ -88,6 +89,14 @@ defmodule CuevolutionWeb.Router do
       live "/teams/:id", TeamDetailLive, :show
       live "/venues", VenueManagementLive, :index
       live "/notifications", NotificationLogLive, :index
+    end
+
+    live_session :admin_super_required,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, :ensure_super_admin}
+      ] do
+      live "/admins", AdminManagementLive, :index
     end
   end
 

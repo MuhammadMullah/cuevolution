@@ -16,6 +16,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
   alias Cuevolution.Notifications
+  alias Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
@@ -25,22 +26,86 @@ defmodule Cuevolution.Accounts do
   Authenticates an admin by email and password.
 
   Always runs a bcrypt comparison (against a dummy hash when the email
-  doesn't match anyone) so a non-existent email takes the same time as a
-  wrong password — the caller can't distinguish the two failure modes.
+  doesn't match anyone, or matches an admin who hasn't completed account
+  setup yet and so has no `hashed_password`) so none of those failure modes
+  can be told apart by response time.
   """
   def authenticate_admin(email, password) when is_binary(email) and is_binary(password) do
-    admin = Repo.get_by(Admin, email: email)
+    case Repo.get_by(Admin, email: email) do
+      %Admin{hashed_password: hashed} = admin when is_binary(hashed) ->
+        if Bcrypt.verify_pass(password, hashed) do
+          {:ok, admin}
+        else
+          {:error, :invalid_credentials}
+        end
 
-    cond do
-      admin && Bcrypt.verify_pass(password, admin.hashed_password) ->
-        {:ok, admin}
-
-      admin ->
-        {:error, :invalid_credentials}
-
-      true ->
+      _ ->
         Bcrypt.no_user_verify()
         {:error, :invalid_credentials}
+    end
+  end
+
+  @doc "Lists all admins for the admin-management page (super admin only), most recently invited first."
+  def list_admins do
+    Repo.all(from a in Admin, order_by: [desc: a.inserted_at])
+  end
+
+  @doc """
+  Invites a new admin: creates a pending record (email + role, no password
+  yet), logs the action against `inviter` (spec 001 FR-005 audit trail), and
+  enqueues the account-setup email. `setup_url_fun` receives the URL-safe
+  encoded token and must return the full setup URL — callers build this
+  with their own route helper rather than this context hardcoding a path.
+  """
+  def invite_admin(%Admin{} = inviter, attrs, setup_url_fun) when is_function(setup_url_fun, 1) do
+    Multi.new()
+    |> Multi.insert(:admin, Admin.invite_changeset(%Admin{}, attrs))
+    |> Multi.run(:token, fn repo, %{admin: admin} ->
+      {encoded_token, token_struct} = AdminToken.build_admin_setup_token(admin)
+      repo.insert(token_struct)
+      {:ok, encoded_token}
+    end)
+    |> Multi.run(:log, fn _repo, %{admin: admin} ->
+      log_admin_action("invite_admin", inviter, admin, new_value: %{"role" => admin.role})
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{admin: admin, token: encoded_token}} ->
+        %{"admin_id" => admin.id, "setup_url" => setup_url_fun.(encoded_token)}
+        |> SendAdminInvitationEmailWorker.new()
+        |> Oban.insert()
+
+        {:ok, admin}
+
+      {:error, :admin, changeset, _changes} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc """
+  Looks up the admin a setup token belongs to — `nil` if the token is
+  malformed, unknown, expired, or already consumed.
+  """
+  def get_admin_by_setup_token(token) do
+    case AdminToken.verify_admin_setup_token_query(token) do
+      {:ok, query} -> Repo.one(query)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Completes an invited admin's account setup — sets their password and
+  mobile number and invalidates every one of their tokens, including the
+  setup token just used.
+  """
+  def complete_admin_setup(%Admin{} = admin, attrs) do
+    Multi.new()
+    |> Multi.update(:admin, Admin.setup_changeset(admin, attrs))
+    |> Multi.delete_all(:tokens, AdminToken.by_admin_and_contexts_query(admin, :all))
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{admin: admin}} -> {:ok, admin}
+      {:error, :admin, changeset, _changes} -> {:error, changeset}
     end
   end
 

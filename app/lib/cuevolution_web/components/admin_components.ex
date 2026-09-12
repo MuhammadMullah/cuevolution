@@ -79,13 +79,14 @@ defmodule CuevolutionWeb.AdminComponents do
 
   attr :active, :atom,
     required: true,
-    doc: "one of :dashboard, :stages, :groups, :draws, :results, :directory, :venues"
+    doc:
+      "one of :dashboard, :stages, :groups, :draws, :results, :directory, :venues, :notifications, :admins"
 
   attr :flash, :map, required: true
   slot :inner_block, required: true
 
   def app_shell(assigns) do
-    assigns = assign(assigns, :nav_items, @nav_items)
+    assigns = assign(assigns, :nav_items, nav_items_for(assigns.current_admin))
 
     ~H"""
     <div class="flex min-h-screen flex-col bg-ink-25 font-sans antialiased lg:flex-row">
@@ -189,6 +190,10 @@ defmodule CuevolutionWeb.AdminComponents do
   defp nav_active?(active, "/admin/results"), do: active == :results
   defp nav_active?(active, "/admin/players"), do: active == :directory
   defp nav_active?(active, "/admin/venues"), do: active == :venues
+  defp nav_active?(active, "/admin/admins"), do: active == :admins
+
+  defp nav_items_for(%{role: "super_admin"}), do: @nav_items ++ [{"Admins", "☺", "/admin/admins"}]
+  defp nav_items_for(_current_admin), do: @nav_items
 
   defp admin_initials(%{email: email}) do
     email

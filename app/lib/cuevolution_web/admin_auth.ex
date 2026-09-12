@@ -85,4 +85,21 @@ defmodule CuevolutionWeb.AdminAuth do
       {:halt, socket}
     end
   end
+
+  # Halts unless `:current_admin` (already assigned by `:ensure_admin`, which
+  # must run first) has the `"super_admin"` role — for the admin-management
+  # page, which only a super admin may reach.
+  @doc false
+  def on_mount(:ensure_super_admin, _params, _session, socket) do
+    if socket.assigns.current_admin.role == "super_admin" do
+      {:cont, socket}
+    else
+      socket =
+        socket
+        |> Phoenix.LiveView.put_flash(:error, "You don't have access to that page.")
+        |> Phoenix.LiveView.redirect(to: ~p"/admin/dashboard")
+
+      {:halt, socket}
+    end
+  end
 end

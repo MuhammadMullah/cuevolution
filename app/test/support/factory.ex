@@ -32,6 +32,7 @@ defmodule Cuevolution.Factory do
   def admin_factory do
     %Admin{
       email: sequence(:email, &"admin-#{&1}@cuevolution.test"),
+      role: "super_admin",
       hashed_password: Bcrypt.hash_pwd_salt("Valid1!Pass")
     }
   end

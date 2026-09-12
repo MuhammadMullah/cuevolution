@@ -2,6 +2,9 @@ defmodule Cuevolution.AccountsTest do
   use Cuevolution.DataCase, async: true
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Accounts.AdminActionLog
+  alias Cuevolution.Accounts.AdminToken
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions
   alias Cuevolution.Teams
@@ -49,6 +52,120 @@ defmodule Cuevolution.AccountsTest do
       # "email not found" would leak account existence via timing.
       ratio = max(existing_time, missing_time) / max(min(existing_time, missing_time), 1)
       assert ratio < 10
+    end
+
+    test "rejects an invited admin who hasn't completed setup yet, same generic error" do
+      admin = insert(:admin, hashed_password: nil, role: "tournament_manager")
+
+      assert Accounts.authenticate_admin(admin.email, "whatever") ==
+               {:error, :invalid_credentials}
+    end
+  end
+
+  describe "invite_admin/3, get_admin_by_setup_token/1 and complete_admin_setup/2" do
+    test "creates a pending admin with the given role and enqueues a setup email" do
+      inviter = insert(:admin, role: "super_admin")
+
+      assert {:ok, invited} =
+               Accounts.invite_admin(
+                 inviter,
+                 %{"email" => "new-admin@cuevolution.test", "role" => "tournament_manager"},
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+
+      assert invited.role == "tournament_manager"
+      assert invited.hashed_password == nil
+      assert Admin.pending?(invited)
+
+      assert_enqueued(
+        worker: Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker,
+        args: %{"admin_id" => invited.id}
+      )
+
+      [job] =
+        all_enqueued(worker: Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker)
+
+      "https://cuevolution.test/admin/setup/" <> token = job.args["setup_url"]
+
+      assert Accounts.get_admin_by_setup_token(token).id == invited.id
+    end
+
+    test "rejects super_admin as an invitable role" do
+      inviter = insert(:admin, role: "super_admin")
+
+      assert {:error, changeset} =
+               Accounts.invite_admin(
+                 inviter,
+                 %{"email" => "wannabe@cuevolution.test", "role" => "super_admin"},
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+
+      assert "is invalid" in errors_on(changeset).role
+    end
+
+    test "rejects a duplicate email" do
+      existing = insert(:admin)
+      inviter = insert(:admin, role: "super_admin")
+
+      assert {:error, changeset} =
+               Accounts.invite_admin(
+                 inviter,
+                 %{"email" => existing.email, "role" => "tournament_manager"},
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+
+      assert "has already been taken" in errors_on(changeset).email
+    end
+
+    test "logs the invite against the inviting admin" do
+      inviter = insert(:admin, role: "super_admin")
+
+      {:ok, invited} =
+        Accounts.invite_admin(
+          inviter,
+          %{"email" => "logged@cuevolution.test", "role" => "regional_coordinator"},
+          &"https://cuevolution.test/admin/setup/#{&1}"
+        )
+
+      log = Repo.get_by!(AdminActionLog, entity_id: invited.id)
+      assert log.admin_id == inviter.id
+      assert log.action_type == "invite_admin"
+    end
+
+    test "an unknown or garbage setup token resolves to nil" do
+      assert Accounts.get_admin_by_setup_token("garbage") == nil
+    end
+
+    test "complete_admin_setup sets password and mobile number and clears pending status" do
+      admin = insert(:admin, hashed_password: nil, role: "venue_representative")
+
+      assert {:ok, updated} =
+               Accounts.complete_admin_setup(admin, %{
+                 "password" => "New-Pass1!",
+                 "password_confirmation" => "New-Pass1!",
+                 "mobile_number" => "0712345678"
+               })
+
+      assert Bcrypt.verify_pass("New-Pass1!", updated.hashed_password)
+      assert updated.mobile_number == "+254712345678"
+      refute Admin.pending?(updated)
+    end
+
+    test "complete_admin_setup invalidates the setup token that was used" do
+      admin = insert(:admin, hashed_password: nil, role: "venue_representative")
+
+      {encoded_token, token_struct} = AdminToken.build_admin_setup_token(admin)
+
+      Repo.insert!(token_struct)
+
+      {:ok, _updated} =
+        Accounts.complete_admin_setup(admin, %{
+          "password" => "New-Pass1!",
+          "password_confirmation" => "New-Pass1!",
+          "mobile_number" => "0712345678"
+        })
+
+      assert Accounts.get_admin_by_setup_token(encoded_token) == nil
     end
   end
 

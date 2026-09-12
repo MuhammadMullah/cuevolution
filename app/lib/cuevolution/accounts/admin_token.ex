@@ -4,6 +4,7 @@ defmodule Cuevolution.Accounts.AdminToken do
 
   @rand_size 32
   @session_validity_in_days 60
+  @setup_validity_in_days 7
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -35,6 +36,49 @@ defmodule Cuevolution.Accounts.AdminToken do
         select: admin
 
     {:ok, query}
+  end
+
+  @doc """
+  Builds an account-setup token for a newly invited admin: returns
+  `{url_safe_raw_token, token_struct}`. Only its hash is persisted, matching
+  `PlayerToken.build_reset_password_token/1` — a DB read alone can't
+  reconstruct a working setup link.
+  """
+  def build_admin_setup_token(admin) do
+    raw = :crypto.strong_rand_bytes(@rand_size)
+
+    token_struct = %__MODULE__{
+      token: :crypto.hash(:sha256, raw),
+      context: "admin_setup",
+      sent_to: admin.email,
+      admin_id: admin.id
+    }
+
+    {Base.url_encode64(raw, padding: false), token_struct}
+  end
+
+  @doc """
+  Verifies an encoded account-setup token and returns a query resolving to
+  its admin, or `:error` if the string isn't even decodable — a malformed
+  or never-issued token is treated identically to an expired one by the
+  caller.
+  """
+  def verify_admin_setup_token_query(encoded_token) do
+    case Base.url_decode64(encoded_token, padding: false) do
+      {:ok, raw} ->
+        hashed = :crypto.hash(:sha256, raw)
+
+        query =
+          from t in by_token_and_context_query(hashed, "admin_setup"),
+            join: admin in assoc(t, :admin),
+            where: t.inserted_at > ago(@setup_validity_in_days, "day"),
+            select: admin
+
+        {:ok, query}
+
+      :error ->
+        :error
+    end
   end
 
   def by_token_and_context_query(token, context) do

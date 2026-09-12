@@ -73,7 +73,11 @@ defmodule Cuevolution.Seeds.Accounts do
       nil ->
         {:ok, _admin} =
           %Admin{}
-          |> Admin.registration_changeset(%{email: @admin_email, password: @admin_password})
+          |> Admin.registration_changeset(%{
+            email: @admin_email,
+            password: @admin_password,
+            role: "super_admin"
+          })
           |> Repo.insert()
 
         IO.puts("Seeded admin: #{@admin_email} / #{@admin_password}")
