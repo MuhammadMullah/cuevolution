@@ -15,6 +15,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Accounts.PlayerToken
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications
   alias Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
@@ -447,15 +448,17 @@ defmodule Cuevolution.Accounts do
   Filterable, index-backed player directory query (spec 010 US1).
 
   Supported filters: `:region_id`, `:category` (gender), `:username`
-  (case-insensitive substring search). A `:stage` filter isn't implemented
-  yet — it depends on `Competitions.StageParticipation`, which doesn't
-  exist until Context 5 is built (mirrors the T027/T028/T032 deferral).
+  (case-insensitive substring search), `:stage_id` (current
+  `Competitions.StageParticipation`, via an indexed `EXISTS` subquery rather
+  than loading every participation into memory — see the admin Directory,
+  which used to do exactly that).
   """
   def list_players_filtered(filters) do
     Player
     |> filter_by_region(filters[:region_id])
     |> filter_by_category(filters[:category])
     |> filter_by_username(filters[:username])
+    |> filter_by_stage(filters[:stage_id])
     |> order_by(asc: :username)
     |> preload(:region)
     |> Repo.all()
@@ -472,6 +475,15 @@ defmodule Cuevolution.Accounts do
   defp filter_by_username(query, username) do
     pattern = "%" <> escape_like_pattern(username) <> "%"
     where(query, [p], ilike(p.username, ^pattern))
+  end
+
+  defp filter_by_stage(query, nil), do: query
+
+  defp filter_by_stage(query, stage_id) do
+    participant_ids =
+      from(sp in StageParticipation, where: sp.stage_id == ^stage_id, select: sp.player_id)
+
+    where(query, [p], p.id in subquery(participant_ids))
   end
 
   @doc """

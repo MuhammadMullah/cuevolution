@@ -146,6 +146,22 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
+  @doc """
+  Maps each of the given player/team ids to their current `Stage`, in one
+  indexed query. Used to annotate rows already loaded elsewhere (e.g. the
+  admin Directory) with a stage badge — deliberately narrower than
+  `list_participations/1`, which would otherwise have to load and preload
+  *every* participation (player, team, region and stage included) in the
+  whole competition just to look up a handful of ids.
+  """
+  def stages_by_participant(player_ids, team_ids) do
+    StageParticipation
+    |> where([sp], sp.player_id in ^player_ids or sp.team_id in ^team_ids)
+    |> preload(:stage)
+    |> Repo.all()
+    |> Map.new(&{&1.player_id || &1.team_id, &1.stage})
+  end
+
   defp filter_by(query, _field, nil), do: query
   defp filter_by(query, field, value), do: where(query, [p], field(p, ^field) == ^value)
 

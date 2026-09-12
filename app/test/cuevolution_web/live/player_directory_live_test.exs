@@ -63,6 +63,28 @@ defmodule CuevolutionWeb.PlayerDirectoryLiveTest do
     refute html =~ team.name
   end
 
+  test "filters by stage without loading every participation in the system", %{conn: conn} do
+    grassroots = Cuevolution.Repo.get_by!(Cuevolution.Competitions.Stage, name: "Grassroots")
+    regional = Cuevolution.Repo.get_by!(Cuevolution.Competitions.Stage, name: "Regional")
+
+    player_in_grassroots = insert(:player, username: "grassrootsplayer")
+    player_in_regional = insert(:player, username: "regionalplayer")
+
+    insert(:stage_participation, player_id: player_in_grassroots.id, stage_id: grassroots.id)
+    insert(:stage_participation, player_id: player_in_regional.id, stage_id: regional.id)
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/players")
+
+    html =
+      view
+      |> form("#player-filter-form", filter: %{"stage_id" => grassroots.id})
+      |> render_change()
+
+    assert html =~ player_in_grassroots.username
+    refute html =~ player_in_regional.username
+  end
+
   test "clicking a team row navigates to the team detail page", %{conn: conn} do
     team = insert(:team, name: "Rift Valley Racks")
 

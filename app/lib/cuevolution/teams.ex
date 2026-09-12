@@ -11,6 +11,7 @@ defmodule Cuevolution.Teams do
   alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
@@ -229,14 +230,18 @@ defmodule Cuevolution.Teams do
   Filterable team directory query — the Teams-context counterpart of
   `Accounts.list_players_filtered/1`, backing the admin Directory's "Teams"
   kind. Supported filters: `:region_id`, `:name` (case-insensitive
-  substring search).
+  substring search), `:stage_id` (via an indexed `EXISTS` subquery, same
+  approach as `Accounts.list_players_filtered/1`). Preloads `:roster` only
+  (no caller needs `:captain` — dropped to save a query) since callers use
+  it just for `length/1`, not the roster's contents.
   """
   def list_teams_filtered(filters \\ %{}) do
     Team
     |> filter_by_region(filters[:region_id])
     |> filter_by_name(filters[:name])
+    |> filter_by_stage(filters[:stage_id])
     |> order_by(asc: :name)
-    |> preload([:region, :captain, :roster])
+    |> preload([:region, :roster])
     |> Repo.all()
   end
 
@@ -248,5 +253,14 @@ defmodule Cuevolution.Teams do
   defp filter_by_name(query, name) do
     pattern = "%" <> String.replace(name, ~w(% _), fn c -> "\\" <> c end) <> "%"
     where(query, [t], ilike(t.name, ^pattern))
+  end
+
+  defp filter_by_stage(query, nil), do: query
+
+  defp filter_by_stage(query, stage_id) do
+    participant_ids =
+      from(sp in StageParticipation, where: sp.stage_id == ^stage_id, select: sp.team_id)
+
+    where(query, [t], t.id in subquery(participant_ids))
   end
 end

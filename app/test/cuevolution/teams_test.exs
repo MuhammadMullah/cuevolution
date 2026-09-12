@@ -262,4 +262,63 @@ defmodule Cuevolution.TeamsTest do
                Teams.override_roster_change(:add, team, ninth_player, admin)
     end
   end
+
+  describe "list_teams_filtered/1" do
+    test "with no filters, returns all teams" do
+      insert_list(3, :team)
+
+      assert length(Teams.list_teams_filtered()) == 3
+    end
+
+    test "filters by region_id" do
+      region_a = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "nairobi-a")
+      region_b = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "coast")
+
+      captain_a = insert(:player, region_id: region_a.id)
+      captain_b = insert(:player, region_id: region_b.id)
+      team_a = insert(:team, region_id: region_a.id, captain_id: captain_a.id)
+      _team_b = insert(:team, region_id: region_b.id, captain_id: captain_b.id)
+
+      results = Teams.list_teams_filtered(%{region_id: region_a.id})
+
+      assert [found] = results
+      assert found.id == team_a.id
+    end
+
+    test "filters by name substring, case-insensitively" do
+      target = insert(:team, name: "Westlands Cue Kings")
+      _other = insert(:team, name: "Rift Valley Racks")
+
+      results = Teams.list_teams_filtered(%{name: "westlands"})
+
+      assert [found] = results
+      assert found.id == target.id
+    end
+
+    test "filters by stage_id via an indexed query, without loading every participation" do
+      stage_a = build(:stage)
+      stage_b = build(:stage)
+      team_in_a = insert(:team)
+      team_in_b = insert(:team)
+
+      insert(:stage_participation,
+        player_id: nil,
+        team_id: team_in_a.id,
+        category: "team",
+        stage_id: stage_a.id
+      )
+
+      insert(:stage_participation,
+        player_id: nil,
+        team_id: team_in_b.id,
+        category: "team",
+        stage_id: stage_b.id
+      )
+
+      results = Teams.list_teams_filtered(%{stage_id: stage_a.id})
+
+      assert [found] = results
+      assert found.id == team_in_a.id
+    end
+  end
 end

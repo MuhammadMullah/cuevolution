@@ -139,6 +139,40 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
+  describe "stages_by_participant/2" do
+    test "maps each player/team id to its current stage" do
+      grassroots = stage("Grassroots")
+      regional = stage("Regional")
+
+      player_participation = insert(:stage_participation, stage_id: grassroots.id)
+      team = insert(:team)
+
+      team_participation =
+        insert(:stage_participation,
+          player_id: nil,
+          team_id: team.id,
+          category: "team",
+          stage_id: regional.id
+        )
+
+      result =
+        Competitions.stages_by_participant(
+          [player_participation.player_id],
+          [team_participation.team_id]
+        )
+
+      assert result[player_participation.player_id].id == grassroots.id
+      assert result[team_participation.team_id].id == regional.id
+    end
+
+    test "ignores ids with no participation and never errors on empty lists" do
+      assert Competitions.stages_by_participant([], []) == %{}
+
+      player = insert(:player)
+      assert Competitions.stages_by_participant([player.id], []) == %{}
+    end
+  end
+
   describe "assign_to_group/2 and create_group/1" do
     test "Grassroots groups require a venue and never create a knockout bracket" do
       region = build(:region)

@@ -43,6 +43,21 @@ defmodule Cuevolution.Accounts.ListPlayersFilteredTest do
       assert found.id == target.id
     end
 
+    test "filters by stage_id via an indexed query, without loading every participation" do
+      stage_a = build(:stage)
+      stage_b = build(:stage)
+      player_in_a = insert(:player)
+      player_in_b = insert(:player)
+
+      insert(:stage_participation, player_id: player_in_a.id, stage_id: stage_a.id)
+      insert(:stage_participation, player_id: player_in_b.id, stage_id: stage_b.id)
+
+      results = Accounts.list_players_filtered(%{stage_id: stage_a.id})
+
+      assert [found] = results
+      assert found.id == player_in_a.id
+    end
+
     test "combines multiple filters" do
       region = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "central")
       other_region = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "coast")

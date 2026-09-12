@@ -59,45 +59,37 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
 
   defp build_rows(filters) do
     kind = filters[:kind] || "all"
-    stage_lookup = stage_lookup()
+    stage_id = filters[:stage_id]
 
     players =
       if kind in ["all", "male", "female"] do
         Accounts.list_players_filtered(%{
           region_id: filters[:region_id],
           category: (kind != "all" && kind) || nil,
-          username: filters[:search]
+          username: filters[:search],
+          stage_id: stage_id
         })
-        |> Enum.filter(&matches_stage?(&1.id, filters[:stage_id], stage_lookup))
       else
         []
       end
 
     teams =
       if kind in ["all", "team"] do
-        Teams.list_teams_filtered(%{region_id: filters[:region_id], name: filters[:search]})
-        |> Enum.filter(&matches_stage?(&1.id, filters[:stage_id], stage_lookup))
+        Teams.list_teams_filtered(%{
+          region_id: filters[:region_id],
+          name: filters[:search],
+          stage_id: stage_id
+        })
       else
         []
       end
 
+    stage_lookup =
+      Competitions.stages_by_participant(Enum.map(players, & &1.id), Enum.map(teams, & &1.id))
+
     (Enum.map(players, &player_row(&1, stage_lookup)) ++
        Enum.map(teams, &team_row(&1, stage_lookup)))
     |> Enum.sort_by(&String.downcase(&1.name))
-  end
-
-  defp stage_lookup do
-    Competitions.list_participations()
-    |> Map.new(&{&1.player_id || &1.team_id, &1.stage})
-  end
-
-  defp matches_stage?(_id, nil, _lookup), do: true
-
-  defp matches_stage?(id, stage_id, lookup) do
-    case Map.get(lookup, id) do
-      nil -> false
-      stage -> stage.id == stage_id
-    end
   end
 
   defp player_row(player, stage_lookup) do
