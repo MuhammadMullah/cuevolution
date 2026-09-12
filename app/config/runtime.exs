@@ -48,7 +48,9 @@ if config_env() == :prod do
         end
     end
 
-  secret = fn name -> Map.get(secret_values, name) || System.get_env(name) end
+  # A plain env var wins over the JSON blob, so a single value (e.g. the
+  # Terraform-managed DATABASE_URL secret) can be swapped without rewriting it.
+  secret = fn name -> System.get_env(name) || Map.get(secret_values, name) end
 
   database_url =
     secret.("DATABASE_URL") ||
@@ -75,6 +77,20 @@ if config_env() == :prod do
     socket_options: maybe_ipv6,
     ssl: db_ssl,
     ssl_opts: db_ssl_opts
+
+  # ## Oban role
+  #
+  # Web and worker run the same release. The web service must keep Oban
+  # running, because LiveViews enqueue jobs and Oban.insert/1 needs a live
+  # instance, but it must not execute jobs: it scales to zero and its CPU is
+  # throttled between requests. The worker Cloud Run instance runs the queues
+  # and plugins from config/config.exs. Terraform sets OBAN_QUEUES=false on web.
+  #
+  # Non-keyword values replace (rather than merge with) config.exs, so this
+  # node keeps Oban for inserts but runs no queues, plugins or leadership.
+  if System.get_env("OBAN_QUEUES") in ~w(false 0) do
+    config :cuevolution, Oban, queues: false, plugins: false, peer: false
+  end
 
   # ## Configuring profile picture storage
   #

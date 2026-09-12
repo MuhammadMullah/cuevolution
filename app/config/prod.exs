@@ -15,7 +15,9 @@ config :cuevolution, CuevolutionWeb.Endpoint,
   force_ssl: [
     rewrite_on: [:x_forwarded_proto],
     exclude: [
-      # paths: ["/health"],
+      # Cloud Run probes hit the container directly, without x-forwarded-proto.
+      # Paths match exactly (not by prefix), so list each health route.
+      paths: ["/health/live", "/health/startup", "/health/readiness"],
       hosts: ["localhost", "127.0.0.1"]
     ]
   ]
