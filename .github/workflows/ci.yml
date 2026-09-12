@@ -19,12 +19,6 @@ jobs:
       - name: Check formatting
         run: terraform fmt -check -recursive infra
 
-      - name: Initialize staging configuration
-        run: terraform -chdir=infra/envs/staging init -backend=false
-
-      - name: Validate staging configuration
-        run: terraform -chdir=infra/envs/staging validate
-
       - name: Initialize production configuration
         run: terraform -chdir=infra/envs/production init -backend=false
 

@@ -1,8 +1,19 @@
 # Copy to production.tfvars; this file must not be committed with real values.
-project_id                = "REPLACE_WITH_PRODUCTION_PROJECT_ID"
-region                    = "africa-south1"
-image                     = "africa-south1-docker.pkg.dev/REPLACE_WITH_PRODUCTION_PROJECT_ID/cuevolution-images/cuevolution@sha256:REPLACE_WITH_IMAGE_DIGEST"
-cloud_sql_connection_name = "REPLACE_WITH_PRODUCTION_PROJECT_ID:africa-south1:REPLACE_WITH_INSTANCE_NAME"
-storage_bucket            = "REPLACE_WITH_PRODUCTION_GCS_BUCKET_NAME"
-mail_from_address         = "admin@cuevolutionke.com"
-africastalking_sender_id  = "REPLACE_WITH_SENDER_ID_IF_USED"
+project_id = "cuevolution-app"
+region     = "europe-west4"
+
+# Only used when the web service and migration job are first created; Cloud Build
+# deploys every later image. Use the digest of an image built from a commit that
+# already prefers a plain DATABASE_URL env var (see infra/README.md).
+image = "africa-south1-docker.pkg.dev/cuevolution-app/cuevolution-images/cuevolution@sha256:REPLACE_WITH_IMAGE_DIGEST"
+
+mail_from_address        = "admin@cuevolutionke.com"
+africastalking_sender_id = "REPLACE_WITH_SENDER_ID_IF_USED"
+
+# Must match the database and object owner in the cuevolution-prod dump.
+db_name    = "REPLACE_WITH_DATABASE_NAME"
+db_user    = "REPLACE_WITH_DATABASE_USER"
+db_version = "POSTGRES_18"
+
+# Set to true at DNS cutover.
+map_custom_domain = false

@@ -1,7 +1,6 @@
 terraform {
+  # Write-only arguments (password_wo, secret_data_wo) need Terraform 1.11+.
   required_version = ">= 1.11.0"
-
-  backend "gcs" {}
 
   required_providers {
     google = {
@@ -13,9 +12,4 @@ terraform {
       version = ">= 3.7.1"
     }
   }
-}
-
-provider "google" {
-  project = var.project_id
-  region  = var.region
 }

@@ -1,5 +1,9 @@
+# Builds the release image and deploys the production environment in order:
+# migrations (Cloud Run job) -> web (Cloud Run service) -> background worker
+# (Cloud Run instance, created on the first deploy). Names match infra/.
 steps:
-  - name: gcr.io/cloud-builders/docker
+  - id: build
+    name: gcr.io/cloud-builders/docker
     args:
       - build
       - -f
@@ -8,62 +12,104 @@ steps:
       - ${_IMAGE_TAG}
       - app
 
-  - name: gcr.io/cloud-builders/docker
+  - id: push
+    name: gcr.io/cloud-builders/docker
     args:
       - push
       - ${_IMAGE_TAG}
 
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
     entrypoint: bash
     env:
       - IMAGE_TAG=${_IMAGE_TAG}
       - REGION=${_REGION}
+      - GCP_PROJECT=${PROJECT_ID}
       - MIGRATION_JOB=${_MIGRATION_JOB}
       - WEB_SERVICE=${_WEB_SERVICE}
-      - WORKER_SERVICE=${_WORKER_SERVICE}
-      - GCP_PROJECT=${PROJECT_ID}
+      - WORKER_INSTANCE=${_WORKER_INSTANCE}
+      - WORKER_SA_ID=${_WORKER_SA_ID}
+      - WORKER_POOL_SIZE=${_WORKER_POOL_SIZE}
+      - SQL_INSTANCE=${_SQL_INSTANCE}
+      - APP_SECRET=${_APP_SECRET}
+      - DATABASE_URL_SECRET=${_DATABASE_URL_SECRET}
+      - SMOKE_URL=${_SMOKE_URL}
     args:
       - -ceu
       - |
+        # Cloud Run instances are a Preview feature: fail fast if this image
+        # has no `gcloud beta` (or python3, used to build the worker env file).
+        gcloud beta run instances --help >/dev/null
+        command -v python3 >/dev/null
+
+        common=(--project="$${GCP_PROJECT}" --region="$${REGION}" --quiet)
+
         digest="$$(gcloud artifacts docker images describe "$${IMAGE_TAG}" \
           --format='value(image_summary.digest)')"
         image_ref="$${IMAGE_TAG%:*}@$${digest}"
 
-        gcloud run jobs update "$${MIGRATION_JOB}" \
-          --project="$${GCP_PROJECT}" \
-          --region="$${REGION}" \
-          --image="$${image_ref}" \
-          --quiet
+        gcloud run jobs update "$${MIGRATION_JOB}" "$${common[@]}" --image="$${image_ref}"
+        gcloud run jobs execute "$${MIGRATION_JOB}" "$${common[@]}" --wait
 
-        gcloud run jobs execute "$${MIGRATION_JOB}" \
-          --project="$${GCP_PROJECT}" \
-          --region="$${REGION}" \
-          --wait \
-          --quiet
+        gcloud run services update "$${WEB_SERVICE}" "$${common[@]}" --image="$${image_ref}"
 
-        gcloud run services update "$${WEB_SERVICE}" \
-          --project="$${GCP_PROJECT}" \
-          --region="$${REGION}" \
-          --image="$${image_ref}" \
-          --quiet
+        # The worker has no Terraform resource yet. It reuses the web service's
+        # plain env vars (managed by Terraform) so config has one source of
+        # truth, replacing the web-only OBAN_QUEUES, POOL_SIZE and signing SA.
+        worker_sa="$${WORKER_SA_ID}@$${GCP_PROJECT}.iam.gserviceaccount.com"
+        gcloud run services describe "$${WEB_SERVICE}" "$${common[@]}" --format=json \
+          | python3 -c '
+        import json, sys
+        container = json.load(sys.stdin)["spec"]["template"]["spec"]["containers"][0]
+        skip = {"OBAN_QUEUES", "POOL_SIZE", "GCS_SIGNING_SERVICE_ACCOUNT"}
+        for var in container.get("env", []):
+            if "value" in var and var["name"] not in skip:
+                print("{}: {}".format(var["name"], json.dumps(var["value"])))
+        ' > worker.env.yaml
+        printf 'POOL_SIZE: "%s"\nGCS_SIGNING_SERVICE_ACCOUNT: "%s"\n' \
+          "$${WORKER_POOL_SIZE}" "$${worker_sa}" >> worker.env.yaml
 
-        gcloud run services update "$${WORKER_SERVICE}" \
-          --project="$${GCP_PROJECT}" \
-          --region="$${REGION}" \
-          --image="$${image_ref}" \
-          --quiet
+        worker_flags=(
+          --image="$${image_ref}"
+          --service-account="$${worker_sa}"
+          --set-cloudsql-instances="$${GCP_PROJECT}:$${REGION}:$${SQL_INSTANCE}"
+          --set-secrets="CUEVOLUTION_SECRETS_JSON=$${APP_SECRET}:latest,DATABASE_URL=$${DATABASE_URL_SECRET}:latest"
+          --env-vars-file=worker.env.yaml
+          --cpu=1
+          --memory=1Gi
+          --ingress=internal
+          --no-default-url
+          --restart-policy=always
+          --startup-probe=httpGet.path=/health/startup,periodSeconds=5,failureThreshold=24
+        )
+        if gcloud beta run instances describe "$${WORKER_INSTANCE}" "$${common[@]}" >/dev/null 2>&1; then
+          gcloud beta run instances update "$${WORKER_INSTANCE}" "$${common[@]}" "$${worker_flags[@]}"
+        else
+          gcloud beta run instances create "$${WORKER_INSTANCE}" "$${common[@]}" "$${worker_flags[@]}"
+        fi
 
-        url="$$(gcloud run services describe "$${WEB_SERVICE}" \
-          --project="$${GCP_PROJECT}" \
-          --region="$${REGION}" \
-          --format='value(status.url)')"
-        token="$$(gcloud auth print-identity-token --audiences="$${url}")"
-        curl --fail --silent --show-error \
-          --header "Authorization: Bearer $${token}" \
-          "$${url}/health/readiness"
+        url="$${SMOKE_URL}"
+        if [ -z "$${url}" ]; then
+          url="$$(gcloud run services describe "$${WEB_SERVICE}" "$${common[@]}" \
+            --format='value(status.url)')"
+        fi
+        curl --fail --silent --show-error --retry 5 --retry-delay 5 "$${url}/health/readiness"
+
+substitutions:
+  _REGION: europe-west4
+  _MIGRATION_JOB: cuevolution-production-migrate
+  _WEB_SERVICE: cuevolution-production-web
+  _WORKER_INSTANCE: cuevolution-production-worker
+  _WORKER_SA_ID: cuevolution-production-worker
+  _WORKER_POOL_SIZE: "6"
+  _SQL_INSTANCE: cuevolution-production-db
+  _APP_SECRET: cuevolution-production-application-secrets
+  _DATABASE_URL_SECRET: cuevolution-production-database-url
+  _SMOKE_URL: ""
 
 images:
   - ${_IMAGE_TAG}
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  substitution_option: ALLOW_LOOSE
