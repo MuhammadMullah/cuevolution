@@ -11,9 +11,6 @@ resource "google_project_service" "required" {
     "secretmanager.googleapis.com",
     "storage.googleapis.com",
     "sts.googleapis.com",
-    # Still used by the africa-south1 NAT and load balancer until they are
-    # deleted after cutover; nothing in this module needs it afterwards.
-    "compute.googleapis.com",
   ])
 
   project            = var.project_id

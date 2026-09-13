@@ -16,10 +16,8 @@ and no load balancer.
 | Secrets | `cuevolution-production-application-secrets` (JSON, values added by hand) and `cuevolution-production-database-url` (written by Terraform, never stored in state) | Terraform |
 
 Code layout: `envs/production` is the only root; `modules/cuevolution-runtime`
-holds the resources, split by concern (`apis.tf`, `iam.tf`, `sql.tf`,
-`secrets.tf`, `storage.tf`, `run.tf`, `domain.tf`). `removed.tf` drops the old
-africa-south1 runtime from state without destroying it; delete that file once
-the teardown below is finished.
+holds the resources, split by concern (`apis.tf`, `iam.tf`, `org_policy.tf`,
+`sql.tf`, `secrets.tf`, `storage.tf`, `run.tf`, `domain.tf`).
 
 ## Running Terraform
 
@@ -84,7 +82,12 @@ GitHub configuration: environment `production` with secrets
 `GCP_PRODUCTION_PROJECT_ID`, plus the repository variable `SMOKE_URL` (empty
 until DNS cutover, then `https://sportpesapool.ke`).
 
-## Migration from africa-south1 (one-time runbook)
+## Migration from africa-south1 (completed 2026-09-13)
+
+Kept for reference. The old stack and the `cuevolution-staging` project have
+been torn down; only the old subnet and network `cuevolution-production-runtime`
+remain until Cloud Run releases its reserved serverless IP (1-2 hours after the
+services were deleted), after which they can be deleted with gcloud.
 
 Stop at any failed check. Every deletion in step 8 is confirmed before running.
 
@@ -147,4 +150,5 @@ Stop at any failed check. Every deletion in step 8 is confirmed before running.
    - africa-south1 Artifact Registry repository, buckets
      `cuevolution-production-profile-pictures` and `cuevolution-app-cloudbuild-source`
    - project `cuevolution-staging`; GitHub environment `staging`
-   - then delete `removed.tf` and `compute.googleapis.com` from `apis.tf`
+   - `removed.tf` and `compute.googleapis.com` were then removed from the
+     module (Terraform only forgets the API; `disable_on_destroy = false`)

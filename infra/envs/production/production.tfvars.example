@@ -3,17 +3,15 @@ project_id = "cuevolution-app"
 region     = "europe-west4"
 
 # Only used when the web service and migration job are first created; Cloud Build
-# deploys every later image. Use the digest of an image built from a commit that
-# already prefers a plain DATABASE_URL env var (see infra/README.md).
-image = "africa-south1-docker.pkg.dev/cuevolution-app/cuevolution-images/cuevolution@sha256:REPLACE_WITH_IMAGE_DIGEST"
+# deploys every later image by digest.
+image = "europe-west4-docker.pkg.dev/cuevolution-app/cuevolution-images/cuevolution@sha256:REPLACE_WITH_IMAGE_DIGEST"
 
 mail_from_address        = "admin@cuevolutionke.com"
 africastalking_sender_id = "REPLACE_WITH_SENDER_ID_IF_USED"
 
-# Must match the database and object owner in the cuevolution-prod dump.
 db_name    = "REPLACE_WITH_DATABASE_NAME"
 db_user    = "REPLACE_WITH_DATABASE_USER"
 db_version = "POSTGRES_18"
 
-# Set to true at DNS cutover.
-map_custom_domain = false
+# sportpesapool.ke is mapped to the web service (DNS-only records at Cloudflare).
+map_custom_domain = true
