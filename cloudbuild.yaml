@@ -88,6 +88,10 @@ steps:
         )
         if gcloud beta run instances describe "$${WORKER_INSTANCE}" "$${common[@]}" >/dev/null 2>&1; then
           gcloud beta run instances update "$${WORKER_INSTANCE}" "$${common[@]}" "$${worker_flags[@]}"
+          # An update does not start a stopped instance (for example after its
+          # restart retries ran out). Restart starts it if stopped, or restarts it
+          # onto the new configuration if running.
+          gcloud beta run instances restart "$${WORKER_INSTANCE}" "$${common[@]}"
         else
           gcloud beta run instances create "$${WORKER_INSTANCE}" "$${common[@]}" "$${worker_flags[@]}"
         fi
