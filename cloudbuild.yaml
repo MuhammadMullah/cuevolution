@@ -77,6 +77,8 @@ steps:
           --env-vars-file=worker.env.yaml
           --cpu=1
           --memory=1Gi
+          # Instances get no default port; ingress and the HTTP startup probe need one.
+          --port=8080
           --ingress=internal
           --no-default-url
           --restart-policy=always
