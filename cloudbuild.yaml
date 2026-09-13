@@ -78,7 +78,7 @@ steps:
           --cpu=1
           --memory=1Gi
           # Instances need a declared port for ingress and HTTP probes, but unlike
-          # services they don't pass it to the app as $PORT, so Phoenix listens on
+          # services they don't set the PORT env var for the app, so Phoenix listens on
           # its default 4000 (runtime.exs). Declare that port and probe it explicitly.
           --port=4000
           --ingress=internal
