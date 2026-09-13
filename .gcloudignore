@@ -1,0 +1,22 @@
+# Files uploaded by `gcloud builds submit`. The build only needs app/ and
+# cloudbuild.yaml. When this file exists gcloud ignores .gitignore, so
+# build artifacts and secrets are listed here too.
+.gcloudignore
+.git
+.gitignore
+.github/
+.claude/
+project-scope/
+infra/
+
+app/_build/
+app/deps/
+app/node_modules/
+app/assets/node_modules/
+app/.elixir_ls/
+app/cover/
+app/tmp/
+
+*.tfvars
+*secrets*.json
+.env
