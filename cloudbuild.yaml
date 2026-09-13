@@ -77,12 +77,14 @@ steps:
           --env-vars-file=worker.env.yaml
           --cpu=1
           --memory=1Gi
-          # Instances get no default port; ingress and the HTTP startup probe need one.
-          --port=8080
+          # Instances need a declared port for ingress and HTTP probes, but unlike
+          # services they don't pass it to the app as $PORT, so Phoenix listens on
+          # its default 4000 (runtime.exs). Declare that port and probe it explicitly.
+          --port=4000
           --ingress=internal
           --no-default-url
           --restart-policy=always
-          --startup-probe=httpGet.path=/health/startup,periodSeconds=5,failureThreshold=24
+          --startup-probe=httpGet.path=/health/startup,httpGet.port=4000,periodSeconds=5,failureThreshold=24
         )
         if gcloud beta run instances describe "$${WORKER_INSTANCE}" "$${common[@]}" >/dev/null 2>&1; then
           gcloud beta run instances update "$${WORKER_INSTANCE}" "$${common[@]}" "$${worker_flags[@]}"
