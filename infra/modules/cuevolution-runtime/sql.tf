@@ -40,7 +40,10 @@ resource "google_sql_database_instance" "db" {
     }
   }
 
-  depends_on = [google_project_service.required["sqladmin.googleapis.com"]]
+  depends_on = [
+    google_project_service.required["sqladmin.googleapis.com"],
+    google_org_policy_policy.allow_sql_public_ip
+  ]
 
   lifecycle {
     # disk_autoresize grows the disk; don't let Terraform shrink it back.

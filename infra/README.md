@@ -10,7 +10,7 @@ and no load balancer.
 | Domain | Cloud Run domain mapping `sportpesapool.ke` → web (Preview) | Terraform (`map_custom_domain`) |
 | Background jobs | Cloud Run **instance** `cuevolution-production-worker` running Oban queues (Preview, always on) | Cloud Build (`cloudbuild.yaml`); Terraform owns its service account and IAM |
 | Migrations | Cloud Run job `cuevolution-production-migrate` | Terraform; image by Cloud Build |
-| Database | Cloud SQL PostgreSQL `cuevolution-production-db`, `db-f1-micro`, public IP, connector-only | Terraform |
+| Database | Cloud SQL PostgreSQL `cuevolution-production-db`, `db-f1-micro`, public IP with no authorized networks, connector-only (project exception to the org's `sql.restrictPublicIp` policy, see `org_policy.tf`) | Terraform |
 | Images | Artifact Registry `cuevolution-images` (keeps 10 newest, deletes > 30 days) | Terraform |
 | Uploads | Private bucket `cuevolution-production-profile-pictures-ew4` | Terraform |
 | Secrets | `cuevolution-production-application-secrets` (JSON, values added by hand) and `cuevolution-production-database-url` (written by Terraform, never stored in state) | Terraform |
@@ -106,7 +106,10 @@ Stop at any failed check. Every deletion in step 8 is confirmed before running.
    creates for the database, user, secrets, bucket, registry, web service,
    migration job; old africa-south1 resources only "removed from state"; no
    destroys. If `POSTGRES_18` is rejected for `db-f1-micro`, set
-   `db_version = "POSTGRES_17"` and apply again.
+   `db_version = "POSTGRES_17"` and apply again. If the database still fails
+   with `constraints/sql.restrictPublicIp` right after the project exception
+   is created, the policy is still propagating: wait a few minutes and apply
+   again.
 3. **Freeze the old stack** (maintenance starts):
    ```bash
    gcloud run services update cuevolution-production-web --region=africa-south1 --ingress=internal
