@@ -133,11 +133,24 @@
       class="flex flex-col gap-4 rounded-2xl border border-ink-200 bg-white p-4.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
     >
       <div>
-        <h2 class="mb-2 text-[14.5px] font-bold text-ink-950">Correct result</h2>
-        <div class="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">
+        <h2
+          :if={Admin.can?(@current_admin, :approve_results)}
+          class="mb-2 text-[14.5px] font-bold text-ink-950"
+        >
+          Correct result
+        </h2>
+        <div
+          :if={Admin.can?(@current_admin, :approve_results)}
+          class="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800"
+        >
           Correcting this result may affect standings and any stage advancement already made from it — review before saving.
         </div>
-        <.form for={@correction_form} phx-submit="correct_result" class="flex flex-col gap-2.5">
+        <.form
+          :if={Admin.can?(@current_admin, :approve_results)}
+          for={@correction_form}
+          phx-submit="correct_result"
+          class="flex flex-col gap-2.5"
+        >
           <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
             <input
               type="radio"

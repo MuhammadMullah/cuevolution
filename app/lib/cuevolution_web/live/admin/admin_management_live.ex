@@ -1,9 +1,7 @@
 defmodule CuevolutionWeb.AdminManagementLive do
   @moduledoc """
-  Super-admin-only "Admins" page: invite a Tournament Manager, Regional
-  Coordinator, or Venue Representative by email. The invited admin gets an
-  email to set their password and mobile number before they can sign in
-  (`AdminSetupLive`) — role-specific permissions are out of scope for now.
+  User-management page for Super Admins and Tournament Directors. The latter
+  may manage every role except Super Admins.
   """
   use CuevolutionWeb, :live_view
 
@@ -45,8 +43,69 @@ defmodule CuevolutionWeb.AdminManagementLive do
          |> assign_form(Admin.invite_changeset(%Admin{}, %{}))
          |> load_admins()}
 
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to invite admins.")}
+
       {:error, changeset} ->
         {:noreply, assign_form(socket, changeset)}
+    end
+  end
+
+  def handle_event("change_role", %{"target_id" => id, "role" => %{"role" => role}}, socket) do
+    with %Admin{} = target <- find_admin(socket, id),
+         {:ok, _target} <- Accounts.update_admin_role(socket.assigns.current_admin, target, role) do
+      {:noreply,
+       socket
+       |> put_flash(:info, "#{target.email} is now #{Admin.role_label(role)}.")
+       |> load_admins()}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "That admin no longer exists.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You can't change that admin's role.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update that role.")}
+    end
+  end
+
+  def handle_event("toggle_suspend", %{"id" => id}, socket) do
+    with %Admin{} = target <- find_admin(socket, id),
+         result <-
+           if(Admin.suspended?(target),
+             do: Accounts.reinstate_admin(socket.assigns.current_admin, target),
+             else: Accounts.suspend_admin(socket.assigns.current_admin, target)
+           ),
+         {:ok, _target} <- result do
+      action = if Admin.suspended?(target), do: "reinstated", else: "suspended"
+      {:noreply, socket |> put_flash(:info, "#{target.email} #{action}.") |> load_admins()}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "That admin no longer exists.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You can't suspend that admin.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update that admin.")}
+    end
+  end
+
+  def handle_event("remove", %{"id" => id}, socket) do
+    with %Admin{} = target <- find_admin(socket, id),
+         {:ok, _target} <- Accounts.remove_admin(socket.assigns.current_admin, target) do
+      {:noreply,
+       socket |> put_flash(:info, "#{target.email} removed from the admin team.") |> load_admins()}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "That admin no longer exists.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You can't remove that admin.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Couldn't remove that admin.")}
     end
   end
 
@@ -54,15 +113,32 @@ defmodule CuevolutionWeb.AdminManagementLive do
     assign(socket, :admins, Accounts.list_admins())
   end
 
+  defp find_admin(socket, id), do: Enum.find(socket.assigns.admins, &(&1.id == id))
+
   defp assign_form(socket, changeset) do
     assign(socket, :form, to_form(changeset, as: :admin))
   end
 
   @doc false
-  def status_label(admin), do: if(Admin.pending?(admin), do: "Invited", else: "Active")
-
-  @doc false
   def status_badge_class(admin) do
-    if Admin.pending?(admin), do: "bg-ink-100 text-ink-700", else: "bg-[#DCF3E4] text-[#0E6A30]"
+    cond do
+      Admin.pending?(admin) -> "bg-[#FEF3E2] text-[#92400E]"
+      Admin.suspended?(admin) -> "bg-[#FDECEA] text-[#A81810]"
+      true -> "bg-[#DCF3E4] text-[#0E6A30]"
+    end
+  end
+
+  def status_label(%Admin{} = admin) do
+    cond do
+      Admin.pending?(admin) -> "Invited"
+      Admin.suspended?(admin) -> "Suspended"
+      true -> "Active"
+    end
+  end
+
+  def role_options_for(%Admin{} = actor, %Admin{} = target) do
+    Admin.roles()
+    |> Enum.filter(&(actor.role == "super_admin" or &1 != "super_admin" or &1 == target.role))
+    |> Enum.map(&{Admin.role_label(&1), &1})
   end
 end

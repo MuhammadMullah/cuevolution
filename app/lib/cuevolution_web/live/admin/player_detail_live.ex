@@ -4,6 +4,7 @@ defmodule CuevolutionWeb.PlayerDetailLive do
   import Ecto.Query
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Accounts.ProfilePicture
   alias Cuevolution.Notifications.Notification
@@ -31,8 +32,12 @@ defmodule CuevolutionWeb.PlayerDetailLive do
   end
 
   def handle_event("confirm_anonymize", _params, socket) do
-    {:noreply,
-     assign(socket, :anonymize_warnings, Accounts.anonymize_warnings(socket.assigns.player))}
+    if Admin.can?(socket.assigns.current_admin, :anonymize_users) do
+      {:noreply,
+       assign(socket, :anonymize_warnings, Accounts.anonymize_warnings(socket.assigns.player))}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to anonymize users.")}
+    end
   end
 
   def handle_event("cancel_anonymize", _params, socket) do
@@ -46,6 +51,9 @@ defmodule CuevolutionWeb.PlayerDetailLive do
          socket
          |> assign(player: player, anonymize_warnings: nil)
          |> put_flash(:info, "Player anonymized.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to anonymize users.")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Couldn't anonymize this player.")}

@@ -33,7 +33,8 @@ defmodule Cuevolution.Accounts do
   """
   def authenticate_admin(email, password) when is_binary(email) and is_binary(password) do
     case Repo.get_by(Admin, email: email) do
-      %Admin{hashed_password: hashed} = admin when is_binary(hashed) ->
+      %Admin{hashed_password: hashed} = admin
+      when is_binary(hashed) and admin.suspended_at == nil and admin.removed_at == nil ->
         if Bcrypt.verify_pass(password, hashed) do
           {:ok, admin}
         else
@@ -46,9 +47,9 @@ defmodule Cuevolution.Accounts do
     end
   end
 
-  @doc "Lists all admins for the admin-management page (super admin only), most recently invited first."
+  @doc "Lists all active and suspended admins for the admin-management page, most recently invited first."
   def list_admins do
-    Repo.all(from a in Admin, order_by: [desc: a.inserted_at])
+    Repo.all(from a in Admin, where: is_nil(a.removed_at), order_by: [desc: a.inserted_at])
   end
 
   @doc """
@@ -59,6 +60,14 @@ defmodule Cuevolution.Accounts do
   with their own route helper rather than this context hardcoding a path.
   """
   def invite_admin(%Admin{} = inviter, attrs, setup_url_fun) when is_function(setup_url_fun, 1) do
+    if not Admin.can?(inviter, :manage_admins) do
+      {:error, :unauthorized}
+    else
+      do_invite_admin(inviter, attrs, setup_url_fun)
+    end
+  end
+
+  defp do_invite_admin(%Admin{} = inviter, attrs, setup_url_fun) do
     Multi.new()
     |> Multi.insert(:admin, Admin.invite_changeset(%Admin{}, attrs))
     |> Multi.run(:token, fn repo, %{admin: admin} ->
@@ -82,6 +91,62 @@ defmodule Cuevolution.Accounts do
         {:error, changeset}
     end
   end
+
+  def update_admin_role(%Admin{} = actor, %Admin{} = target, role)
+      when is_binary(role) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         role in (Admin.invitable_roles() ++ ["super_admin"]) and
+         (actor.role == "super_admin" or role != "super_admin") do
+      target
+      |> Ecto.Changeset.change(role: role)
+      |> Repo.update()
+      |> log_admin_change(actor, target, "update_admin_role", role)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def suspend_admin(%Admin{} = actor, %Admin{} = target) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         actor.id != target.id do
+      target
+      |> Ecto.Changeset.change(suspended_at: DateTime.utc_now() |> DateTime.truncate(:second))
+      |> Repo.update()
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def reinstate_admin(%Admin{} = actor, %Admin{} = target) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) do
+      target |> Ecto.Changeset.change(suspended_at: nil) |> Repo.update()
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def remove_admin(%Admin{} = actor, %Admin{} = target) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         actor.id != target.id do
+      target
+      |> Ecto.Changeset.change(removed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+      |> Repo.update()
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp log_admin_change({:ok, _updated} = result, actor, target, action, role) do
+    _ =
+      log_admin_action(action, actor, target,
+        prior_value: %{"role" => target.role},
+        new_value: %{"role" => role}
+      )
+
+    result
+  end
+
+  defp log_admin_change(error, _actor, _target, _action, _role), do: error
 
   @doc """
   Looks up the admin a setup token belongs to — `nil` if the token is
@@ -414,15 +479,19 @@ defmodule Cuevolution.Accounts do
   the anonymized email/username no longer match what the player would enter.
   """
   def anonymize_player(%Player{} = player, %Admin{} = admin) do
-    Multi.new()
-    |> Multi.update(:player, Player.anonymize_changeset(player))
-    |> Multi.run(:log, fn _repo, %{player: updated} ->
-      log_admin_action("anonymize_player", admin, updated)
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{player: player}} -> {:ok, player}
-      {:error, :player, changeset, _changes} -> {:error, changeset}
+    if Admin.can?(admin, :anonymize_users) do
+      Multi.new()
+      |> Multi.update(:player, Player.anonymize_changeset(player))
+      |> Multi.run(:log, fn _repo, %{player: updated} ->
+        log_admin_action("anonymize_player", admin, updated)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{player: player}} -> {:ok, player}
+        {:error, :player, changeset, _changes} -> {:error, changeset}
+      end
+    else
+      {:error, :unauthorized}
     end
   end
 

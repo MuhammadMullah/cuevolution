@@ -46,15 +46,61 @@
   >
     <div
       :for={admin <- @admins}
-      class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
+      class="flex flex-col gap-3 border-b border-ink-100 px-4.5 py-4 last:border-0 sm:flex-row sm:items-center"
     >
-      <div class="min-w-[220px] flex-1">
+      <div class="min-w-0 flex-1">
         <div class="text-[14.5px] font-semibold text-ink-950">{admin.email}</div>
         <div class="text-[12.5px] text-ink-500">{Admin.role_label(admin.role)}</div>
       </div>
       <span class={["rounded-full px-2.5 py-1 text-xs font-semibold", status_badge_class(admin)]}>
         {status_label(admin)}
       </span>
+      <div class="w-full sm:w-[220px]">
+        <.form
+          for={to_form(%{"role" => admin.role}, as: :role)}
+          id={"role-form-#{admin.id}"}
+          phx-change="change_role"
+        >
+          <input type="hidden" name="target_id" value={admin.id} />
+          <.input
+            field={to_form(%{"role" => admin.role}, as: :role)[:role]}
+            id={"role-#{admin.id}"}
+            type="select"
+            options={role_options_for(@current_admin, admin)}
+            disabled={!Admin.manageable_by?(@current_admin, admin)}
+            aria-label={"Role for #{admin.email}"}
+            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </.form>
+        <div
+          :if={admin.role == "super_admin" and @current_admin.role == "tournament_director"}
+          class="mt-1 text-xs font-medium text-ink-400"
+        >
+          Protected — Super Admin accounts cannot be managed by Tournament Directors.
+        </div>
+      </div>
+      <div
+        :if={admin.id != @current_admin.id and Admin.manageable_by?(@current_admin, admin)}
+        class="flex flex-wrap gap-2"
+      >
+        <button
+          type="button"
+          phx-click="toggle_suspend"
+          phx-value-id={admin.id}
+          class="rounded-full border border-ink-300 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-100"
+        >
+          {if Admin.suspended?(admin), do: "Reinstate", else: "Suspend"}
+        </button>
+        <button
+          type="button"
+          phx-click="remove"
+          phx-value-id={admin.id}
+          data-confirm="Remove this admin?"
+          class="rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+        >
+          Remove
+        </button>
+      </div>
     </div>
   </div>
   <div
@@ -63,4 +109,46 @@
   >
     No admins yet.
   </div>
+
+  <AdminComponents.card class="mt-4">
+    <h2 class="mb-1 text-[15px] font-bold tracking-tight text-ink-950">Role permissions</h2>
+    <p class="mb-4 text-sm text-ink-500">
+      Permissions are enforced on the server for every admin action.
+    </p>
+    <div class="overflow-x-auto">
+      <table class="min-w-[700px] w-full text-left text-sm">
+        <thead class="border-b border-ink-200 text-xs uppercase tracking-wide text-ink-500">
+          <tr>
+            <th class="px-3 py-3 font-semibold">Permission</th>
+            <th :for={role <- Admin.roles()} class="px-3 py-3 font-semibold">
+              {Admin.role_label(role)}
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-100">
+          <tr :for={
+            {permission, label} <- [
+              {:manage_admins, "Manage admin users"},
+              {:manage_fixtures, "Create and update fixtures"},
+              {:record_results, "Add results"},
+              {:approve_results, "Approve fixtures and results"},
+              {:manage_venues, "Manage venues and regions"},
+              {:anonymize_users, "Anonymize users"}
+            ]
+          }>
+            <td class="px-3 py-3 font-medium text-ink-700">{label}</td>
+            <td :for={role <- Admin.roles()} class="px-3 py-3 font-mono text-base">
+              <span class={
+                if role in Map.get(Admin.permissions(), permission),
+                  do: "text-cue-600",
+                  else: "text-ink-300"
+              }>
+                {if role in Map.get(Admin.permissions(), permission), do: "✓", else: "—"}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </AdminComponents.card>
 </AdminComponents.app_shell>

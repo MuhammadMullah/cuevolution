@@ -13,6 +13,7 @@ defmodule CuevolutionWeb.AdminComponents do
   use CuevolutionWeb, :verified_routes
 
   alias Phoenix.LiveView.JS
+  alias Cuevolution.Accounts.Admin
 
   @doc "The small uppercase mono label used above page/section titles."
   attr :class, :string, default: nil
@@ -143,7 +144,7 @@ defmodule CuevolutionWeb.AdminComponents do
               <div class="truncate text-[13.5px] font-semibold text-ink-25">
                 {@current_admin.email}
               </div>
-              <div class="text-xs text-ink-500">Circuit Admin</div>
+              <div class="text-xs text-ink-500">{Admin.role_label(@current_admin.role)}</div>
             </div>
           </div>
           <.link
@@ -192,8 +193,29 @@ defmodule CuevolutionWeb.AdminComponents do
   defp nav_active?(active, "/admin/venues"), do: active == :venues
   defp nav_active?(active, "/admin/admins"), do: active == :admins
 
-  defp nav_items_for(%{role: "super_admin"}), do: @nav_items ++ [{"Admins", "☺", "/admin/admins"}]
-  defp nav_items_for(_current_admin), do: @nav_items
+  defp nav_items_for(admin) do
+    admin
+    |> permitted_nav_items()
+    |> maybe_add_admins(admin)
+  end
+
+  defp permitted_nav_items(admin) do
+    Enum.filter(@nav_items, fn
+      {_, _, "/admin/draws"} -> Admin.can?(admin, :manage_fixtures)
+      {_, _, "/admin/results"} -> Admin.can?(admin, :record_results)
+      {_, _, "/admin/stages"} -> Admin.can?(admin, :manage_stages)
+      {_, _, "/admin/groups"} -> Admin.can?(admin, :manage_groups)
+      {_, _, "/admin/players"} -> Admin.can?(admin, :view_directory)
+      {_, _, "/admin/venues"} -> Admin.can?(admin, :manage_venues)
+      _ -> true
+    end)
+  end
+
+  defp maybe_add_admins(items, admin) do
+    if Admin.can?(admin, :manage_admins),
+      do: items ++ [{"Admins", "☺", "/admin/admins"}],
+      else: items
+  end
 
   defp admin_initials(%{email: email}) do
     email

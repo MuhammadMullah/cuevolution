@@ -12,6 +12,7 @@
 # a region), Venues before Accounts (players pick a venue at registration),
 # Accounts before Teams (teams need players to captain them).
 
-for file <- ~w(regions_seeds.exs venues_seeds.exs accounts_seeds.exs teams_seeds.exs) do
+for file <-
+      ~w(regions_seeds.exs venues_seeds.exs admins_seeds.exs accounts_seeds.exs teams_seeds.exs) do
   Code.require_file(Path.join([__DIR__, "seeds", file]))
 end
