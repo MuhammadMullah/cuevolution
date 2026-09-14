@@ -20,7 +20,9 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     {"Teams", "team"}
   ]
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    filters = build_filters(params)
+
     {:ok,
      socket
      |> assign(
@@ -28,9 +30,9 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
        regions: Accounts.list_regions(),
        stages: Competitions.list_stages(),
        kinds: @kinds,
-       filter_form: to_form(%{}, as: :filter)
+       filter_form: to_form(params, as: :filter)
      )
-     |> assign(:rows, build_rows(%{}))}
+     |> assign(:rows, build_rows(filters))}
   end
 
   def handle_event("filter", %{"filter" => params}, socket) do
