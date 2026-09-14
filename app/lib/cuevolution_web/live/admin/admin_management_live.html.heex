@@ -140,7 +140,7 @@
             <td :for={role <- Admin.roles()} class="px-3 py-3 font-mono text-base">
               <span class={
                 if role in Map.get(Admin.permissions(), permission),
-                  do: "text-cue-600",
+                  do: "text-green-600",
                   else: "text-ink-300"
               }>
                 {if role in Map.get(Admin.permissions(), permission), do: "✓", else: "—"}
