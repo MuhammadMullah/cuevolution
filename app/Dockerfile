@@ -28,7 +28,7 @@ FROM ${BUILDER_IMAGE} AS builder
 
 # install build dependencies
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git \
+  && apt-get install -y --no-install-recommends build-essential git nodejs npm \
   && rm -rf /var/lib/apt/lists/*
 
 # prepare build dir
@@ -51,6 +51,10 @@ RUN mkdir config
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
+
+# Install JavaScript dependencies before compiling the production assets.
+COPY assets/package.json assets/package-lock.json ./assets/
+RUN npm ci --prefix assets
 
 RUN mix assets.setup
 
