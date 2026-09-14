@@ -19,8 +19,12 @@ body{background:#FDFCFB;-webkit-font-smoothing:antialiased;text-rendering:optimi
 a{color:#C81E16;text-decoration:none;}
 a:hover{color:#A81810;text-decoration:underline;}
 input::placeholder{color:#9E9EA7;}
+@media (max-width: 600px){
+  .cv-device-toggle{display:none !important;}
+}
 </style>
 </helmet>
+<sc-if value="{{ isDesktopPreview }}" hint-placeholder-val="{{ true }}">
 <div style="font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;color:#3A3546;min-height:100vh;background:#FDFCFB;">
 
   <!-- ============================ AUTH SHELL ============================ -->
@@ -134,7 +138,7 @@ input::placeholder{color:#9E9EA7;}
           <!-- STEP 1 · Personal -->
           <sc-if value="{{ rs1 }}" hint-placeholder-val="">
             <h1 style="font-size:23px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 4px;">Your details</h1>
-            <p style="font-size:14px;color:#6E6D7A;margin:0 0 22px;">Players must be 18 or older and be a Kenyan citizen or a resident of Kenya for at least 5 years to register.</p>
+            <p style="font-size:14px;color:#6E6D7A;margin:0 0 22px;">Players must be 18 or older to register.</p>
             <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
               <div onClick="{{ togglePhoto }}" style="{{ photoStyle }}" style-hover="border-color:#E32219;">{{ photoText }}</div>
               <div><div style="font-size:14px;font-weight:600;color:#3A3546;">Profile picture</div><div style="font-size:13px;color:#9E9EA7;">Tap the circle to add a photo</div></div>
@@ -270,15 +274,15 @@ input::placeholder{color:#9E9EA7;}
       <!-- top nav -->
       <header style="position:sticky;top:0;z-index:20;background:rgba(253,252,251,0.9);backdrop-filter:blur(10px);border-bottom:1px solid #E7E7E9;">
         <div style="max-width:1080px;margin:0 auto;padding:0 clamp(16px,4vw,28px);display:flex;align-items:center;gap:20px;height:62px;">
-          <img src="assets/logo-black.png" alt="Cuevolution" style="height:24px;width:auto;display:block;flex:none;" />
-          <nav style="display:flex;align-items:stretch;gap:clamp(14px,3vw,28px);margin-left:8px;overflow-x:auto;flex:1;">
+          <img src="assets/logo-black.png" alt="Cuevolution" style="height:clamp(20px,5vw,24px);width:auto;display:block;flex:none;" />
+          <nav style="display:flex;align-items:stretch;gap:clamp(10px,3vw,28px);margin-left:8px;overflow-x:auto;flex:1;min-width:0;">
             <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4"><div onClick="{{ n.onClick }}" style="{{ n.style }}">{{ n.label }}</div></sc-for>
           </nav>
           <div style="position:relative;flex:none;">
-            <div onClick="{{ toggleMenu }}" style="width:36px;height:36px;border-radius:9999px;background:#0D0C22;color:#FDFCFB;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:0.02em;" title="Account">{{ userInitials }}</div>
+            <div onClick="{{ toggleMenu }}" style="width:clamp(30px,8vw,36px);height:clamp(30px,8vw,36px);border-radius:9999px;background:#0D0C22;color:#FDFCFB;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:0.02em;" title="Account">{{ userInitials }}</div>
             <sc-if value="{{ menuOpen }}" hint-placeholder-val="">
               <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:40;"></div>
-              <div style="position:absolute;right:0;top:46px;z-index:50;width:216px;background:#fff;border:1px solid #E7E7E9;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.18);overflow:hidden;">
+              <div style="position:absolute;right:0;top:46px;z-index:50;width:216px;max-width:calc(100vw - 32px);background:#fff;border:1px solid #E7E7E9;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.18);overflow:hidden;">
                 <div style="padding:13px 15px;border-bottom:1px solid #F3F3F4;">
                   <div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ userName }}</div>
                   <div style="font-size:12.5px;color:#9E9EA7;font-family:'IBM Plex Mono',monospace;">{{ userHandle }}</div>
@@ -319,7 +323,7 @@ input::placeholder{color:#9E9EA7;}
               </button>
               <sc-if value="{{ filterOpen }}" hint-placeholder-val="">
                 <div onClick="{{ closeFilter }}" style="position:fixed;inset:0;z-index:40;"></div>
-                <div style="position:absolute;right:0;top:46px;z-index:50;width:262px;background:#fff;border:1px solid #E7E7E9;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.16);padding:16px;">
+                <div style="position:absolute;right:0;top:46px;z-index:50;width:262px;max-width:calc(100vw - 32px);background:#fff;border:1px solid #E7E7E9;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.16);padding:16px;">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;">
                     <span style="font-size:12px;font-weight:700;color:#0D0C22;text-transform:uppercase;letter-spacing:0.07em;">Filter standings</span>
                     <span onClick="{{ clearFilters }}" style="font-size:12.5px;font-weight:600;color:#C81E16;cursor:pointer;">Clear all</span>
@@ -480,7 +484,7 @@ input::placeholder{color:#9E9EA7;}
           <sc-if value="{{ hasUpcoming }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex;gap:12px;align-items:flex-start;background:#0D0C22;color:#FDFCFB;border-radius:16px;padding:16px 20px;margin-bottom:26px;">
             <div style="width:34px;height:34px;border-radius:9999px;background:#E32219;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none;">◆</div>
-            <div><div style="font-size:15px;font-weight:600;margin-bottom:2px;">A new draw has been published</div><div style="font-size:13.5px;color:#DBDBDE;">You have 2 upcoming fixtures. Notifications were sent to your email and SMS.</div></div>
+            <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;margin-bottom:2px;">A new draw has been published</div><div style="font-size:13.5px;color:#DBDBDE;">You have 2 upcoming fixtures. Notifications were sent to your email and SMS.</div></div>
           </div>
           </sc-if>
 
@@ -580,7 +584,7 @@ input::placeholder{color:#9E9EA7;}
                 <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">Current password</label>
                 <input type="password" value="{{ acct.curPass }}" onInput="{{ acctH.curPass }}" placeholder="••••••••" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
               </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px;">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:6px;">
                 <div>
                   <label style="display:block;font-size:13px;font-weight:600;color:#3A3546;margin-bottom:6px;">New password</label>
                   <input type="password" value="{{ acct.newPass }}" onInput="{{ acctH.newPass }}" placeholder="min. 8 characters" style="width:100%;border:1px solid #DBDBDE;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
@@ -637,7 +641,7 @@ input::placeholder{color:#9E9EA7;}
               <div style="font-size:13.5px;color:#DBDBDE;">{{ playerDetail.region }} · Rank {{ playerDetail.rank }}</div>
             </div>
           </div>
-          <div style="display:flex;gap:22px;margin-top:20px;font-family:'IBM Plex Mono',monospace;">
+          <div style="display:flex;gap:22px;margin-top:20px;font-family:'IBM Plex Mono',monospace;flex-wrap:wrap;">
             <div><div style="font-size:20px;font-weight:600;">{{ playerDetail.played }}</div><div style="font-size:11px;color:#9E9EA7;letter-spacing:0.04em;">PLAYED</div></div>
             <div><div style="font-size:20px;font-weight:600;">{{ playerDetail.record }}</div><div style="font-size:11px;color:#9E9EA7;letter-spacing:0.04em;">W–L</div></div>
             <div><div style="font-size:20px;font-weight:600;color:#F09B92;">{{ playerDetail.points }}</div><div style="font-size:11px;color:#9E9EA7;letter-spacing:0.04em;">POINTS</div></div>
@@ -664,7 +668,7 @@ input::placeholder{color:#9E9EA7;}
   <!-- ============================ DEMO STATE SWITCHER ============================ -->
   <div style="position:fixed;right:18px;bottom:18px;z-index:100;display:flex;flex-direction:column;align-items:flex-end;">
     <sc-if value="{{ switcherOpen }}" hint-placeholder-val="">
-      <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;box-shadow:0 14px 44px rgba(13,12,34,0.18);padding:14px;width:256px;margin-bottom:10px;">
+        <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;box-shadow:0 14px 44px rgba(13,12,34,0.18);padding:14px;width:256px;max-width:calc(100vw - 36px);margin-bottom:10px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0D0C22;margin-bottom:11px;">Demo states</div>
         <div style="display:flex;flex-direction:column;gap:7px;">
           <sc-for list="{{ scenarioOpts }}" as="o" hint-placeholder-count="6"><button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button></sc-for>
@@ -676,11 +680,20 @@ input::placeholder{color:#9E9EA7;}
   </div>
 
 </div>
+</sc-if>
+<sc-if value="{{ isMobilePreview }}" hint-placeholder-val="">
+<div style="min-height:100vh;background:#3A3546;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+  <div style="width:390px;height:844px;border-radius:36px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.4);border:8px solid #0D0C22;">
+    <iframe src="Cuevolution Player App.dc.html" style="width:100%;height:100%;border:none;"></iframe>
+  </div>
+</div>
+</sc-if>
+<button class="cv-device-toggle" onClick="{{ toggleDevice }}" style="position:fixed;bottom:20px;left:20px;z-index:9999;background:#0D0C22;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:9999px;padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.25);">{{ deviceToggleLabel }}</button>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:720}}">
 class Component extends DCLogic {
   state = {
-    authed:false, route:'signin', 
+    authed:false, route:'signin', mobilePreview:false,
     si:{email:'',pass:''}, siError:'',
     fp:{email:'',pass:'',confirm:''}, fpError:'',
     regStep:1,
@@ -836,7 +849,7 @@ class Component extends DCLogic {
   chip(sel){ return `flex:1;min-width:0;text-align:center;padding:11px 14px;border-radius:9999px;border:1px solid ${sel?'#0D0C22':'#DBDBDE'};background:${sel?'#0D0C22':'#fff'};color:${sel?'#FDFCFB':'#3A3546'};font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;`; }
   pill(sel){ return `padding:9px 16px;border-radius:9999px;border:1px solid ${sel?'#E32219':'#DBDBDE'};background:${sel?'#FDECEA':'#fff'};color:${sel?'#A81810':'#3A3546'};font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;`; }
   optCard(sel){ return `text-align:left;padding:14px 16px;border-radius:14px;border:1px solid ${sel?'#E32219':'#DBDBDE'};background:${sel?'#FDECEA':'#fff'};cursor:pointer;font-family:inherit;`; }
-  navStyle(active){ return `display:flex;align-items:center;padding:0 2px;font-size:15px;font-weight:600;color:${active?'#0D0C22':'#6E6D7A'};border-bottom:2px solid ${active?'#E32219':'transparent'};cursor:pointer;white-space:nowrap;`; }
+  navStyle(active){ return `display:flex;align-items:center;padding:0 2px;font-size:clamp(13px,3.5vw,15px);font-weight:600;color:${active?'#0D0C22':'#6E6D7A'};border-bottom:2px solid ${active?'#E32219':'transparent'};cursor:pointer;white-space:nowrap;`; }
   tabStyle(active){ return `padding:11px 4px;font-size:15px;font-weight:600;color:${active?'#0D0C22':'#6E6D7A'};border-bottom:2px solid ${active?'#E32219':'transparent'};cursor:pointer;white-space:nowrap;`; }
   pageBtnStyle(active){ return `min-width:34px;height:34px;padding:0 8px;border-radius:9px;border:1px solid ${active?'#0D0C22':'#DBDBDE'};background:${active?'#0D0C22':'#fff'};color:${active?'#FDFCFB':'#3A3546'};font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;cursor:pointer;`; }
   initialsOf(n){ return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
@@ -1039,6 +1052,7 @@ class Component extends DCLogic {
       menuLogout:()=>{ this.setState({menuOpen:false,authed:false,route:'signin',si:{email:'',pass:''}}); try{window.scrollTo(0,0);}catch(e){} },
       noop:(e)=>{ if(e&&e.preventDefault)e.preventDefault(); },
       navItems, userInitials:'BO', userName:'Brian Otieno', userHandle:'@brian_o', teamName:'Westlands Cue Kings', teamRegion:'Nairobi A',
+      isDesktopPreview: !S.mobilePreview, isMobilePreview: S.mobilePreview, deviceToggleLabel: S.mobilePreview ? 'Desktop view' : 'Mobile preview', toggleDevice: () => this.setState(s => ({ mobilePreview: !s.mobilePreview })),
       // signin
       si:S.si, siError:S.siError,
       siH:{email:(e)=>this.setState(s=>({si:{...s.si,email:e.target.value},siError:''})), pass:(e)=>this.setState(s=>({si:{...s.si,pass:e.target.value},siError:''}))},

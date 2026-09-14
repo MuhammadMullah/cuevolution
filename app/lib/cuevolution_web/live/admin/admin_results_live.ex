@@ -15,8 +15,8 @@ defmodule CuevolutionWeb.AdminResultsLive do
   """
   use CuevolutionWeb, :live_view
 
-  alias Cuevolution.Competitions
   alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Competitions
   alias CuevolutionWeb.AdminComponents
 
   def mount(_params, _session, socket) do

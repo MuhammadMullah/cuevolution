@@ -207,7 +207,13 @@ defmodule CuevolutionWeb.AdminDrawsLive do
         if attempted == [] do
           {:noreply, put_flash(socket, :error, "Add at least one fixture row first.")}
         else
-          results = Competitions.enter_fixtures(round, Enum.map(attempted, &row_to_params/1))
+          results =
+            Competitions.enter_fixtures(
+              round,
+              socket.assigns.current_admin,
+              Enum.map(attempted, &row_to_params/1)
+            )
+
           {:noreply, apply_save_results(socket, attempted, results)}
         end
     end

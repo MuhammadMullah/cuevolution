@@ -87,7 +87,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             <div style="width:32px;height:32px;border-radius:9999px;background:#E32219;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;">{{ adminInitials }}</div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:13.5px;font-weight:600;color:#FDFCFB;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ adminName }}</div>
-              <div style="font-size:12px;color:#6E6D7A;">League Admin</div>
+              <div style="font-size:12px;color:#6E6D7A;">{{ adminRoleLabel }}</div>
             </div>
           </div>
           <div onClick="{{ logout }}" style="display:flex;align-items:center;gap:8px;padding:9px 10px;font-size:13.5px;font-weight:600;color:#F09B92;cursor:pointer;border-radius:9px;" style-hover="background:rgba(227,34,25,0.14);"><span>⏻</span>Log out</div>
@@ -110,6 +110,88 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
                 <div style="font-size:12.5px;margin-top:4px;color:{{ s.deltaColor }};">{{ s.delta }}</div>
               </div>
             </sc-for>
+          </div>
+
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:16px;">
+            <div style="display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:baseline;margin-bottom:16px;">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0;letter-spacing:-0.01em;">Players per region</h2>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <sc-for list="{{ catLegend }}" as="l" hint-placeholder-count="3">
+                  <span onClick="{{ l.onClick }}" style="{{ l.style }}"><span style="{{ l.dotStyle }}"></span>{{ l.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <sc-for list="{{ regionBars }}" as="r" hint-placeholder-count="8">
+              <div onMouseEnter="{{ r.onEnter }}" onMouseLeave="{{ r.onLeave }}" onClick="{{ r.onClick }}" style="{{ r.rowStyle }}">
+                <div style="{{ r.labelStyle }}">{{ r.region }}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;height:16px;width:{{ r.barWidth }};border-radius:4px;overflow:hidden;min-width:3px;transition:width .2s ease;">
+                    <sc-for list="{{ r.segs }}" as="s" hint-placeholder-count="3">
+                      <div style="width:{{ s.w }};background:{{ s.color }};"></div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:11.5px;color:#9E9EA7;margin-top:4px;">{{ r.detail }}</div>
+                </div>
+                <div style="width:52px;flex:none;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#0D0C22;">{{ r.total }}</div>
+              </div>
+            </sc-for>
+            <div style="font-size:12px;color:#9E9EA7;margin-top:12px;">{{ regionHint }}</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:16px;">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 2px;letter-spacing:-0.01em;">Registrations, last 12 weeks</h2>
+              <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px;">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#0D0C22;">{{ trendTotalLabel }}</span>
+                <span style="font-size:12.5px;color:{{ trendDeltaColor }};">{{ trendDeltaLabel }}</span>
+              </div>
+              <svg viewBox="0 0 {{ chartW }} {{ chartH }}" preserveAspectRatio="none" style="width:100%;height:120px;display:block;overflow:visible;">
+                <path d="{{ areaPath }}" fill="rgba(227,34,25,0.10)"></path>
+                <polyline points="{{ linePts }}" fill="none" stroke="#E32219" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline>
+                <sc-if value="{{ trendHasGuide }}" hint-placeholder-val="">
+                  <line x1="{{ trendGuide.x }}" y1="0" x2="{{ trendGuide.x }}" y2="{{ chartH }}" stroke="#DBDBDE" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></line>
+                </sc-if>
+                <sc-for list="{{ trendDots }}" as="d" hint-placeholder-count="12">
+                  <circle cx="{{ d.cx }}" cy="{{ d.cy }}" r="{{ d.r }}" fill="{{ d.fill }}" stroke="#E32219" stroke-width="2" vector-effect="non-scaling-stroke"></circle>
+                </sc-for>
+                <sc-for list="{{ trendDots }}" as="d" hint-placeholder-count="12">
+                  <rect x="{{ d.bandX }}" y="0" width="{{ d.bandW }}" height="{{ chartH }}" fill="transparent" onMouseEnter="{{ d.onEnter }}" onMouseLeave="{{ d.onLeave }}" style="cursor:crosshair;"></rect>
+                </sc-for>
+              </svg>
+              <div style="display:flex;justify-content:space-between;margin-top:8px;">
+                <sc-for list="{{ weekLabels }}" as="w" hint-placeholder-count="4">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9E9EA7;">{{ w }}</span>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 16px;letter-spacing:-0.01em;">Category mix</h2>
+              <div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;">
+                <div style="position:relative;width:120px;height:120px;flex:none;">
+                  <svg viewBox="0 0 100 100" style="width:120px;height:120px;transform:rotate(-90deg);">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#F3F3F4" stroke-width="14"></circle>
+                    <sc-for list="{{ mixArcs }}" as="a" hint-placeholder-count="3">
+                      <circle cx="50" cy="50" r="42" fill="none" stroke="{{ a.color }}" stroke-width="{{ a.width }}" stroke-opacity="{{ a.opacity }}" stroke-dasharray="{{ a.dash }}" stroke-dashoffset="{{ a.offset }}" onMouseEnter="{{ a.onEnter }}" onMouseLeave="{{ a.onLeave }}" style="cursor:pointer;transition:stroke-width .15s ease,stroke-opacity .15s ease;"></circle>
+                    </sc-for>
+                  </svg>
+                  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:#0D0C22;line-height:1;">{{ mixTotalLabel }}</span>
+                    <span style="font-size:11px;color:#9E9EA7;text-align:center;line-height:1.25;">{{ mixTotalNote }}</span>
+                  </div>
+                </div>
+                <div style="flex:1;min-width:150px;">
+                  <sc-for list="{{ mixLegend }}" as="l" hint-placeholder-count="3">
+                    <div onMouseEnter="{{ l.onEnter }}" onMouseLeave="{{ l.onLeave }}" style="{{ l.rowStyle }}">
+                      <span style="width:9px;height:9px;border-radius:2px;background:{{ l.color }};flex:none;"></span>
+                      <span style="flex:1;font-size:13px;font-weight:600;color:#3A3546;">{{ l.label }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6E6D7A;">{{ l.value }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9E9EA7;width:34px;text-align:right;">{{ l.pct }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
@@ -511,6 +593,180 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
           </sc-if>
         </sc-if>
 
+        <!-- ===== AUDIT LOG ===== -->
+        <sc-if value="{{ rIsAudit }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Accountability</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 6px;">Audit log</h1>
+          <p style="font-size:14.5px;line-height:1.6;color:#6E6D7A;margin:0 0 20px;max-width:64ch;">Sign-in history and every fixture or result change, by admin. Super Admin accounts are excluded from these records.</p>
+
+          <div style="display:flex;gap:26px;overflow-x:auto;border-bottom:1px solid #E7E7E9;margin-bottom:18px;">
+            <sc-for list="{{ auditTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+
+          <!-- admin activity -->
+          <sc-if value="{{ auditIsActivity }}" hint-placeholder-val="{{ true }}">
+            <sc-if value="{{ hasActivityRows }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow-x:auto;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="min-width:760px;">
+                <div style="display:grid;grid-template-columns:2.2fr 1.3fr 0.7fr 1.3fr 0.8fr 0.8fr 0.9fr;background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                  <div style="padding:12px 18px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;">Admin</div>
+                  <div style="padding:12px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;">Role</div>
+                  <div style="padding:12px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;text-align:right;">Logins</div>
+                  <div style="padding:12px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;">Last login</div>
+                  <div style="padding:12px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;text-align:right;">Fixtures</div>
+                  <div style="padding:12px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;text-align:right;">Results</div>
+                  <div style="padding:12px 18px 12px 12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;text-align:right;">Approvals</div>
+                </div>
+                <sc-for list="{{ activityRows }}" as="a" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:2.2fr 1.3fr 0.7fr 1.3fr 0.8fr 0.8fr 0.9fr;border-bottom:1px solid #F3F3F4;align-items:center;">
+                    <div style="padding:12px 18px;display:flex;align-items:center;gap:11px;min-width:0;overflow:hidden;">
+                      <div style="width:32px;height:32px;border-radius:9999px;background:{{ a.avatarBg }};color:{{ a.avatarColor }};display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:700;flex:none;">{{ a.initials }}</div>
+                      <div style="min-width:0;overflow:hidden;display:flex;flex-direction:column;gap:3px;">
+                        <div style="font-size:13.5px;font-weight:600;color:#0D0C22;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.who }}</div>
+                        <sc-if value="{{ a.showEmail }}" hint-placeholder-val="{{ true }}">
+                          <div style="font-size:12px;color:#9E9EA7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.email }}</div>
+                        </sc-if>
+                        <sc-if value="{{ a.hasFlag }}" hint-placeholder-val=""><span style="{{ a.flagStyle }}">{{ a.flag }}</span></sc-if>
+                      </div>
+                    </div>
+                    <div style="padding:12px;"><span style="{{ a.rolePillStyle }}">{{ a.roleLabel }}</span></div>
+                    <div style="padding:12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#0D0C22;">{{ a.logins }}</div>
+                    <div style="padding:12px;"><span style="{{ a.lastLoginStyle }}">{{ a.lastLogin }}</span></div>
+                    <div style="padding:12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#3A3546;">{{ a.fixtures }}</div>
+                    <div style="padding:12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#3A3546;">{{ a.results }}</div>
+                    <div style="padding:12px 18px 12px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#3A3546;">{{ a.approvals }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ noActivityRows }}" hint-placeholder-val="">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:36px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No auditable admins yet — only Super Admin accounts exist, and those are excluded.</div>
+            </sc-if>
+          </sc-if>
+
+          <!-- fixture & result log -->
+          <sc-if value="{{ auditIsEvents }}" hint-placeholder-val="">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px;">
+              <input type="text" value="{{ auditSearch }}" onInput="{{ onAuditSearch }}" placeholder="Search admin, match or round…" style="flex:1;min-width:220px;border:1px solid #DBDBDE;border-radius:9999px;padding:10px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+              <select value="{{ auditActor }}" onChange="{{ onAuditActor }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:10px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                <sc-for list="{{ actorOpts }}" as="o" hint-placeholder-count="5"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+              <select value="{{ auditType }}" onChange="{{ onAuditType }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:10px 15px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                <sc-for list="{{ typeOpts }}" as="o" hint-placeholder-count="7"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#9E9EA7;">{{ eventCountLabel }}</span>
+            </div>
+
+            <sc-if value="{{ hasEventRows }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <sc-for list="{{ eventRows }}" as="e" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:13px;padding:13px 18px;border-bottom:1px solid #F3F3F4;flex-wrap:wrap;">
+                  <div style="width:32px;height:32px;border-radius:9999px;background:{{ e.avatarBg }};color:{{ e.avatarColor }};display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:700;flex:none;">{{ e.initials }}</div>
+                  <span style="{{ e.typePillStyle }}">{{ e.typeLabel }}</span>
+                  <div style="flex:1;min-width:190px;">
+                    <div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ e.subject }}</div>
+                    <div style="font-size:12.5px;color:#9E9EA7;">{{ e.context }} · {{ e.detail }}</div>
+                  </div>
+                  <div style="flex:none;text-align:right;">
+                    <div style="font-size:13px;font-weight:600;color:#3A3546;">{{ e.actorName }}</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9E9EA7;">{{ e.stamp }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ noEventRows }}" hint-placeholder-val="">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:36px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No activity matches these filters.</div>
+            </sc-if>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== ADMINS / USER MANAGEMENT ===== -->
+        <sc-if value="{{ rIsAdmins }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Admin team</div>
+          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 6px;">User management</h1>
+          <p style="font-size:14.5px;line-height:1.6;color:#6E6D7A;margin:0 0 24px;max-width:62ch;">Your role is {{ myRoleLabel }}. {{ adminIntro }}</p>
+
+          <sc-if value="{{ canManageUsers }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:14px;">
+            <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0 0 14px;letter-spacing:-0.01em;">Invite an admin</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+              <input type="email" value="{{ inviteEmail }}" onInput="{{ onInviteEmail }}" placeholder="name@example.com" style="flex:2;min-width:220px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+              <select value="{{ inviteRole }}" onChange="{{ onInviteRole }}" style="flex:1;min-width:200px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;cursor:pointer;">
+                <sc-for list="{{ assignableRoleOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+              </select>
+              <button onClick="{{ sendInvite }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 24px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex:none;" style-hover="background:#16152B;">Send invite</button>
+            </div>
+            <sc-if value="{{ inviteRoleBlurb }}" hint-placeholder-val="{{ true }}">
+              <p style="font-size:13px;line-height:1.55;color:#6E6D7A;margin:12px 0 0;">{{ inviteRoleBlurb }}</p>
+            </sc-if>
+          </div>
+          </sc-if>
+          <sc-if value="{{ adminMsg }}" hint-placeholder-val=""><div style="{{ adminMsgStyle }}">{{ adminMsg }}</div></sc-if>
+
+          <div style="display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid #E7E7E9;margin:24px 0 16px;">
+            <sc-for list="{{ adminFilterTabs }}" as="t" hint-placeholder-count="5"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+          </div>
+
+          <sc-if value="{{ hasAdminRows }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <sc-for list="{{ adminRows }}" as="u" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #F3F3F4;flex-wrap:wrap;">
+                <div style="width:36px;height:36px;border-radius:9999px;background:{{ u.avatarBg }};color:{{ u.avatarColor }};display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;flex:none;">{{ u.initials }}</div>
+                <div style="flex:1;min-width:180px;">
+                  <div style="font-size:14.5px;font-weight:600;color:#0D0C22;">{{ u.displayName }}</div>
+                  <div style="font-size:12.5px;color:#9E9EA7;">{{ u.scope }}</div>
+                </div>
+                <span style="{{ u.rolePillStyle }}">{{ u.roleLabel }}</span>
+                <span style="{{ u.statusStyle }}">{{ u.statusLabel }}</span>
+                <sc-if value="{{ u.canManage }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;gap:7px;flex:none;">
+                    <sc-if value="{{ u.notSelf }}" hint-placeholder-val="{{ true }}">
+                      <select value="{{ u.role }}" onChange="{{ u.onRoleChange }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:7px 12px;font-family:inherit;font-size:12.5px;font-weight:600;color:#3A3546;background:#fff;cursor:pointer;">
+                        <sc-for list="{{ u.roleOpts }}" as="o" hint-placeholder-count="4"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                      </select>
+                      <button onClick="{{ u.toggleSuspend }}" style="{{ u.suspendBtnStyle }}">{{ u.suspendBtnLabel }}</button>
+                      <button onClick="{{ u.remove }}" style="background:none;border:1px solid #F6C9C5;color:#A81810;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;" style-hover="background:#FDECEA;">Remove</button>
+                    </sc-if>
+                    <sc-if value="{{ u.isSelf }}" hint-placeholder-val="">
+                      <span style="font-size:12.5px;color:#9E9EA7;align-self:center;">You</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ u.cannotManage }}" hint-placeholder-val="">
+                  <span style="font-size:12.5px;color:#9E9EA7;flex:none;">{{ u.lockReason }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ noAdminRows }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:36px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No admins in this view yet.</div>
+          </sc-if>
+
+          <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:32px 0 4px;letter-spacing:-0.01em;">What each role can do</h2>
+          <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 14px;">Permissions are fixed per role — assigning a role grants exactly this set.</p>
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow-x:auto;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <div style="min-width:660px;">
+              <div style="display:grid;grid-template-columns:2fr repeat(4,1fr);gap:0;background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                <div style="padding:13px 18px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;">Permission</div>
+                <sc-for list="{{ matrixCols }}" as="c" hint-placeholder-count="4">
+                  <div style="padding:13px 12px;text-align:center;font-size:12px;font-weight:700;color:#0D0C22;line-height:1.3;">{{ c.label }}</div>
+                </sc-for>
+              </div>
+              <sc-for list="{{ matrixRows }}" as="r" hint-placeholder-count="9">
+                <div style="display:grid;grid-template-columns:2fr repeat(4,1fr);gap:0;border-bottom:1px solid #F3F3F4;align-items:center;">
+                  <div style="padding:12px 18px;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ r.label }}<span style="font-weight:500;color:#9E9EA7;">{{ r.note }}</span></div>
+                  <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4">
+                    <div style="padding:12px;text-align:center;font-size:15px;font-weight:700;color:{{ c.color }};">{{ c.mark }}</div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
       </main>
     </div>
   </sc-if>
@@ -519,7 +775,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
   <sc-if value="{{ menuOpen }}" hint-placeholder-val="">
     <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:60;background:rgba(13,12,34,0.4);display:flex;align-items:flex-start;justify-content:flex-end;padding:64px 16px;">
       <div onClick="{{ stopClick }}" style="width:220px;background:#fff;border-radius:14px;box-shadow:0 16px 44px rgba(13,12,34,0.2);overflow:hidden;">
-        <div style="padding:13px 15px;border-bottom:1px solid #F3F3F4;"><div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ adminName }}</div><div style="font-size:12px;color:#9E9EA7;">League Admin</div></div>
+        <div style="padding:13px 15px;border-bottom:1px solid #F3F3F4;"><div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ adminName }}</div><div style="font-size:12px;color:#9E9EA7;">{{ adminRoleLabel }}</div></div>
         <div onClick="{{ logout }}" style="display:flex;align-items:center;gap:9px;padding:11px 15px;font-size:14px;font-weight:600;color:#A81810;cursor:pointer;" style-hover="background:#FDECEA;"><span>⏻</span>Log out</div>
       </div>
     </div>
@@ -644,7 +900,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
 
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:760}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:760},&quot;viewAsRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;super&quot;,&quot;director&quot;,&quot;coordinator&quot;,&quot;venue&quot;],&quot;default&quot;:&quot;super&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Admins page&quot;}}">
 class Component extends DCLogic {
   state = {
     authed:false, li:{email:'',pass:''}, liError:'',
@@ -656,8 +912,41 @@ class Component extends DCLogic {
     scenario:'default', switcherOpen:false,
     stagesStage:'Grassroots', stagesPanel:'participants', stagesRegion:'All', stagesCategory:'all',
     groupsStage:'Grassroots', groupsRegion:'Nairobi A', groupsVenue:'', groupsCategory:'male', newGroupName:'',
-    showNewRound:false, newRoundStage:'Grassroots', newRoundGroup:'', newRoundCategory:'male', newRoundName:'', extraRounds:[]
+    showNewRound:false, newRoundStage:'Grassroots', newRoundGroup:'', newRoundCategory:'male', newRoundName:'', extraRounds:[],
+    chartCats:['m','f','t'], hoverRegion:null, hoverWeek:null, hoverMix:null,
+    auditTab:'activity', auditActor:'all', auditType:'all', auditSearch:'',
+    myRole:'super', inviteEmail:'', inviteRole:'coordinator', adminMsg:'', adminMsgOk:false, adminFilter:'all',
+    adminUsers:[
+      {id:'u1', email:'amina.yusuf@cuevolutionke.com', name:'Amina Yusuf', role:'super', scope:'All regions', status:'active'},
+      {id:'u2', email:'collins@cuevolutionke.com', name:'Collins Barasa', role:'director', scope:'All regions', status:'active'},
+      {id:'u3', email:'jmarto96@gmail.com', name:'Joseph Martos', role:'director', scope:'All regions', status:'active'},
+      {id:'u4', email:'fhdtuke@gmail.com', name:'Fahad Tuke', role:'coordinator', scope:'Nairobi A · Nairobi B', status:'active'},
+      {id:'u5', email:'a.wanjiru@cuevolutionke.com', name:'Alice Wanjiru', role:'coordinator', scope:'Coast', status:'suspended'},
+      {id:'u6', email:'rack9.westlands@gmail.com', name:'Victor Omondi', role:'venue', scope:'Rack Nine, Westlands', status:'active'},
+      {id:'u7', email:'nyalipool@gmail.com', name:'Nyali Pool Lounge', role:'venue', scope:'Nyali Pool Lounge', status:'invited'}
+    ]
   };
+
+  ROLES={
+    super:{label:'Super Admin', rank:4, blurb:'Full access to everything, including managing other Super Admins.'},
+    director:{label:'Tournament Director', rank:3, blurb:'Everything a Super Admin can do except managing Super Admins.'},
+    coordinator:{label:'Regional Coordinator', rank:2, blurb:'Creates and approves fixtures and results, manages venues and regions, updates the calendar.'},
+    venue:{label:'Venue Representative', rank:1, blurb:'Creates and updates fixtures for their venue, and adds results.'}
+  };
+  ROLE_ORDER=['super','director','coordinator','venue'];
+  MY_ID='u1';
+  initialsFor(u){ return u.name ? u.name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase() : u.email.slice(0,2).toUpperCase(); }
+  PERMS=[
+    {label:'Full application access', grants:['super','director']},
+    {label:'Manage admin users', note:' — invite, suspend, remove', grants:['super','director']},
+    {label:'Manage Super Admins', grants:['super']},
+    {label:'Create & update fixtures', grants:['super','director','coordinator','venue']},
+    {label:'Add results', grants:['super','director','coordinator','venue']},
+    {label:'Approve fixtures & results', grants:['super','director','coordinator']},
+    {label:'Manage venues & regions', grants:['super','director','coordinator']},
+    {label:'Update calendar', note:' — coming soon', grants:['super','director','coordinator']},
+    {label:'Anonymize users', grants:['super','director']}
+  ];
 
   REGIONS=['Nairobi A','Nairobi B','Central','Eastern','Coast','Rift A','Rift B','Nyanza & Western'];
   FIRST_M=['Brian','Kevin','Samuel','Joseph','Victor','Daniel','Peter','Collins','Dennis','Michael','James','Anthony','Charles','George','Patrick','Simon'];
@@ -848,17 +1137,180 @@ class Component extends DCLogic {
     const mobileBarDisplay = isMobileLayout ? 'flex' : 'none';
     const sidebarLogoDisplay = isMobileLayout ? 'none' : 'flex';
 
-    const navDefs=[['dashboard','▦','Dashboard'],['stages','◆','Stages'],['groups','▤','Groups'],['draws','⚏','Draws'],['results','◔','Results & Points'],['directory','☰','Directory'],['venues','⚑','Venues']];
+    const _myRoleKey=(this.props.viewAsRole && this.ROLES[this.props.viewAsRole]) ? this.props.viewAsRole : S.myRole;
+    const canManageUsers=['super','director'].indexOf(_myRoleKey)>=0;
+    if(!canManageUsers && (S.route==='admins'||S.route==='audit')){ S.route='dashboard'; }
+    const navDefs=[['dashboard','▦','Dashboard'],['stages','◆','Stages'],['groups','▤','Groups'],['draws','⚏','Draws'],['results','◔','Results & Points'],['directory','☰','Directory'],['venues','⚑','Venues']].concat(canManageUsers?[['admins','☺','Admins'],['audit','◷','Audit log']]:[]);
     const navItems=navDefs.map(([r,icon,label])=>({icon,label,onClick:()=>{this.setState({route:r,drawerOpen:false});},
       style:`display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;color:${S.route===r?'#fff':'#9E9EA7'};background:${S.route===r?'rgba(227,34,25,0.18)':'transparent'};`}));
 
+    // ---- admins / user management ----
+    const R=this.ROLES, myRoleKey=_myRoleKey, myRank=R[myRoleKey].rank;
+    const rolePill=(key)=>{
+      const c={super:['#FDECEA','#A81810'],director:['#FEF3E2','#92400E'],coordinator:['#E8EEF7','#1F4D7A'],venue:['#F3F3F4','#3A3546']}[key];
+      return `background:${c[0]};color:${c[1]};font-size:12px;font-weight:700;padding:5px 12px;border-radius:9999px;flex:none;white-space:nowrap;`;
+    };
+    const assignable=this.ROLE_ORDER.filter(k=>myRank===4 || k!=='super');
+    const assignableRoleOpts=assignable.map(k=>({value:k,label:R[k].label}));
+    const setAdminMsg=(msg,ok)=>this.setState({adminMsg:msg,adminMsgOk:ok});
+    const sendInvite=()=>{
+      const em=S.inviteEmail.trim();
+      if(!canManageUsers) return setAdminMsg('Your role cannot invite admins.',false);
+      if(!/^\S+@\S+\.\S+$/.test(em)) return setAdminMsg('Enter a valid email address.',false);
+      if(S.adminUsers.some(u=>u.email.toLowerCase()===em.toLowerCase())) return setAdminMsg(em+' is already on the admin team.',false);
+      this.setState(s=>({adminUsers:[...s.adminUsers,{id:'u'+Date.now(),email:em,role:s.inviteRole,scope:'Scope not set',status:'invited'}],inviteEmail:'',adminMsg:'Invite sent to '+em+' as '+R[S.inviteRole].label+'.',adminMsgOk:true}));
+    };
+    const adminFilterDefs=[['all','All']].concat(this.ROLE_ORDER.map(k=>[k,R[k].label]));
+    const adminFilterTabs=adminFilterDefs.map(([k,label])=>({label,onClick:()=>this.setState({adminFilter:k}),style:this.tabStyle(S.adminFilter===k)}));
+    const statusStyles={
+      active:'background:#DCF3E4;color:#0E6A30;font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:9999px;flex:none;',
+      suspended:'background:#FDECEA;color:#A81810;font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:9999px;flex:none;',
+      invited:'background:#FEF3E2;color:#92400E;font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:9999px;flex:none;'
+    };
+    const avatarTints={super:['#FDECEA','#A81810'],director:['#FEF3E2','#92400E'],coordinator:['#E8EEF7','#1F4D7A'],venue:['#F3F3F4','#3A3546']};
+    const adminRows=S.adminUsers.filter(u=>S.adminFilter==='all'||u.role===S.adminFilter).map(u=>{
+      const isSelf = u.id===this.MY_ID;
+      const canManage = canManageUsers && (myRank===4 ? true : u.role!=='super');
+      const opts=this.ROLE_ORDER.filter(k=>myRank===4||k!=='super'||k===u.role).map(k=>({value:k,label:R[k].label}));
+      return {
+        ...u, roleLabel:R[u.role].label, rolePillStyle:rolePill(u.role),
+        displayName: u.name ? u.name + ' · ' + u.email : u.email,
+        initials: this.initialsFor(u),
+        avatarBg:avatarTints[u.role][0], avatarColor:avatarTints[u.role][1],
+        statusLabel:u.status.charAt(0).toUpperCase()+u.status.slice(1), statusStyle:statusStyles[u.status],
+        canManage, cannotManage:!canManage, lockReason:canManageUsers?'Above your role':'View only', roleOpts:opts,
+        isSelf, notSelf:!isSelf,
+        onRoleChange:(e)=>{const v=e.target.value;this.setState(s=>({adminUsers:s.adminUsers.map(x=>x.id===u.id?{...x,role:v}:x),adminMsg:u.email+' is now '+R[v].label+'.',adminMsgOk:true}));},
+        suspendBtnLabel:u.status==='suspended'?'Reinstate':'Suspend',
+        suspendBtnStyle:u.status==='suspended'
+          ? 'background:none;border:1px solid #A7DDBA;color:#0E6A30;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;'
+          : 'background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;',
+        toggleSuspend:()=>this.setState(s=>({adminUsers:s.adminUsers.map(x=>x.id===u.id?{...x,status:x.status==='suspended'?'active':'suspended'}:x),adminMsg:u.email+(u.status==='suspended'?' reinstated.':' suspended — they can no longer sign in.'),adminMsgOk:u.status==='suspended'})),
+        remove:()=>this.setState(s=>({adminUsers:s.adminUsers.filter(x=>x.id!==u.id),adminMsg:u.email+' removed from the admin team.',adminMsgOk:false}))
+      };
+    });
+    const matrixCols=this.ROLE_ORDER.map(k=>({label:R[k].label}));
+    const matrixRows=this.PERMS.map(p=>({
+      label:p.label, note:p.note||'',
+      cells:this.ROLE_ORDER.map(k=>p.grants.indexOf(k)>=0?{mark:'✓',color:'#0E6A30'}:{mark:'—',color:'#DBDBDE'})
+    }));
+    const meRecord=S.adminUsers.find(u=>u.id===this.MY_ID)||{email:'admin@cuevolutionke.com'};
+    const meInitials=this.initialsFor(meRecord);
+    const adminVals={
+      myRoleLabel:R[myRoleKey].label,
+      inviteEmail:S.inviteEmail, onInviteEmail:(e)=>this.setState({inviteEmail:e.target.value}),
+      inviteRole:S.inviteRole, onInviteRole:(e)=>this.setState({inviteRole:e.target.value}),
+      inviteRoleBlurb:R[S.inviteRole]?R[S.inviteRole].blurb:'',
+      assignableRoleOpts, sendInvite,
+      adminMsg:S.adminMsg, meRole:myRoleKey,
+      adminMsgStyle:`border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:500;margin-bottom:4px;background:${S.adminMsgOk?'#DCF3E4':'#FDECEA'};color:${S.adminMsgOk?'#0E6A30':'#A81810'};border:1px solid ${S.adminMsgOk?'#A7DDBA':'#F6C9C5'};`,
+      canManageUsers, readOnlyAdmins:!canManageUsers,
+      adminIntro: canManageUsers ? 'You can invite, change roles for, suspend and remove admins — except anyone whose role sits above your own.' : 'This roster is view only for your role — only a Super Admin or Tournament Director can invite or change admins.',
+      adminFilterTabs, adminRows, hasAdminRows:adminRows.length>0, noAdminRows:adminRows.length===0,
+      matrixCols, matrixRows
+    };
+
+    // ---- audit log ----
+    // Super Admins are deliberately excluded from audit records.
+    const auditable=S.adminUsers.filter(u=>u.role!=='super');
+    const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const fmtWhen=(i)=>{
+      const h24=8+Math.floor(this._seed(i+53)*11), mm=Math.floor(this._seed(i+59)*60);
+      const d=1+Math.floor(this._seed(i+61)*13);
+      return {stamp:(d<10?'0'+d:d)+' Jul 2026 · '+(h24<10?'0'+h24:h24)+':'+(mm<10?'0'+mm:mm), day:DAYS[i%7]};
+    };
+    const CAN_APPROVE=['super','director','coordinator'];
+    const activeAuditable=auditable.filter(u=>u.status!=='invited');
+    const activityRows=auditable.map((u,i)=>{
+      const never=u.status==='invited';
+      const logins=never?0:6+Math.floor(this._seed(i+31)*54);
+      const last=fmtWhen(i*3+1);
+      const staleDays=Math.floor(this._seed(i+67)*11);
+      const fixtures=never?0:Math.floor(this._seed(i+37)*18);
+      const results=never?0:Math.floor(this._seed(i+41)*26);
+      const approvals=(!never&&CAN_APPROVE.indexOf(u.role)>=0)?Math.floor(this._seed(i+43)*14):0;
+      const dormant=!never&&staleDays>=7;
+      return {
+        who:u.name||u.email, email:u.email, showEmail:!!u.name,
+        initials:this.initialsFor(u),
+        avatarBg:avatarTints[u.role][0], avatarColor:avatarTints[u.role][1],
+        roleLabel:R[u.role].label, rolePillStyle:rolePill(u.role),
+        logins:never?'—':String(logins),
+        lastLogin:never?'Never signed in':last.stamp,
+        lastLoginStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:12.5px;color:'+(never?'#9E9EA7':(dormant?'#92400E':'#3A3546'))+';',
+        flag: never?'Invite pending':(dormant?'Inactive '+staleDays+'d':''),
+        flagStyle:'display:inline-flex;align-items:center;white-space:nowrap;flex:none;align-self:flex-start;background:#FEF3E2;color:#92400E;font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:9999px;',
+        hasFlag: never||dormant,
+        fixtures:String(fixtures), results:String(results), approvals:String(approvals)
+      };
+    }).sort((a,b)=>(parseInt(b.logins,10)||0)-(parseInt(a.logins,10)||0));
+
+    const EV_TYPES={
+      fixture_created:{label:'Fixture created',bg:'#E8EEF7',color:'#1F4D7A'},
+      fixture_updated:{label:'Fixture updated',bg:'#F3F3F4',color:'#3A3546'},
+      result_added:{label:'Result added',bg:'#DCF3E4',color:'#0E6A30'},
+      result_corrected:{label:'Result corrected',bg:'#FEF3E2',color:'#92400E'},
+      fixture_approved:{label:'Fixture approved',bg:'#DCF3E4',color:'#0E6A30'},
+      result_approved:{label:'Result approved',bg:'#DCF3E4',color:'#0E6A30'}
+    };
+    const evKeys=Object.keys(EV_TYPES);
+    const auditEvents=(()=>{
+      if(!activeAuditable.length) return [];
+      const out=[];
+      fixtures.slice(0,26).forEach((f,i)=>{
+        const actor=activeAuditable[i%activeAuditable.length];
+        const canApprove=CAN_APPROVE.indexOf(actor.role)>=0;
+        let type=f.played?(i%7===0?'result_corrected':(i%3===0?'result_approved':'result_added')):(i%4===0?'fixture_approved':(i%5===0?'fixture_updated':'fixture_created'));
+        if(!canApprove&&(type==='fixture_approved'||type==='result_approved')) type=f.played?'result_added':'fixture_created';
+        const when=fmtWhen(i*5+2);
+        out.push({
+          id:'ev'+i, type,
+          actorName:actor.name||actor.email, actorEmail:actor.email, actorRole:actor.role,
+          initials:this.initialsFor(actor),
+          subject:f.a+' vs '+f.b, context:f.round+' · '+f.venue,
+          detail: type==='result_added'||type==='result_approved' ? 'Score '+(f.score||'5–2')
+                : type==='result_corrected' ? 'Score changed to '+(f.score||'5–2')
+                : type==='fixture_updated' ? 'Rescheduled to '+f.date+' '+f.time
+                : f.date+' · '+f.time,
+          stamp:when.stamp
+        });
+      });
+      return out;
+    })();
+    const actorOpts=[{value:'all',label:'All admins'}].concat(activeAuditable.map(u=>({value:u.email,label:(u.name||u.email)+' — '+R[u.role].label})));
+    const typeOpts=[{value:'all',label:'All activity'}].concat(evKeys.map(k=>({value:k,label:EV_TYPES[k].label})));
+    const auditQ=S.auditSearch.trim().toLowerCase();
+    const eventRows=auditEvents.filter(e=>
+      (S.auditActor==='all'||e.actorEmail===S.auditActor) &&
+      (S.auditType==='all'||e.type===S.auditType) &&
+      (!auditQ||e.subject.toLowerCase().indexOf(auditQ)>=0||e.actorName.toLowerCase().indexOf(auditQ)>=0||e.context.toLowerCase().indexOf(auditQ)>=0)
+    ).map(e=>({
+      ...e, typeLabel:EV_TYPES[e.type].label,
+      typePillStyle:`background:${EV_TYPES[e.type].bg};color:${EV_TYPES[e.type].color};font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:9999px;flex:none;white-space:nowrap;`,
+      avatarBg:avatarTints[e.actorRole][0], avatarColor:avatarTints[e.actorRole][1]
+    }));
+    const auditTabs=[['activity','Admin activity'],['events','Fixture & result log']].map(([k,label])=>({label,onClick:()=>this.setState({auditTab:k}),style:this.tabStyle(S.auditTab===k)}));
+    const auditVals={
+      auditTabs, auditIsActivity:S.auditTab==='activity', auditIsEvents:S.auditTab==='events',
+      activityRows, hasActivityRows:activityRows.length>0, noActivityRows:activityRows.length===0,
+      actorOpts, typeOpts,
+      auditActor:S.auditActor, onAuditActor:(e)=>this.setState({auditActor:e.target.value}),
+      auditType:S.auditType, onAuditType:(e)=>this.setState({auditType:e.target.value}),
+      auditSearch:S.auditSearch, onAuditSearch:(e)=>this.setState({auditSearch:e.target.value}),
+      eventRows, hasEventRows:eventRows.length>0, noEventRows:eventRows.length===0,
+      eventCountLabel:eventRows.length+' of '+auditEvents.length+' entries'
+    };
+
     // ---- dashboard ----
-    const playerCount=dir.filter(d=>d.kind!=='team').length*4; // scale up for realism narrative
+    const indivMale=dir.filter(d=>d.kind==='male').length*4;
+    const indivFemale=dir.filter(d=>d.kind==='female').length*4;
+    const teamPlayers=dir.filter(d=>d.kind==='team').reduce((a,t)=>a+(t.roster?t.roster.length:0),0)*2;
+    const playerCount=indivMale+indivFemale+teamPlayers; // one definition, shared with the charts below
     const teamCount=dir.filter(d=>d.kind==='team').length;
     const venueCount=Object.values(venues).reduce((a,v)=>a+v.filter(x=>x.active).length,0);
     const upcomingCount=fixtures.filter(f=>!f.played).length;
     const statTiles=[
-      {label:'Registered players',value:String(playerCount),delta:'+38 this week',deltaColor:'#16A34A'},
+      {label:'Registered players',value:String(playerCount),delta:'incl. team rosters',deltaColor:'#6E6D7A'},
       {label:'Active teams',value:String(teamCount),delta:'+2 this week',deltaColor:'#16A34A'},
       {label:'Venues (active)',value:String(venueCount),delta:'across 8 regions',deltaColor:'#6E6D7A'},
       {label:'Upcoming fixtures',value:String(upcomingCount),delta:'this round',deltaColor:'#6E6D7A'},
@@ -871,6 +1323,98 @@ class Component extends DCLogic {
       {icon:'⚑',title:'2 custom venue entries to review',sub:'Submitted by players via "Other"',route:'venues',iconStyle:`width:34px;height:34px;border-radius:9px;background:#DCF3E4;color:#0E6A30;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;`},
     ];
     const attentionItems=attentionSource.map(a=>({...a,onClick:()=>this.setState({route:a.route})}));
+    // ---- dashboard charts ----
+    const teamPlayersIn=(rg)=>dir.filter(d=>d.kind==='team'&&d.region===rg).reduce((a,t)=>a+(t.roster?t.roster.length:0),0);
+    const regionStats=this.REGIONS.map(rg=>{
+      const m=dir.filter(d=>d.kind==='male'&&d.region===rg).length*4;
+      const f=dir.filter(d=>d.kind==='female'&&d.region===rg).length*4;
+      const t=teamPlayersIn(rg)*2;
+      return {region:rg,m,f,t,total:m+f+t};
+    }).sort((a,b)=>b.total-a.total);
+    const CAT_COLORS={m:'#0D0C22',f:'#E32219',t:'#D9A02B'};
+    const active=S.chartCats;
+    const shown=r=>active.reduce((a,k)=>a+r[k],0);
+    const regionShown=regionStats.map(r=>({...r,shownTotal:shown(r)})).sort((a,b)=>b.shownTotal-a.shownTotal);
+    const regionMax=Math.max.apply(null,regionShown.map(r=>r.shownTotal))||1;
+    const regionBars=regionShown.map(r=>{
+      const isHover=S.hoverRegion===r.region, t=r.shownTotal||1;
+      const parts=[['m','male'],['f','female'],['t','in teams']].filter(([k])=>active.indexOf(k)>=0);
+      return {
+        region:r.region, total:String(r.shownTotal),
+        barWidth:(r.shownTotal/regionMax*100).toFixed(1)+'%',
+        segs:parts.map(([k])=>({w:(r[k]/t*100).toFixed(1)+'%',color:CAT_COLORS[k]})),
+        detail:parts.map(([k,lbl])=>r[k]+' '+lbl).join(' · '),
+        rowStyle:'display:flex;align-items:center;gap:14px;margin:0 -10px;padding:5px 10px;border-radius:10px;cursor:pointer;transition:background .12s ease;background:'+(isHover?'#FAF9FB':'transparent')+';',
+        labelStyle:'width:126px;flex:none;font-size:13px;font-weight:600;color:'+(isHover?'#0D0C22':'#3A3546')+';',
+        onEnter:()=>this.setState({hoverRegion:r.region}),
+        onLeave:()=>this.setState({hoverRegion:null}),
+        onClick:()=>this.setState({route:'directory',dirRegion:r.region,dirKind:'all',dirStage:'All',dirSearch:''})
+      };
+    });
+    const catDefs=[['m','Individual male'],['f','Individual female'],['t','Team players']];
+    const catLegend=catDefs.map(([k,label])=>{
+      const on=active.indexOf(k)>=0;
+      return {label,color:CAT_COLORS[k],
+        style:'display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;cursor:pointer;padding:5px 11px;border-radius:9999px;border:1px solid '+(on?'#DBDBDE':'#F0EEEF')+';background:'+(on?'#fff':'#FAF9FB')+';color:'+(on?'#3A3546':'#BFBFC6')+';',
+        dotStyle:'width:9px;height:9px;border-radius:2px;background:'+(on?CAT_COLORS[k]:'#DBDBDE')+';',
+        onClick:()=>this.setState(s=>{
+          const has=s.chartCats.indexOf(k)>=0;
+          const next=has?s.chartCats.filter(x=>x!==k):s.chartCats.concat([k]);
+          return {chartCats:next.length?next:[k]};
+        })};
+    });
+    const regionHint=S.hoverRegion?'Click to open '+S.hoverRegion+' in the Directory':'Tap a category to filter · click a region to open it in the Directory';
+
+    // registrations over the last 12 weeks
+    const W=12, chartW=560, chartH=120;
+    const weekly=Array.from({length:W},(_,i)=>28+Math.round(this._seed(i+77)*46)+i*3);
+    const wkMax=Math.max.apply(null,weekly);
+    const pt=(i,v)=>[(i/(W-1)*chartW).toFixed(1),(chartH-v/wkMax*(chartH-12)).toFixed(1)];
+    const linePts=weekly.map((v,i)=>pt(i,v).join(',')).join(' ');
+    const areaPath='M0,'+chartH+' L'+weekly.map((v,i)=>pt(i,v).join(',')).join(' L')+' L'+chartW+','+chartH+' Z';
+    const bandW=chartW/W;
+    const trendDots=weekly.map((v,i)=>{
+      const [x,y]=pt(i,v), on=S.hoverWeek===i;
+      return {cx:x,cy:y,r:on?'4.5':'2.5',fill:on?'#E32219':'#fff',
+        bandX:(i*bandW-bandW/2).toFixed(1), bandW:bandW.toFixed(1),
+        onEnter:()=>this.setState({hoverWeek:i}), onLeave:()=>this.setState({hoverWeek:null})};
+    });
+    const weekLabels=['W1','W4','W8','W12'];
+    const trendTotal=weekly.reduce((a,b)=>a+b,0);
+    const trendDelta=Math.round((weekly[W-1]/weekly[W-2]-1)*100);
+    const hw=S.hoverWeek;
+    const trendHeadValue = hw===null||hw===undefined ? String(trendTotal) : String(weekly[hw]);
+    const trendHeadNote  = hw===null||hw===undefined ? (trendDelta>=0?'+':'')+trendDelta+'% vs last week'
+      : 'Week '+(hw+1)+' — '+weekly[hw]+' new registrations';
+    const trendHeadColor = hw===null||hw===undefined ? (trendDelta>=0?'#16A34A':'#E32219') : '#6E6D7A';
+    const trendGuide = hw===null||hw===undefined ? null : {x:pt(hw,weekly[hw])[0]};
+    const trendHasGuide = !(hw===null||hw===undefined);
+
+    // category mix donut
+    const mixDefs=[
+      {label:'Individual male',value:indivMale,color:CAT_COLORS.m},
+      {label:'Individual female',value:indivFemale,color:CAT_COLORS.f},
+      {label:'Team players',value:teamPlayers,color:CAT_COLORS.t}
+    ];
+    const mixTotal=playerCount;
+    const CIRC=2*Math.PI*42;
+    let mixAcc=0;
+    const mixArcs=mixDefs.map((x,i)=>{
+      const frac=x.value/mixTotal, dim=S.hoverMix!==null&&S.hoverMix!==undefined&&S.hoverMix!==i;
+      const seg={color:x.color,dash:(frac*CIRC-2).toFixed(1)+' '+CIRC,offset:(-mixAcc*CIRC).toFixed(1),
+        width:S.hoverMix===i?'17':'14', opacity:dim?'0.28':'1',
+        onEnter:()=>this.setState({hoverMix:i}), onLeave:()=>this.setState({hoverMix:null})};
+      mixAcc+=frac; return seg;
+    });
+    const mixLegend=mixDefs.map((x,i)=>({
+      label:x.label,color:x.color,value:String(x.value),pct:Math.round(x.value/mixTotal*100)+'%',
+      rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 9px;margin:0 -9px;border-radius:8px;cursor:default;border-bottom:1px solid #F3F3F4;background:'+(S.hoverMix===i?'#FAF9FB':'transparent')+';',
+      onEnter:()=>this.setState({hoverMix:i}), onLeave:()=>this.setState({hoverMix:null})
+    }));
+    const hm=S.hoverMix;
+    const mixTotalLabel = hm===null||hm===undefined ? String(mixTotal) : String(mixDefs[hm].value);
+    const mixTotalNote  = hm===null||hm===undefined ? 'players' : Math.round(mixDefs[hm].value/mixTotal*100)+'% of players';
+
     const pipelineDefs=[['Grassroots',54],['Regional',28],['Circuit',12],['Finals',6]];
     const pipelineBars=pipelineDefs.map(([label,count])=>{ const [,,dot]=this.stageStyle(label); return {label,count:String(count),pct:count+'%',color:dot}; });
 
@@ -1059,16 +1603,22 @@ class Component extends DCLogic {
       liH:{email:(e)=>this.setState(s=>({li:{...s.li,email:e.target.value},liError:''})), pass:(e)=>this.setState(s=>({li:{...s.li,pass:e.target.value},liError:''}))},
       login:()=>{ if(!S.li.email.trim()||!S.li.pass){ this.setState({liError:'Enter your admin email/username and password.'}); return; } this.setState({authed:true,liError:''}); },
       logout:()=>this.setState({authed:false,menuOpen:false,li:{email:'',pass:''},route:'dashboard'}),
-      adminName:'Amina Yusuf', adminInitials:'AY',
+      adminName:meRecord.name||meRecord.email, adminInitials:meInitials, adminRoleLabel:R[myRoleKey].label,
       // shell
       sidebarStyle, mobileBarDisplay, sidebarLogoDisplay, navItems,
       drawerOpen:S.drawerOpen, toggleDrawer:()=>this.setState(s=>({drawerOpen:!s.drawerOpen})), closeDrawer:()=>this.setState({drawerOpen:false}),
       menuOpen:S.menuOpen, toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})), closeMenu:()=>this.setState({menuOpen:false}),
       stopClick:(e)=>{ if(e&&e.stopPropagation)e.stopPropagation(); },
       rIsDash:S.route==='dashboard', rIsDraws:S.route==='draws', rIsResults:S.route==='results', rIsDirectory:S.route==='directory', rIsVenues:S.route==='venues',
-      rIsStages:S.route==='stages', rIsGroups:S.route==='groups',
+      rIsStages:S.route==='stages', rIsGroups:S.route==='groups', rIsAdmins:S.route==='admins', rIsAudit:S.route==='audit',
+      ...adminVals,
+      ...auditVals,
       // dashboard
       statTiles, attentionItems, noAttention:attentionItems.length===0, pipelineBars,
+      regionBars, catLegend, regionHint, chartW, chartH, linePts, areaPath, trendDots, weekLabels,
+      trendTotalLabel:trendHeadValue, trendDeltaLabel:trendHeadNote, trendDeltaColor:trendHeadColor,
+      trendGuide, trendHasGuide,
+      mixArcs, mixLegend, mixTotalLabel, mixTotalNote,
       // draws
       roundOpts, drawRound:S.drawRound, onDrawRound:(e)=>this.setState({drawRound:e.target.value}),
       catOpts, venueOpts, drawRows,

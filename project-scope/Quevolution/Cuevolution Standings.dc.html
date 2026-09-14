@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Standings — Cuevolution Africa</title>
+<meta name="description" content="Live Cuevolution standings — Individual Male, Individual Female and Teams — from grassroots nights to the national circuit.">
+<style>
+@font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#EDEBE4;-webkit-font-smoothing:antialiased;font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;text-wrap:pretty;}
+a{color:#C81E16;text-decoration:none;}
+a:hover{color:#A81810;text-decoration:underline;}
+@media (max-width: 860px){
+  .cv-nav-desktop, .cv-actions-desktop{display:none !important;}
+  .cv-hamburger{display:flex !important;}
+}
+@media (max-width: 600px){
+  .cv-device-toggle{display:none !important;}
+}
+@media (max-width: 720px){
+  .cv-st-table{min-width:560px !important;}
+}
+</style>
+</helmet>
+
+<sc-if value="{{ isDesktopPreview }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;">
+
+  <!-- nav -->
+  <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#0D0C22;">
+    <img src="assets/logo-white.png" alt="Cuevolution" style="height:24px;width:auto;" />
+    <nav class="cv-nav-desktop" style="display:flex;align-items:center;gap:2px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:9999px;padding:5px;">
+      <a href="Cuevolution Landing.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Home</a>
+      <a href="Cuevolution About.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">About</a>
+      <a href="Cuevolution Events.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Events</a>
+      <a href="Cuevolution Players.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="display:inline-flex;align-items:center;padding:9px 17px;border-radius:9999px;background:#fff;color:#0D0C22;font-size:14px;font-weight:700;">Standings<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0D0C22" stroke-width="2.6" style="margin-left:2px;"><path d="M7 17 17 7"></path><path d="M9 7h8v8"></path></svg></a>
+    </nav>
+    <div class="cv-actions-desktop" style="display:flex;align-items:center;gap:10px;">
+      <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#fff;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+    </div>
+    <button class="cv-hamburger" onClick="{{ toggleMenu }}" aria-label="Menu" style="display:none;width:40px;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);background:transparent;align-items:center;justify-content:center;cursor:pointer;flex:none;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+    <div style="display:{{ mobileMenuDisplay }};position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;background:#0D0C22;padding:8px 24px 22px;border-top:1px solid rgba(255,255,255,0.08);box-shadow:0 16px 28px rgba(0,0,0,0.3);z-index:60;">
+      <div style="display:flex;flex-direction:column;">
+        <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Home</a>
+        <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">About</a>
+        <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Events</a>
+        <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Players</a>
+        <a href="Cuevolution Standings.dc.html" style="color:#fff;font-size:15.5px;font-weight:700;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Standings</a>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#524B63;margin:14px 2px 4px;">More</div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="Cuevolution Rules.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Rules</a>
+        <a href="Cuevolution Venues.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Venues</a>
+        <a href="Cuevolution Feedback.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Feedback</a>
+        <a href="#" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Shop</a>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <a href="Cuevolution Player App.dc.html?screen=signin" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+        <a href="Cuevolution Player App.dc.html?screen=register" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;background:#E32219;">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="position:relative;background:#0D0C22;overflow:hidden;padding:0 24px;">
+    <div style="position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:56px 16px 40px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px;">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:14px;">Season 2026</div>
+        <h1 style="font-size:clamp(30px,5vw,44px);line-height:1.1;font-weight:700;letter-spacing:-0.02em;color:#FDFCFB;margin:0;">Standings</h1>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9E9EA7;">{{ updatedLabel }}</div>
+    </div>
+  </div>
+
+  <!-- category tabs + table -->
+  <div style="padding:44px 24px 88px;background:#fff;">
+    <div style="max-width:1160px;margin:0 auto;">
+
+      <div style="display:flex;gap:8px;border-bottom:1px solid #E7E7E9;margin-bottom:28px;overflow-x:auto;">
+        <sc-for list="{{ catTabs }}" as="t" hint-placeholder-count="3">
+          <div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ hasStandings }}" hint-placeholder-val="{{ true }}">
+      <div style="overflow-x:auto;border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+        <table class="cv-st-table" style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+              <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;width:56px;">#</th>
+              <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;">{{ nameColLabel }}</th>
+              <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;">Region</th>
+              <th style="text-align:right;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;">W–L</th>
+              <th style="text-align:left;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;">Stage</th>
+              <th style="text-align:right;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:13px 16px;">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="10">
+              <tr style="{{ r.rowStyle }}">
+                <td style="padding:13px 16px;border-bottom:1px solid #F3F3F4;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:{{ r.rankColor }};">{{ r.rank }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #F3F3F4;font-size:15px;font-weight:600;color:#0D0C22;">{{ r.name }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #F3F3F4;font-size:14px;color:#524B63;">{{ r.region }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #F3F3F4;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#0D0C22;">{{ r.record }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #F3F3F4;">
+                  <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600;background:{{ r.badgeBg }};color:{{ r.badgeColor }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.dotColor }};"></span>{{ r.stage }}</span>
+                </td>
+                <td style="padding:13px 16px;border-bottom:1px solid #F3F3F4;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#9C7318;">{{ r.points }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12.5px;color:#9E9EA7;margin:14px 2px 0;">Points in gold are Cuevo Points, earned from the Circuit stage onward. Rank #1 is marked with a red accent.</p>
+      </sc-if>
+
+      <sc-if value="{{ noStandings }}" hint-placeholder-val="">
+        <div style="background:#FAF9FB;border:1px solid #E7E7E9;border-radius:16px;padding:clamp(48px,9vw,72px) 24px;text-align:center;">
+          <div style="width:56px;height:56px;border-radius:14px;background:#F3F3F4;color:#9E9EA7;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;">#</div>
+          <h3 style="font-size:19px;font-weight:700;color:#0D0C22;margin:0 0 8px;">No standings yet</h3>
+          <p style="font-size:14.5px;line-height:1.6;color:#6E6D7A;margin:0 auto 24px;max-width:42ch;">Rankings for this category appear here once the admin records the season's first match results.</p>
+          <a href="Cuevolution Events.dc.html" style="display:inline-block;color:#fff;font-size:14.5px;font-weight:600;padding:12px 26px;border-radius:9999px;background:#E32219;">See upcoming events</a>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <!-- CTA row -->
+  <div style="background:#0D0C22;">
+    <div style="padding:64px 40px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;max-width:1160px;margin:0 auto;">
+      <div>
+        <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.01em;color:#fff;margin:0 0 10px;">Ready to pick up a cue?</h2>
+        <p style="font-size:16px;color:#DBDBDE;margin:0;max-width:52ch;">Register today and get drawn into your first fixture at a grassroots night near you.</p>
+      </div>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="flex:none;display:inline-block;color:#fff;font-size:16px;font-weight:600;padding:14px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div style="padding:52px 40px 32px;background:#0D0C22;border-top:1px solid rgba(255,255,255,0.08);">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:32px;max-width:1160px;margin:0 auto;padding-bottom:36px;border-bottom:1px solid rgba(255,255,255,0.08);">
+      <div style="grid-column:span 2;min-width:240px;">
+        <img src="assets/logo-white.png" alt="Cuevolution" style="height:20px;width:auto;opacity:0.9;margin-bottom:14px;" />
+        <p style="font-size:13.5px;line-height:1.6;color:#9E9EA7;margin:0 0 16px;max-width:32ch;">Kenya's pool league — from grassroots nights to the national circuit.</p>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <a href="#" aria-label="Instagram" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"></rect><circle cx="12" cy="12" r="4.2"></circle><circle cx="17.4" cy="6.6" r="1.1" fill="#DBDBDE" stroke="none"></circle></svg>
+          </a>
+          <a href="#" aria-label="YouTube" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="4"></rect><path d="M10.5 9.2v5.6l4.8-2.8z" fill="#DBDBDE" stroke="none"></path></svg>
+          </a>
+          <a href="#" aria-label="TikTok" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#DBDBDE"><path d="M16.6 2h-3.2v14.4a3.1 3.1 0 1 1-2.2-3v-3.3a6.4 6.4 0 1 0 5.4 6.3V9.1a6.6 6.6 0 0 0 4 1.3V7.2a3.9 3.9 0 0 1-4-3.9z"></path></svg>
+          </a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Site</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Home</a>
+          <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">About</a>
+          <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Events</a>
+          <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Players</a>
+          <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Standings</a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">More</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Rules.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rules</a>
+          <a href="Cuevolution Feedback.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Feedback</a>
+          <a href="#" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Shop</a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Account</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Sign in</a>
+          <a href="Cuevolution Player App.dc.html?screen=register" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Register</a>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:12.5px;color:#6E6D7A;margin-top:28px;">© 2026 Cuevolution. All rights reserved.</div>
+  </div>
+
+</div>
+</sc-if>
+<sc-if value="{{ isMobilePreview }}" hint-placeholder-val="">
+<div style="min-height:100vh;background:#3A3546;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+  <div style="width:390px;height:844px;border-radius:36px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.4);border:8px solid #0D0C22;">
+    <iframe src="Cuevolution Standings.dc.html" style="width:100%;height:100%;border:none;"></iframe>
+  </div>
+</div>
+</sc-if>
+<button class="cv-device-toggle" onClick="{{ toggleDevice }}" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#0D0C22;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:9999px;padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.25);">{{ deviceToggleLabel }}</button>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+class Component extends DCLogic {
+  state = { cat: 'male', mobileOpen: false, mobilePreview: false };
+  DATA = {
+    male: [
+      { rank:1, name:'Brian Otieno', region:'Nairobi A', wl:'11–3', stage:'Finals', points:412 },
+      { rank:2, name:'Kevin Mwangi', region:'Coast', wl:'10–4', stage:'Finals', points:388 },
+      { rank:3, name:'Dennis Kip', region:'Rift Valley', wl:'9–5', stage:'Circuit', points:340 },
+      { rank:4, name:'Samuel Otieno', region:'Nairobi B', wl:'9–5', stage:'Circuit', points:322 },
+      { rank:5, name:'Felix Wanjiru', region:'Central', wl:'8–6', stage:'Circuit', points:298 },
+      { rank:6, name:'Ian Kiptoo', region:'Nyanza', wl:'8–6', stage:'Regional', points:210 },
+      { rank:7, name:'Peter Njoroge', region:'Western', wl:'7–7', stage:'Regional', points:184 }
+    ],
+    female: [
+      { rank:1, name:'Mercy Achieng', region:'Nairobi A', wl:'12–2', stage:'Finals', points:430 },
+      { rank:2, name:'Faith Wambui', region:'Coast', wl:'10–4', stage:'Finals', points:375 },
+      { rank:3, name:'Grace Chebet', region:'Rift Valley', wl:'9–5', stage:'Circuit', points:330 },
+      { rank:4, name:'Winnie Auma', region:'Central', wl:'8–6', stage:'Circuit', points:301 },
+      { rank:5, name:'Joy Naliaka', region:'Western', wl:'7–7', stage:'Regional', points:198 }
+    ],
+    team: []
+  };
+  STAGE_STYLE = {
+    Finals:{bg:'#FDECEA',color:'#A81810',dot:'#E32219'},
+    Circuit:{bg:'#EAF2FE',color:'#1D4ED8',dot:'#3B82F6'},
+    Regional:{bg:'#F3F3F4',color:'#524B63',dot:'#9E9EA7'}
+  };
+  renderVals() {
+    const S = this.state;
+    const cats = [
+      ['male','Individual Male'],
+      ['female','Individual Female'],
+      ['team','Teams']
+    ];
+    const catTabs = cats.map(([key,label]) => ({
+      label, onClick: () => this.setState({ cat: key }),
+      style: `padding:12px 4px;margin-right:24px;font-size:14.5px;font-weight:700;cursor:pointer;color:${S.cat===key?'#0D0C22':'#9E9EA7'};border-bottom:2px solid ${S.cat===key?'#E32219':'transparent'};white-space:nowrap;`
+    }));
+    const data = this.DATA[S.cat] || [];
+    const rows = data.map(d => {
+      const st = this.STAGE_STYLE[d.stage];
+      return {
+        rank: d.rank, name: d.name, region: d.region, record: d.wl, stage: d.stage, points: d.points,
+        rankColor: d.rank === 1 ? '#E32219' : '#6E6D7A',
+        rowStyle: d.rank === 1 ? 'background:#FCEFCB;' : '',
+        badgeBg: st.bg, badgeColor: st.color, dotColor: st.dot
+      };
+    });
+    return {
+      catTabs, rows,
+      nameColLabel: S.cat === 'team' ? 'Team' : 'Player',
+      hasStandings: rows.length > 0,
+      noStandings: rows.length === 0,
+      updatedLabel: 'Updated just now',
+      mobileMenuDisplay: this.state.mobileOpen ? 'flex' : 'none',
+      toggleMenu: () => this.setState(s => ({ mobileOpen: !s.mobileOpen })),
+      isDesktopPreview: !this.state.mobilePreview,
+      isMobilePreview: this.state.mobilePreview,
+      deviceToggleLabel: this.state.mobilePreview ? 'Desktop view' : 'Mobile preview',
+      toggleDevice: () => this.setState(s => ({ mobilePreview: !s.mobilePreview }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>

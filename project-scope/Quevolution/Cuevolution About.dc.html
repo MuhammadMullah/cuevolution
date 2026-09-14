@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="image-slot.js"></script>
+<title>About — Cuevolution Africa</title>
+<meta name="description" content="Cuevolution Africa is building the ecosystem around pool in Kenya and across Africa — tables and equipment, venue development, events, talent, and industry growth.">
+<style>
+@font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#EDEBE4;-webkit-font-smoothing:antialiased;font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;text-wrap:pretty;}
+a{color:#C81E16;text-decoration:none;}
+a:hover{color:#A81810;text-decoration:underline;}
+@media (max-width: 860px){
+  .cv-nav-desktop, .cv-actions-desktop{display:none !important;}
+  .cv-hamburger{display:flex !important;}
+}
+@media (max-width: 600px){
+  .cv-device-toggle{display:none !important;}
+}
+@media (max-width: 780px){
+  .cv-ecosystem-grid{grid-template-columns:1fr !important;}
+  .cv-ecosystem-photo{position:static !important;height:320px !important;}
+}
+@media (max-width: 640px){
+  .cv-vm-grid{grid-template-columns:1fr !important;}
+}
+</style>
+</helmet>
+
+<sc-if value="{{ isDesktopPreview }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;">
+
+  <!-- nav -->
+  <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#0D0C22;">
+    <img src="assets/logo-white.png" alt="Cuevolution" style="height:24px;width:auto;" />
+    <nav class="cv-nav-desktop" style="display:flex;align-items:center;gap:2px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:9999px;padding:5px;">
+      <a href="Cuevolution Landing.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Home</a>
+      <a href="Cuevolution About.dc.html" style="display:inline-flex;align-items:center;padding:9px 17px;border-radius:9999px;background:#fff;color:#0D0C22;font-size:14px;font-weight:700;">About<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0D0C22" stroke-width="2.6" style="margin-left:2px;"><path d="M7 17 17 7"></path><path d="M9 7h8v8"></path></svg></a>
+      <a href="Cuevolution Events.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Events</a>
+      <a href="Cuevolution Players.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Standings</a>
+    </nav>
+    <div class="cv-actions-desktop" style="display:flex;align-items:center;gap:10px;">
+      <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#fff;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+    </div>
+    <button class="cv-hamburger" onClick="{{ toggleMenu }}" aria-label="Menu" style="display:none;width:40px;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);background:transparent;align-items:center;justify-content:center;cursor:pointer;flex:none;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+    <div style="display:{{ mobileMenuDisplay }};position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;background:#0D0C22;padding:8px 24px 22px;border-top:1px solid rgba(255,255,255,0.08);box-shadow:0 16px 28px rgba(0,0,0,0.3);z-index:60;">
+      <div style="display:flex;flex-direction:column;">
+      <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Home</a>
+      <a href="Cuevolution About.dc.html" style="color:#fff;font-size:15.5px;font-weight:700;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">About</a>
+      <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Events</a>
+      <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Standings</a>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#524B63;margin:14px 2px 4px;">More</div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="Cuevolution Rules.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Rules</a>
+        <a href="Cuevolution Venues.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Venues</a>
+        <a href="Cuevolution Feedback.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Feedback</a>
+        <a href="#" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Shop</a>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <a href="Cuevolution Player App.dc.html?screen=signin" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+        <a href="Cuevolution Player App.dc.html?screen=register" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;background:#E32219;">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="position:relative;background:#0D0C22;overflow:hidden;padding:0 24px;">
+    <div style="position:absolute;left:24px;right:24px;top:36px;z-index:0;font-size:clamp(48px,12vw,120px);font-weight:800;letter-spacing:-0.03em;color:rgba(255,255,255,0.06);line-height:1.2;white-space:nowrap;overflow:hidden;">CUEVOLUTION</div>
+    <div style="position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:clamp(56px,10vw,96px) 16px clamp(56px,9vw,88px);">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:20px;">About Us</div>
+      <h1 style="font-size:clamp(32px,6vw,56px);line-height:1.08;font-weight:700;letter-spacing:-0.02em;color:#FDFCFB;margin:0 0 24px;max-width:16ch;">Revolutionizing pool. Building the future.</h1>
+      <p style="font-size:clamp(15.5px,2.2vw,19px);line-height:1.7;color:#DBDBDE;margin:0;max-width:70ch;">Cuevolution Africa is a sports and cuesports company on a mission to popularize, professionalize, and transform the sport of pool in Kenya and across Africa. We believe pool is more than a game — it's a sport with the potential to create careers, build communities, develop young talent, generate businesses, and provide sustainable livelihoods across the continent.</p>
+    </div>
+  </div>
+
+  <!-- what we do -->
+  <div style="padding:76px 24px 20px;background:#fff;">
+    <div style="max-width:1160px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:44px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">What We Do</div>
+        <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 18px;">Building the ecosystem around the sport.</h2>
+        <p style="font-size:17px;line-height:1.7;color:#524B63;margin:0 auto;max-width:60ch;">From quality infrastructure and equipment to player development, business opportunities, events, and industry collaboration.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:76px;">
+        <div style="background:#FAF9FB;border:1px solid #F0EEEF;border-radius:16px;padding:26px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:#FDECEA;display:flex;align-items:center;justify-content:center;margin-bottom:16px;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#E32219" stroke-width="1.8"><rect x="2" y="7" width="20" height="10" rx="1.5"></rect><path d="M4 17v3"></path><path d="M20 17v3"></path><circle cx="8" cy="12" r="1.4" fill="#E32219" stroke="none"></circle><circle cx="16" cy="12" r="1.4" fill="#E32219" stroke="none"></circle></svg></div>
+          <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 10px;letter-spacing:-0.01em;">Pool Tables &amp; Equipment</h3>
+          <p style="font-size:14px;line-height:1.65;color:#6E6D7A;margin:0;">A leading supplier of professional pool tables and equipment in East Africa — including United King, Joy Heyball and Rasson tables — with delivery, installation, maintenance and technical support.</p>
+        </div>
+        <div style="background:#FAF9FB;border:1px solid #F0EEEF;border-radius:16px;padding:26px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:#FDECEA;display:flex;align-items:center;justify-content:center;margin-bottom:16px;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#E32219" stroke-width="1.8"><path d="M4 21V9l8-5 8 5v12"></path><path d="M4 21h16"></path><path d="M10 21v-6h4v6"></path></svg></div>
+          <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 10px;letter-spacing:-0.01em;">Pool Venue Development</h3>
+          <p style="font-size:14px;line-height:1.65;color:#6E6D7A;margin:0;">We help businesses and investors establish and improve pool venues — from table selection to layout — transforming spaces into professionally managed, sustainable hubs for the sport.</p>
+        </div>
+        <div style="background:#FAF9FB;border:1px solid #F0EEEF;border-radius:16px;padding:26px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:#FDECEA;display:flex;align-items:center;justify-content:center;margin-bottom:16px;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#E32219" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg></div>
+          <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 10px;letter-spacing:-0.01em;">Events &amp; Tournament Management</h3>
+          <p style="font-size:14px;line-height:1.65;color:#6E6D7A;margin:0;">Planning, promotion and management of pool tournaments — registration, formats and scheduling, branding, livestreaming, sponsorship activation, and prize management.</p>
+        </div>
+        <div style="background:#FAF9FB;border:1px solid #F0EEEF;border-radius:16px;padding:26px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:#FDECEA;display:flex;align-items:center;justify-content:center;margin-bottom:16px;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#E32219" stroke-width="1.8"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"></path><path d="M12 3v1.4"></path></svg></div>
+          <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 10px;letter-spacing:-0.01em;">Player Development &amp; Talent Management</h3>
+          <p style="font-size:14px;line-height:1.65;color:#6E6D7A;margin:0;">Identifying and supporting emerging players with pathways for training, mentorship, competition and exposure — from grassroots to national and international competition.</p>
+        </div>
+        <div style="background:#FAF9FB;border:1px solid #F0EEEF;border-radius:16px;padding:26px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:#FDECEA;display:flex;align-items:center;justify-content:center;margin-bottom:16px;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#E32219" stroke-width="1.8"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a6 6 0 0 0-4 10.5c.8.7 1.2 1.3 1.2 2.5h5.6c0-1.2.4-1.8 1.2-2.5A6 6 0 0 0 12 2z"></path></svg></div>
+          <h3 style="font-size:18px;font-weight:700;color:#0D0C22;margin:0 0 10px;letter-spacing:-0.01em;">Consultancy</h3>
+          <p style="font-size:14px;line-height:1.65;color:#6E6D7A;margin:0;">Practical industry insight for clubs, venues, investors, federations and organizers — from setting up a facility to developing a tournament or a pool-based business model.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- building an industry -->
+  <div style="padding:0 24px 88px;background:#fff;">
+    <div class="cv-ecosystem-grid" style="max-width:1160px;margin:0 auto;display:grid;grid-template-columns:340px 1fr;gap:48px;align-items:start;">
+      <div class="cv-ecosystem-photo" style="width:100%;height:480px;position:sticky;top:24px;"><image-slot id="about-industry-photo" shape="rounded" radius="18" placeholder="Team / venue photo"></image-slot></div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Beyond The Table</div>
+        <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 22px;">Building an African pool industry.</h2>
+        <p style="font-size:16px;line-height:1.75;color:#524B63;margin:0 0 18px;">Cuevolution Africa's ambition extends beyond selling pool tables. We want to contribute towards building a strong, organized, and professional pool industry in Africa. We believe the future of the sport requires greater collaboration between players, clubs, businesses, manufacturers, event organizers, federations, sponsors, media, and other stakeholders.</p>
+        <p style="font-size:16px;line-height:1.75;color:#524B63;margin:0 0 18px;">We seek to bring stakeholders together, encourage dialogue, lobby for the development of the sport, and contribute ideas through partnerships and industry led initiatives — including our long term vision of a pool industry think tank that can identify challenges, develop solutions, share knowledge, and advocate for the growth and professionalization of cuesports across the region.</p>
+        <p style="font-size:16px;line-height:1.75;color:#524B63;margin:0;">The growth of pool creates opportunities far beyond the players at the table. A thriving pool ecosystem can support livelihoods for venue owners, coaches, referees, tournament organizers, technicians, table installers, cloth fitters, content creators, broadcasters, marketers, event staff, equipment suppliers, and other professionals. We want to see pool evolve from a recreational activity into a recognized sporting and commercial ecosystem capable of creating meaningful opportunities for Africans.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- vision & mission -->
+  <div style="padding:76px 40px;background:#0D0C22;">
+    <div class="cv-vm-grid" style="max-width:1160px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+      <div style="border-top:2px solid #E32219;padding-top:24px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:14px;">Our Vision</div>
+        <p style="font-size:clamp(20px,2.6vw,26px);line-height:1.45;font-weight:600;letter-spacing:-0.01em;color:#FDFCFB;margin:0;">To become Africa's leading force in the development, professionalization, and commercialization of pool and cuesports.</p>
+      </div>
+      <div style="border-top:2px solid #E32219;padding-top:24px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:14px;">Our Mission</div>
+        <p style="font-size:clamp(20px,2.6vw,26px);line-height:1.45;font-weight:600;letter-spacing:-0.01em;color:#FDFCFB;margin:0;">To grow the sport by improving infrastructure, developing talent, supporting businesses, creating world class events, connecting stakeholders, and opening new opportunities throughout the African pool ecosystem.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- values -->
+  <div style="padding:76px 24px 88px;background:#FAF9FB;">
+    <div style="max-width:1160px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:44px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">Our Values</div>
+        <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0;">What drives us.</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;">
+        <div style="background:#fff;border:1px solid #F0EEEF;border-radius:16px;padding:24px;"><h3 style="font-size:16.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Innovation</h3><p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:0;">We continuously look for better ways to grow and develop the sport.</p></div>
+        <div style="background:#fff;border:1px solid #F0EEEF;border-radius:16px;padding:24px;"><h3 style="font-size:16.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Professionalism</h3><p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:0;">We believe the sport deserves world class standards.</p></div>
+        <div style="background:#fff;border:1px solid #F0EEEF;border-radius:16px;padding:24px;"><h3 style="font-size:16.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Quality</h3><p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:0;">We provide equipment and services that players and businesses can trust.</p></div>
+        <div style="background:#fff;border:1px solid #F0EEEF;border-radius:16px;padding:24px;"><h3 style="font-size:16.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Community</h3><p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:0;">We believe the sport grows when its stakeholders work together.</p></div>
+        <div style="background:#fff;border:1px solid #F0EEEF;border-radius:16px;padding:24px;"><h3 style="font-size:16.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Opportunity</h3><p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:0;">We want to create pathways for players, businesses, and professionals to thrive.</p></div>
+        <div style="background:#fff;border:1px solid #F0EEEF;border-radius:16px;padding:24px;"><h3 style="font-size:16.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Development</h3><p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:0;">We are committed to building a sustainable ecosystem for the next generation.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- in action: video + photo gallery -->
+  <div style="padding:76px 24px 88px;background:#fff;">
+    <div style="max-width:1160px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:44px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">In Action</div>
+        <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0;">See the work.</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:20px;">
+        <div style="position:relative;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#0D0C22;display:flex;align-items:center;justify-content:center;">
+          <div style="width:56px;height:56px;border-radius:9999px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.28);display:flex;align-items:center;justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></div>
+          <div style="position:absolute;left:18px;bottom:16px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#DBDBDE;">Venue installation walkthrough</div>
+        </div>
+        <div style="position:relative;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#0D0C22;display:flex;align-items:center;justify-content:center;">
+          <div style="width:56px;height:56px;border-radius:9999px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.28);display:flex;align-items:center;justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></div>
+          <div style="position:absolute;left:18px;bottom:16px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#DBDBDE;">Tournament highlights</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;">
+        <div style="width:100%;aspect-ratio:4/3;"><image-slot id="about-gallery-1" shape="rounded" radius="14" placeholder="Venue photo"></image-slot></div>
+        <div style="width:100%;aspect-ratio:4/3;"><image-slot id="about-gallery-2" shape="rounded" radius="14" placeholder="Tables &amp; equipment"></image-slot></div>
+        <div style="width:100%;aspect-ratio:4/3;"><image-slot id="about-gallery-3" shape="rounded" radius="14" placeholder="Tournament day"></image-slot></div>
+        <div style="width:100%;aspect-ratio:4/3;"><image-slot id="about-gallery-4" shape="rounded" radius="14" placeholder="Community &amp; players"></image-slot></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- closing statement -->
+  <div style="padding:88px 24px;background:#FAF9FB;border-top:1px solid #E7E7E9;">
+    <div style="max-width:760px;margin:0 auto;text-align:center;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:18px;">More Than Pool Tables</div>
+      <p style="font-size:clamp(20px,3vw,28px);line-height:1.5;font-weight:600;letter-spacing:-0.01em;color:#0D0C22;margin:0;">We don't simply sell pool tables. We are building infrastructure, supporting talent, creating opportunities, connecting stakeholders, and helping shape the future of pool in Africa. From the table to the ecosystem, we are Cuevolution Africa.</p>
+    </div>
+  </div>
+
+  <!-- CTA row -->
+  <div style="background:#0D0C22;">
+    <div style="padding:64px 40px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;max-width:1160px;margin:0 auto;">
+      <div>
+        <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.01em;color:#fff;margin:0 0 10px;">Ready to pick up a cue?</h2>
+        <p style="font-size:16px;color:#DBDBDE;margin:0;max-width:52ch;">Register today and get drawn into your first fixture at a grassroots night near you.</p>
+      </div>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="flex:none;display:inline-block;color:#fff;font-size:16px;font-weight:600;padding:14px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div style="padding:52px 40px 32px;background:#0D0C22;border-top:1px solid rgba(255,255,255,0.08);">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:32px;max-width:1160px;margin:0 auto;padding-bottom:36px;border-bottom:1px solid rgba(255,255,255,0.08);">
+      <div style="grid-column:span 2;min-width:240px;">
+        <img src="assets/logo-white.png" alt="Cuevolution" style="height:20px;width:auto;opacity:0.9;margin-bottom:14px;" />
+        <p style="font-size:13.5px;line-height:1.6;color:#9E9EA7;margin:0 0 16px;max-width:32ch;">Kenya's pool league — from grassroots nights to the national circuit.</p>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <a href="#" aria-label="Instagram" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"></rect><circle cx="12" cy="12" r="4.2"></circle><circle cx="17.4" cy="6.6" r="1.1" fill="#DBDBDE" stroke="none"></circle></svg>
+          </a>
+          <a href="#" aria-label="YouTube" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="4"></rect><path d="M10.5 9.2v5.6l4.8-2.8z" fill="#DBDBDE" stroke="none"></path></svg>
+          </a>
+          <a href="#" aria-label="TikTok" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#DBDBDE"><path d="M16.6 2h-3.2v14.4a3.1 3.1 0 1 1-2.2-3v-3.3a6.4 6.4 0 1 0 5.4 6.3V9.1a6.6 6.6 0 0 0 4 1.3V7.2a3.9 3.9 0 0 1-4-3.9z"></path></svg>
+          </a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Site</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Home</a>
+          <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">About</a>
+          <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Events</a>
+          <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Players</a>
+          <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Standings</a>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">More</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Rules.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rules</a>
+          <a href="Cuevolution Feedback.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Feedback</a>
+          <a href="#" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Shop</a>
+        </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Venues</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Nairobi A &amp; B</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Central &amp; Eastern</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Coast</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rift Valley</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Nyanza &amp; Western</a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Account</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Sign in</a>
+          <a href="Cuevolution Player App.dc.html?screen=register" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Register</a>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:12.5px;color:#6E6D7A;margin-top:28px;">© 2026 Cuevolution. All rights reserved.</div>
+  </div>
+
+</div>
+</sc-if>
+<sc-if value="{{ isMobilePreview }}" hint-placeholder-val="">
+<div style="min-height:100vh;background:#3A3546;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+  <div style="width:390px;height:844px;border-radius:36px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.4);border:8px solid #0D0C22;">
+    <iframe src="Cuevolution About.dc.html" style="width:100%;height:100%;border:none;"></iframe>
+  </div>
+</div>
+</sc-if>
+<button class="cv-device-toggle" onClick="{{ toggleDevice }}" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#0D0C22;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:9999px;padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.25);">{{ deviceToggleLabel }}</button>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+class Component extends DCLogic {
+  state = { mobileOpen: false, mobilePreview: false };
+  renderVals() {
+    return {
+      mobileMenuDisplay: this.state.mobileOpen ? 'flex' : 'none',
+      toggleMenu: () => this.setState(s => ({ mobileOpen: !s.mobileOpen })),
+      isDesktopPreview: !this.state.mobilePreview,
+      isMobilePreview: this.state.mobilePreview,
+      deviceToggleLabel: this.state.mobilePreview ? 'Desktop view' : 'Mobile preview',
+      toggleDevice: () => this.setState(s => ({ mobilePreview: !s.mobilePreview }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>

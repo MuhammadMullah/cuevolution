@@ -484,6 +484,14 @@ defmodule Cuevolution.Competitions do
     Enum.map(rows, &enter_fixture_row(round, &1))
   end
 
+  def enter_fixtures(%Round{} = round, %Admin{} = admin, rows) when is_list(rows) do
+    if Admin.can?(admin, :manage_fixtures) do
+      enter_fixtures(round, rows)
+    else
+      Enum.map(rows, fn _row -> {:error, :unauthorized} end)
+    end
+  end
+
   defp enter_fixture_row(round, row) do
     Multi.new()
     |> Multi.run(:scheduled_at, fn _repo, _changes ->
@@ -621,6 +629,14 @@ defmodule Cuevolution.Competitions do
   end
 
   def update_fixture(%Fixture{}, _attrs), do: {:error, :locked}
+
+  def update_fixture(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :manage_fixtures) do
+      update_fixture(fixture, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
 
   defp dispatch_fixture_assignment(fixture, participant_a, participant_b) do
     fixture = Repo.preload(fixture, :venue)
