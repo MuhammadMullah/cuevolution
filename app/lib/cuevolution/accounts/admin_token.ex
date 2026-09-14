@@ -32,7 +32,9 @@ defmodule Cuevolution.Accounts.AdminToken do
     query =
       from t in by_token_and_context_query(token, "session"),
         join: admin in assoc(t, :admin),
-        where: t.inserted_at > ago(@session_validity_in_days, "day"),
+        where:
+          t.inserted_at > ago(@session_validity_in_days, "day") and
+            is_nil(admin.suspended_at) and is_nil(admin.removed_at),
         select: admin
 
     {:ok, query}

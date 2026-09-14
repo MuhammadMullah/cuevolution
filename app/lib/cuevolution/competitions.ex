@@ -484,6 +484,14 @@ defmodule Cuevolution.Competitions do
     Enum.map(rows, &enter_fixture_row(round, &1))
   end
 
+  def enter_fixtures(%Round{} = round, %Admin{} = admin, rows) when is_list(rows) do
+    if Admin.can?(admin, :manage_fixtures) do
+      enter_fixtures(round, rows)
+    else
+      Enum.map(rows, fn _row -> {:error, :unauthorized} end)
+    end
+  end
+
   defp enter_fixture_row(round, row) do
     Multi.new()
     |> Multi.run(:scheduled_at, fn _repo, _changes ->
@@ -622,6 +630,14 @@ defmodule Cuevolution.Competitions do
 
   def update_fixture(%Fixture{}, _attrs), do: {:error, :locked}
 
+  def update_fixture(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :manage_fixtures) do
+      update_fixture(fixture, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
   defp dispatch_fixture_assignment(fixture, participant_a, participant_b) do
     fixture = Repo.preload(fixture, :venue)
     eat = fixture_time_in_eat(fixture)
@@ -727,6 +743,14 @@ defmodule Cuevolution.Competitions do
   `attrs`: `%{"winner_participation_id" => id, "score" => map | nil}`.
   """
   def record_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :record_results) do
+      do_record_result(fixture, admin, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_record_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
     fixture = Repo.preload(fixture, [:participant_a, :participant_b])
 
     result_attrs = %{
@@ -766,6 +790,14 @@ defmodule Cuevolution.Competitions do
   scenario 3), this function does not block the correction.
   """
   def correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :approve_results) do
+      do_correct_result(result, admin, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
     prior_value = %{
       "winner_participation_id" => result.winner_participation_id,
       "score" => result.score
@@ -901,6 +933,14 @@ defmodule Cuevolution.Competitions do
   `attrs`: `%{"participant_id" => id, "match_frame_id" => id | nil, "points" => integer}`.
   """
   def record_points(%MatchResult{} = result, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :record_results) do
+      do_record_points(result, admin, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_record_points(%MatchResult{} = result, %Admin{} = admin, attrs) do
     points_attrs = %{
       participant_id: attrs["participant_id"] || attrs[:participant_id],
       match_result_id: result.id,
@@ -917,6 +957,14 @@ defmodule Cuevolution.Competitions do
 
   @doc "Corrects an already-entered Cuevo Points value (spec 008 FR-010) — snapshots prior_value, logs via `Accounts.log_admin_action/4`."
   def correct_points(%CuevoPointsEntry{} = entry, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :approve_results) do
+      do_correct_points(entry, admin, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_correct_points(%CuevoPointsEntry{} = entry, %Admin{} = admin, attrs) do
     prior_value = %{"points" => entry.points}
     new_points = attrs["points"] || attrs[:points]
 

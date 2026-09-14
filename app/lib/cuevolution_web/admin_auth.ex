@@ -102,4 +102,18 @@ defmodule CuevolutionWeb.AdminAuth do
       {:halt, socket}
     end
   end
+
+  @doc "LiveView hook for role-based admin routes. Each event still re-checks permissions before mutation."
+  def on_mount({:ensure_permission, permission}, _params, _session, socket) do
+    if Cuevolution.Accounts.Admin.can?(socket.assigns.current_admin, permission) do
+      {:cont, socket}
+    else
+      socket =
+        socket
+        |> Phoenix.LiveView.put_flash(:error, "You don't have access to that page.")
+        |> Phoenix.LiveView.redirect(to: ~p"/admin/dashboard")
+
+      {:halt, socket}
+    end
+  end
 end

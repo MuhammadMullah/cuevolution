@@ -15,6 +15,7 @@ defmodule CuevolutionWeb.AdminResultsLive do
   """
   use CuevolutionWeb, :live_view
 
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
   alias CuevolutionWeb.AdminComponents
 
@@ -73,6 +74,9 @@ defmodule CuevolutionWeb.AdminResultsLive do
          |> assign(:played_empty?, false)
          |> put_flash(:info, "Result recorded.")}
 
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to record results.")}
+
       {:error, changeset} ->
         {:noreply, assign(socket, :result_form, to_form(changeset, as: :result))}
     end
@@ -112,6 +116,9 @@ defmodule CuevolutionWeb.AdminResultsLive do
          |> assign(:points_forms, build_points_forms(updated))
          |> put_flash(:info, "Result corrected. Review this fixture's downstream advancement.")}
 
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to correct results.")}
+
       {:error, changeset} ->
         {:noreply, assign(socket, :correction_form, to_form(changeset, as: :result))}
     end
@@ -132,6 +139,9 @@ defmodule CuevolutionWeb.AdminResultsLive do
          |> assign(:points_forms, build_points_forms(fixture))
          |> put_flash(:info, "Points recorded.")}
 
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to record points.")}
+
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Couldn't record points — check the value.")}
     end
@@ -149,6 +159,9 @@ defmodule CuevolutionWeb.AdminResultsLive do
          socket
          |> assign(:points_forms, build_points_forms(fixture))
          |> put_flash(:info, "Points corrected.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to correct points.")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Couldn't correct points — check the value.")}

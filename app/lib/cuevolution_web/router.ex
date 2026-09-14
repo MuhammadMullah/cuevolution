@@ -80,21 +80,63 @@ defmodule CuevolutionWeb.Router do
 
     live_session :admin_authenticated, on_mount: [{CuevolutionWeb.AdminAuth, :ensure_admin}] do
       live "/dashboard", AdminDashboardLive, :index
+    end
+
+    live_session :admin_fixture_operations,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_fixtures}}
+      ] do
+      live "/draws", AdminDrawsLive, :index
+    end
+
+    live_session :admin_result_operations,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :record_results}}
+      ] do
+      live "/results", AdminResultsLive, :index
+    end
+
+    live_session :admin_operations,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_stages}}
+      ] do
       live "/stages", StageManagementLive, :index
       live "/groups", GroupManagementLive, :index
-      live "/draws", AdminDrawsLive, :index
-      live "/results", AdminResultsLive, :index
+    end
+
+    live_session :admin_directory,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :view_directory}}
+      ] do
       live "/players", PlayerDirectoryLive, :index
       live "/players/:id", PlayerDetailLive, :show
       live "/teams/:id", TeamDetailLive, :show
+    end
+
+    live_session :admin_venue_management,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_venues}}
+      ] do
       live "/venues", VenueManagementLive, :index
+    end
+
+    live_session :admin_notifications,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :view_directory}}
+      ] do
       live "/notifications", NotificationLogLive, :index
     end
 
-    live_session :admin_super_required,
+    live_session :admin_user_management,
       on_mount: [
         {CuevolutionWeb.AdminAuth, :ensure_admin},
-        {CuevolutionWeb.AdminAuth, :ensure_super_admin}
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_admins}}
       ] do
       live "/admins", AdminManagementLive, :index
     end

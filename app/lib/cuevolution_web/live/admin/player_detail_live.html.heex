@@ -35,7 +35,13 @@
       </div>
     </div>
 
-    <div :if={is_nil(@player.anonymized_at) and is_nil(@anonymize_warnings)} class="mt-4">
+    <div
+      :if={
+        Admin.can?(@current_admin, :anonymize_users) and is_nil(@player.anonymized_at) and
+          is_nil(@anonymize_warnings)
+      }
+      class="mt-4"
+    >
       <button
         type="button"
         phx-click="confirm_anonymize"

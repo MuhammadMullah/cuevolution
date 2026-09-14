@@ -1,6 +1,6 @@
 defmodule Cuevolution.Seeds.Accounts do
   @moduledoc """
-  Seeds the default admin account and a batch of sample players.
+  Seeds a batch of sample players.
   Idempotent — safe to re-run. Depends on `Cuevolution.Seeds.Venues` having
   already run (players need a venue to select at registration).
 
@@ -12,14 +12,12 @@ defmodule Cuevolution.Seeds.Accounts do
 
   import Ecto.Query
 
-  alias Cuevolution.Accounts.{Admin, Player, Region}
+  alias Cuevolution.Accounts.{Player, Region}
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Repo
   alias Cuevolution.Venues.Venue
 
-  @admin_email "admin@cuevolutionke.com"
-  @admin_password "Admin@Cue26"
   @player_count 5000
   @player_username_prefix "seedplayer"
   @player_password "Valid1!Pass"
@@ -64,27 +62,7 @@ defmodule Cuevolution.Seeds.Accounts do
   )
 
   def run do
-    seed_admin()
     seed_players()
-  end
-
-  defp seed_admin do
-    case Repo.get_by(Admin, email: @admin_email) do
-      nil ->
-        {:ok, _admin} =
-          %Admin{}
-          |> Admin.registration_changeset(%{
-            email: @admin_email,
-            password: @admin_password,
-            role: "super_admin"
-          })
-          |> Repo.insert()
-
-        IO.puts("Seeded admin: #{@admin_email} / #{@admin_password}")
-
-      _admin ->
-        IO.puts("Admin already seeded: #{@admin_email}")
-    end
   end
 
   defp seed_players do

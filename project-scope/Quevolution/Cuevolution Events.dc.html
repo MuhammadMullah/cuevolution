@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Upcoming Pool Events — Cuevolution</title>
+<meta name="description" content="Find upcoming pool tournaments across Kenya hosted by Cuevolution's partner venues and organisers.">
+<style>
+@font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:#EDEBE4;-webkit-font-smoothing:antialiased;font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;text-wrap:pretty;}
+a{color:#C81E16;text-decoration:none;}
+a:hover{color:#A81810;text-decoration:underline;}
+@media (max-width: 860px){
+  .cv-nav-desktop, .cv-actions-desktop{display:none !important;}
+  .cv-hamburger{display:flex !important;}
+}
+@media (max-width: 600px){
+  .cv-device-toggle{display:none !important;}
+}
+</style>
+</helmet>
+
+<sc-if value="{{ isDesktopPreview }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;">
+  <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#0D0C22;">
+    <img src="assets/logo-white.png" alt="Cuevolution" style="height:24px;width:auto;" />
+    <nav class="cv-nav-desktop" style="display:flex;align-items:center;gap:2px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:9999px;padding:5px;">
+      <a href="Cuevolution Landing.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Home</a>
+      <a href="Cuevolution About.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">About</a>
+      <a href="Cuevolution Events.dc.html" style="display:inline-flex;align-items:center;padding:9px 17px;border-radius:9999px;background:#fff;color:#0D0C22;font-size:14px;font-weight:700;">Events<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0D0C22" stroke-width="2.6" style="margin-left:2px;"><path d="M7 17 17 7"></path><path d="M9 7h8v8"></path></svg></a>
+      <a href="Cuevolution Players.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Standings</a>
+    </nav>
+    <div class="cv-actions-desktop" style="display:flex;align-items:center;gap:10px;">
+      <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#fff;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+    </div>
+    <button class="cv-hamburger" onClick="{{ toggleMenu }}" aria-label="Menu" style="display:none;width:40px;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);background:transparent;align-items:center;justify-content:center;cursor:pointer;flex:none;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+    <div style="display:{{ mobileMenuDisplay }};position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;background:#0D0C22;padding:8px 24px 22px;border-top:1px solid rgba(255,255,255,0.08);box-shadow:0 16px 28px rgba(0,0,0,0.3);z-index:60;">
+      <div style="display:flex;flex-direction:column;">
+      <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Home</a>
+      <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">About</a>
+      <a href="Cuevolution Events.dc.html" style="color:#fff;font-size:15.5px;font-weight:700;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Events</a>
+      <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Standings</a>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#524B63;margin:14px 2px 4px;">More</div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="Cuevolution Rules.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Rules</a>
+        <a href="Cuevolution Venues.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Venues</a>
+        <a href="Cuevolution Feedback.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Feedback</a>
+        <a href="#" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Shop</a>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <a href="Cuevolution Player App.dc.html?screen=signin" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+        <a href="Cuevolution Player App.dc.html?screen=register" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;background:#E32219;">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:relative;height:320px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden;">
+    <img src="https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?w=1600&q=80&auto=format&fit=crop" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" />
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(13,12,34,0.55) 0%, rgba(13,12,34,0.78) 100%);"></div>
+    <div style="position:relative;z-index:1;padding:0 40px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:14px;">Around the country</div>
+      <h1 style="font-size:40px;font-weight:700;letter-spacing:-0.02em;color:#fff;margin:0 0 14px;">Upcoming pool events</h1>
+      <p style="font-size:16px;line-height:1.6;color:#DBDBDE;margin:0 auto;max-width:56ch;">Tournaments and pool nights hosted by Cuevolution's partner venues and organisers across Kenya.</p>
+    </div>
+  </div>
+
+  <div style="max-width:1160px;margin:0 auto;padding:56px 40px 20px;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+      <button onClick="{{ toggleEmpty }}" style="background:none;border:1px solid #DBDBDE;color:#9E9EA7;border-radius:9999px;padding:6px 14px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;cursor:pointer;">{{ toggleLabel }}</button>
+    </div>
+
+    <sc-if value="{{ hasEvents }}" hint-placeholder-val="{{ true }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px;">
+      <sc-for list="{{ events }}" as="ev" hint-placeholder-count="6">
+        <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+          <div style="width:100%;height:170px;overflow:hidden;background:#F3F3F4;">
+            <sc-if value="{{ ev.img }}" hint-placeholder-val="">
+              <img src="{{ ev.img }}" alt="{{ ev.name }}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+            </sc-if>
+          </div>
+          <div style="padding:18px 20px 22px;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#C81E16;margin-bottom:8px;">{{ ev.date }}</div>
+            <h3 style="font-size:17px;font-weight:700;color:#0D0C22;margin:0 0 8px;letter-spacing:-0.01em;">{{ ev.name }}</h3>
+            <div style="font-size:13px;color:#6E6D7A;margin-bottom:4px;">{{ ev.venue }}</div>
+            <div style="font-size:12.5px;color:#9E9EA7;margin-bottom:16px;">Hosted by {{ ev.organizer }}</div>
+            <a href="#" style="font-size:13.5px;font-weight:600;">Event details →</a>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ hasEvents }}" hint-placeholder-val="">
+    </sc-if>
+    <div style="display:{{ emptyDisplay }};text-align:center;padding:80px 20px;background:#FAF9FB;border:1px dashed #DBDBDE;border-radius:18px;">
+      <div style="font-size:17px;font-weight:700;color:#0D0C22;margin-bottom:8px;">No upcoming events right now</div>
+      <p style="font-size:14.5px;color:#6E6D7A;margin:0 0 20px;">Check back soon, or follow us on social media so you don't miss the next announcement.</p>
+      <a href="Cuevolution Feedback.dc.html" style="font-size:13.5px;font-weight:600;">Suggest an event →</a>
+    </div>
+  </div>
+
+  <div style="padding:56px 40px;background:#0D0C22;text-align:center;margin-top:40px;">
+    <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.01em;color:#fff;margin:0 0 14px;">Organising a pool event?</h2>
+    <p style="font-size:15px;color:#DBDBDE;margin:0 0 22px;">Partner with Cuevolution to list your tournament here.</p>
+    <a href="Cuevolution Feedback.dc.html" style="display:inline-block;color:#fff;font-size:15.5px;font-weight:600;padding:13px 28px;border-radius:9999px;background:#E32219;">Get in touch</a>
+  </div>
+
+  <div style="padding:52px 40px 32px;background:#0D0C22;border-top:1px solid rgba(255,255,255,0.08);">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:32px;max-width:1160px;margin:0 auto;padding-bottom:36px;border-bottom:1px solid rgba(255,255,255,0.08);">
+      <div style="grid-column:span 2;min-width:240px;">
+        <img src="assets/logo-white.png" alt="Cuevolution" style="height:20px;width:auto;opacity:0.9;margin-bottom:14px;" />
+        <p style="font-size:13.5px;line-height:1.6;color:#9E9EA7;margin:0 0 16px;max-width:32ch;">Kenya's pool league — from grassroots nights to the national circuit.</p>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <a href="#" aria-label="Instagram" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"></rect><circle cx="12" cy="12" r="4.2"></circle><circle cx="17.4" cy="6.6" r="1.1" fill="#DBDBDE" stroke="none"></circle></svg>
+          </a>
+          <a href="#" aria-label="YouTube" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="4"></rect><path d="M10.5 9.2v5.6l4.8-2.8z" fill="#DBDBDE" stroke="none"></path></svg>
+          </a>
+          <a href="#" aria-label="TikTok" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#DBDBDE"><path d="M16.6 2h-3.2v14.4a3.1 3.1 0 1 1-2.2-3v-3.3a6.4 6.4 0 1 0 5.4 6.3V9.1a6.6 6.6 0 0 0 4 1.3V7.2a3.9 3.9 0 0 1-4-3.9z"></path></svg>
+          </a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Site</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Home</a>
+          <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">About</a>
+          <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Events</a>
+          <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Players</a>
+          <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Standings</a>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">More</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Rules.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rules</a>
+          <a href="Cuevolution Feedback.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Feedback</a>
+          <a href="#" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Shop</a>
+        </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Venues</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Nairobi A &amp; B</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Central &amp; Eastern</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Coast</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rift Valley</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Nyanza &amp; Western</a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Account</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Sign in</a>
+          <a href="Cuevolution Player App.dc.html?screen=register" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Register</a>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:12.5px;color:#6E6D7A;margin-top:28px;">© 2026 Cuevolution. All rights reserved.</div>
+  </div>
+</div>
+
+</sc-if>
+<sc-if value="{{ isMobilePreview }}" hint-placeholder-val="">
+<div style="min-height:100vh;background:#3A3546;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+  <div style="width:390px;height:844px;border-radius:36px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.4);border:8px solid #0D0C22;">
+    <iframe src="Cuevolution Events.dc.html" style="width:100%;height:100%;border:none;"></iframe>
+  </div>
+</div>
+</sc-if>
+<button class="cv-device-toggle" onClick="{{ toggleDevice }}" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#0D0C22;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:9999px;padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.25);">{{ deviceToggleLabel }}</button>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { showEmpty: false, mobileOpen: false, mobilePreview: false };
+  renderVals() {
+    const events = [
+      {img:'https://picsum.photos/seed/cuevo-westlands/640/400', date:'Sat, Aug 15 2026', name:'Westlands Open 8-Ball', venue:'Westlands Cue Club, Nairobi', organizer:'Westlands Cue Club'},
+      {img:'https://images.unsplash.com/photo-1595231776515-ddffb1f4eb73?w=640&q=80&auto=format&fit=crop', date:'Sun, Aug 23 2026', name:'Mombasa Coastal Classic', venue:'Nyali Pool Lounge, Mombasa', organizer:'Nyali Pool Lounge'},
+      {img:'https://picsum.photos/seed/cuevo-kisumu/640/400', date:'Sat, Sep 5 2026', name:'Kisumu Lakeside Cup', venue:'Milimani Sports Club, Kisumu', organizer:'Milimani Sports Club'},
+      {img:'https://images.unsplash.com/photo-1519750783826-e2420f4d687f?w=640&q=80&auto=format&fit=crop', date:'Sat, Sep 19 2026', name:'Nakuru Regional Qualifier', venue:'Nakuru Social Hall', organizer:'Nakuru Pool Association'},
+      {img:'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?w=640&q=80&auto=format&fit=crop', date:'Sun, Oct 4 2026', name:'Eldoret Highlands Series', venue:'Eldoret Sports Club', organizer:'Highlands Pool Circuit'},
+      {img:'https://picsum.photos/seed/cuevo-nairobi-finals/640/400', date:'Sat, Oct 17 2026', name:'Nairobi Circuit Finals Warm-up', venue:'Karen Country Club, Nairobi', organizer:'Cuevolution'}
+    ];
+    return {
+      events, hasEvents: !this.state.showEmpty,
+      emptyDisplay: this.state.showEmpty ? 'block' : 'none',
+      toggleLabel: this.state.showEmpty ? 'Preview: with events' : 'Preview: empty state',
+      toggleEmpty: () => this.setState(s => ({ showEmpty: !s.showEmpty })),
+      mobileMenuDisplay: this.state.mobileOpen ? 'flex' : 'none', toggleMenu: () => this.setState(s => ({ mobileOpen: !s.mobileOpen })),
+      isDesktopPreview: !this.state.mobilePreview, isMobilePreview: this.state.mobilePreview, deviceToggleLabel: this.state.mobilePreview ? 'Desktop view' : 'Mobile preview', toggleDevice: () => this.setState(s => ({ mobilePreview: !s.mobilePreview }))
+    };
+  }
+}
+</script>
+</body>
+</html>

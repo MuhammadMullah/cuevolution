@@ -7,222 +7,397 @@
 </head>
 <body>
 <x-dc>
+
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<meta name="design_doc_mode" content="canvas">
-<meta name="description" content="Cuevolution is Kenya's pool league platform — register, compete and climb from grassroots nights to the national circuit.">
+<script src="image-slot.js"></script>
+<title>Cuevolution — Kenya's Pool League</title>
+<meta name="description" content="Cuevolution is Kenya's pool league — register, get drawn into fixtures, and climb from grassroots nights at your local table to the national circuit.">
 <meta property="og:title" content="Cuevolution — Kenya's Pool League">
 <meta property="og:description" content="Join the community of pool players competing from grassroots to the national stage.">
 <style>
 @font-face{font-family:'Mona Sans';src:url('https://cdn.jsdelivr.net/fontsource/fonts/mona-sans:vf@latest/latin-wght-normal.woff2') format('woff2-variations');font-weight:200 900;font-display:swap;}
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
-body{background:#EDEBE4;-webkit-font-smoothing:antialiased;font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;}
+body{background:#EDEBE4;-webkit-font-smoothing:antialiased;font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;text-wrap:pretty;}
 a{color:#C81E16;text-decoration:none;}
 a:hover{color:#A81810;text-decoration:underline;}
+@media (max-width: 860px){
+  .cv-nav-desktop, .cv-actions-desktop{display:none !important;}
+  .cv-hamburger{display:flex !important;}
+}
+@media (max-width: 600px){
+  .cv-device-toggle{display:none !important;}
+}
+@media (max-width: 900px){
+  .cv-home-row2{grid-template-columns:1fr !important;}
+  .cv-events-grid{grid-template-columns:1fr !important;}
+  .cv-events-grid-sm{grid-template-columns:1fr 1fr !important;}
+}
+@media (max-width: 560px){
+  .cv-events-grid-sm{grid-template-columns:1fr !important;}
+}
 </style>
 </helmet>
 
-<section id="t1" style="padding:36px 32px 60px;">
-  <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
-    <a href="#t1" style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:3px 7px;background:#0D0C22;color:#fff;border-radius:4px;">1</a>
-    <span style="font-size:13px;font-weight:600;color:#0D0C22;">Landing page — two directions</span>
-  </div>
-  <p style="font-size:12.5px;color:#6E6D7A;margin:0 0 22px;max-width:64ch;">Both options share the same copy, mission and partners sections — they differ in hero treatment. Reference by id in chat, e.g. "make <a href="#1a" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1a</a>'s hero full-bleed".</p>
+<sc-if value="{{ isDesktopPreview }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;">
 
-  <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start;">
-
-    <!-- ============================================================ -->
-    <!-- OPTION 1A — bold dark hero -->
-    <!-- ============================================================ -->
-    <div id="1a" style="flex:none;display:flex;flex-direction:column;gap:9px;">
-      <div style="display:flex;align-items:baseline;gap:8px;font-size:11px;color:rgba(13,12,34,0.55);">
-        <a href="#1a" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 7px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:5px;">1a</a>Bold — dark ink-950 hero
+  <!-- nav -->
+  <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#0D0C22;">
+    <img src="assets/logo-white.png" alt="Cuevolution" style="height:24px;width:auto;" />
+    <nav class="cv-nav-desktop" style="display:flex;align-items:center;gap:2px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:9999px;padding:5px;">
+      <a href="Cuevolution Landing.dc.html" style="display:inline-flex;align-items:center;padding:9px 17px;border-radius:9999px;background:#fff;color:#0D0C22;font-size:14px;font-weight:700;">Home<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0D0C22" stroke-width="2.6" style="margin-left:2px;"><path d="M7 17 17 7"></path><path d="M9 7h8v8"></path></svg></a>
+      <a href="Cuevolution About.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">About</a>
+      <a href="Cuevolution Events.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Events</a>
+      <a href="Cuevolution Players.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="padding:9px 17px;border-radius:9999px;color:#DBDBDE;font-size:14px;font-weight:600;" style-hover="background:rgba(255,255,255,0.08);color:#fff;">Standings</a>
+    </nav>
+    <div class="cv-actions-desktop" style="display:flex;align-items:center;gap:10px;">
+      <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#fff;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+    </div>
+    <button class="cv-hamburger" onClick="{{ toggleMenu }}" aria-label="Menu" style="display:none;width:40px;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);background:transparent;align-items:center;justify-content:center;cursor:pointer;flex:none;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+    <div style="display:{{ mobileMenuDisplay }};position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:2px;background:#0D0C22;padding:8px 24px 22px;border-top:1px solid rgba(255,255,255,0.08);box-shadow:0 16px 28px rgba(0,0,0,0.3);z-index:60;">
+      <div style="display:flex;flex-direction:column;">
+      <a href="Cuevolution Landing.dc.html" style="color:#fff;font-size:15.5px;font-weight:700;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Home</a>
+      <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">About</a>
+      <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Events</a>
+      <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Players</a>
+      <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:15.5px;font-weight:600;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,0.06);">Standings</a>
       </div>
-      <div style="width:1240px;max-width:1240px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
-
-        <!-- nav -->
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#0D0C22;">
-          <img src="assets/logo-white.png" alt="Cuevolution" style="height:24px;width:auto;" />
-          <nav style="display:flex;align-items:center;gap:28px;">
-            <a href="#mission-1a" style="color:#DBDBDE;font-size:14px;font-weight:600;">Mission</a>
-            <a href="#partners-1a" style="color:#DBDBDE;font-size:14px;font-weight:600;">Partners</a>
-            <a href="#feedback-1a" style="color:#DBDBDE;font-size:14px;font-weight:600;">Feedback</a>
-          </nav>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#fff;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
-            <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
-          </div>
-        </div>
-
-        <!-- hero -->
-        <div style="position:relative;background:#0D0C22;overflow:hidden;min-height:600px;display:flex;align-items:flex-end;">
-          <div style="position:absolute;left:40px;right:40px;top:36px;z-index:1;font-size:120px;font-weight:800;letter-spacing:-0.03em;color:rgba(255,255,255,0.06);line-height:1;white-space:nowrap;overflow:hidden;">CUEVOLUTION</div>
-          <img src="assets/hero-player.png" alt="Cuevolution player lining up a shot" style="position:absolute;right:0;bottom:0;z-index:1;height:130%;width:auto;max-width:66%;object-fit:contain;object-position:bottom right;" />
-          <div style="position:absolute;inset:0;z-index:1;background:linear-gradient(90deg, rgba(13,12,34,0.97) 0%, rgba(13,12,34,0.85) 38%, rgba(13,12,34,0.35) 62%, rgba(13,12,34,0.05) 85%);"></div>
-          <div style="position:relative;z-index:2;padding:0 40px 64px;max-width:600px;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:20px;">Kenya's Pool League</div>
-            <h1 style="font-size:64px;line-height:1.05;font-weight:700;letter-spacing:-0.02em;color:#FDFCFB;margin:0 0 22px;">Every rack starts somewhere.</h1>
-            <p style="font-size:20px;line-height:1.6;color:#DBDBDE;margin:0 0 34px;max-width:52ch;">Register, get drawn into fixtures, and climb from a grassroots night at your local table all the way to the national circuit.</p>
-            <a href="Cuevolution Player App.dc.html?screen=register" style="display:inline-block;color:#fff;font-size:16.5px;font-weight:600;padding:15px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
-          </div>
-        </div>
-
-        <!-- mission -->
-        <div id="mission-1a" style="padding:88px 40px;background:#fff;">
-          <div style="max-width:760px;margin:0 auto;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">Why Cuevolution</div>
-            <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 18px;">One community, every level.</h2>
-            <p style="font-size:17px;line-height:1.7;color:#524B63;margin:0;">We bring Kenya's pool players together in one place to interact, compete and showcase their talent — from grassroots nights at the local table all the way to the national stage.</p>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:56px auto 0;">
-            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1a-photo1" shape="rounded" radius="14" placeholder="Community photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Interact</div><div style="font-size:13.5px;color:#6E6D7A;">Find players and teams near you</div></div>
-            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1a-photo2" shape="rounded" radius="14" placeholder="Match photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Compete</div><div style="font-size:13.5px;color:#6E6D7A;">Fixtures, standings and results in real time</div></div>
-            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1a-photo3" shape="rounded" radius="14" placeholder="Trophy / finals photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Showcase</div><div style="font-size:13.5px;color:#6E6D7A;">Climb the ranks toward the national finals</div></div>
-          </div>
-        </div>
-
-        <!-- partners -->
-        <div id="partners-1a" style="padding:64px 40px 76px;background:#FAF9FB;border-top:1px solid #E7E7E9;">
-          <div style="text-align:center;margin-bottom:36px;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Backed by</div>
-            <h2 style="font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0;">Our partners</h2>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:820px;margin:0 auto;">
-            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 01</div>
-            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 02</div>
-            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 03</div>
-            <div style="height:64px;background:#fff;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 04</div>
-          </div>
-        </div>
-
-        <!-- feedback -->
-        <div id="feedback-1a" style="padding:76px 40px;background:#FDFCFB;border-top:1px solid #E7E7E9;">
-          <div style="max-width:560px;margin:0 auto;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:12px;">Tell us what you think</div>
-            <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0 0 10px;">Share feedback</h2>
-            <p style="font-size:14.5px;color:#6E6D7A;margin:0 0 28px;">Ideas, bugs, or anything you want to see on Cuevolution — we read every submission.</p>
-          </div>
-          <form style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px;">
-            <input type="text" placeholder="Your name" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
-            <input type="email" placeholder="Your email" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
-            <textarea placeholder="Your feedback" rows="4" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;resize:vertical;"></textarea>
-            <button type="submit" style="align-self:center;color:#fff;font-size:14.5px;font-weight:600;padding:12px 28px;border-radius:9999px;background:#E32219;border:none;cursor:pointer;">Send feedback</button>
-          </form>
-        </div>
-
-        <!-- footer -->
-        <div style="padding:28px 40px;background:#0D0C22;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;">
-          <img src="assets/logo-white.png" alt="Cuevolution" style="height:18px;width:auto;opacity:0.9;" />
-          <div style="display:flex;align-items:center;gap:20px;">
-            <a href="#feedback-1a" style="color:#DBDBDE;font-size:13px;font-weight:600;">Share feedback</a>
-            <div style="font-size:12.5px;color:#6E6D7A;">© 2026 Cuevolution. All rights reserved.</div>
-          </div>
-        </div>
-
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#524B63;margin:14px 2px 4px;">More</div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="Cuevolution Rules.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Rules</a>
+        <a href="Cuevolution Venues.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Venues</a>
+        <a href="Cuevolution Feedback.dc.html" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Feedback</a>
+        <a href="#" style="color:#9E9EA7;font-size:13.5px;font-weight:600;padding:9px 2px;">Shop</a>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <a href="Cuevolution Player App.dc.html?screen=signin" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;border:1px solid rgba(255,255,255,0.28);">Sign in</a>
+        <a href="Cuevolution Player App.dc.html?screen=register" style="flex:1;text-align:center;color:#fff;font-size:14.5px;font-weight:600;padding:11px;border-radius:9999px;background:#E32219;">Register</a>
       </div>
     </div>
+  </div>
 
-    <!-- ============================================================ -->
-    <!-- OPTION 1B — light airy hero -->
-    <!-- ============================================================ -->
-    <div id="1b" style="flex:none;display:flex;flex-direction:column;gap:9px;">
-      <div style="display:flex;align-items:baseline;gap:8px;font-size:11px;color:rgba(13,12,34,0.55);">
-        <a href="#1b" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 7px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:5px;">1b</a>Light — airy hero with photo
-      </div>
-      <div style="width:1240px;max-width:1240px;background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
+  <!-- hero -->
+  <div style="position:relative;background:#0D0C22;overflow:hidden;min-height:clamp(420px,62vw,600px);display:flex;align-items:flex-end;">
+    <div style="position:absolute;left:24px;right:24px;top:36px;z-index:1;font-size:clamp(48px,12vw,120px);font-weight:800;letter-spacing:-0.03em;color:rgba(255,255,255,0.06);line-height:1.2;white-space:nowrap;overflow:visible;">CUEVOLUTION</div>
+    <img class="cv-hero-cutout" src="assets/hero-player.png" alt="Cuevolution player lining up a shot" style="position:absolute;right:0;bottom:0;z-index:1;height:130%;width:auto;max-width:66%;object-fit:contain;object-position:bottom right;" />
+    <div style="position:absolute;inset:0;z-index:1;background:linear-gradient(90deg, rgba(13,12,34,0.97) 0%, rgba(13,12,34,0.85) 38%, rgba(13,12,34,0.35) 62%, rgba(13,12,34,0.05) 85%);"></div>
+    <div style="position:relative;z-index:2;padding:0 clamp(20px,6vw,40px) clamp(40px,10vw,64px);max-width:600px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#F09B92;margin-bottom:20px;">Kenya's Pool League</div>
+      <h1 style="font-size:clamp(32px,7vw,64px);line-height:1.05;font-weight:700;letter-spacing:-0.02em;color:#FDFCFB;margin:0 0 22px;">Every rack starts somewhere.</h1>
+      <p style="font-size:clamp(15.5px,2.4vw,20px);line-height:1.6;color:#DBDBDE;margin:0 0 34px;max-width:52ch;">Register, get drawn into fixtures, and climb from a grassroots night at your local table all the way to the national circuit.</p>
+      <a href="Cuevolution Player App.dc.html?screen=register" style="display:inline-block;color:#fff;font-size:16.5px;font-weight:600;padding:15px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+    </div>
+  </div>
 
-        <!-- nav -->
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 40px;background:#FDFCFB;border-bottom:1px solid #E7E7E9;">
-          <img src="assets/logo-black.png" alt="Cuevolution" style="height:22px;width:auto;" />
-          <nav style="display:flex;align-items:center;gap:28px;">
-            <a href="#mission-1b" style="color:#3A3546;font-size:14px;font-weight:600;">Mission</a>
-            <a href="#partners-1b" style="color:#3A3546;font-size:14px;font-weight:600;">Partners</a>
-            <a href="#feedback-1b" style="color:#3A3546;font-size:14px;font-weight:600;">Feedback</a>
-          </nav>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#0D0C22;font-size:14px;font-weight:600;padding:9px 18px;border-radius:9999px;border:1px solid #DBDBDE;">Sign in</a>
-            <a href="Cuevolution Player App.dc.html?screen=register" style="color:#fff;font-size:14px;font-weight:600;padding:9px 20px;border-radius:9999px;background:#E32219;">Register</a>
+  <!-- why cuevolution + standings snippet -->
+  <div style="padding:56px 24px;background:#fff;">
+    <div class="cv-home-row2" style="max-width:1160px;margin:0 auto;display:grid;grid-template-columns:1fr 1.25fr;gap:20px;align-items:stretch;">
+
+      <!-- Left: one photo panel with glass cards on top -->
+      <div style="position:relative;border-radius:20px;overflow:hidden;min-height:520px;background:#DBDBDE;">
+        <div style="position:absolute;inset:0;"><image-slot id="home-why-bg" placeholder="Pool hall / league night photo"></image-slot></div>
+        <div style="position:relative;z-index:3;height:100%;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:24px;pointer-events:none;" data-why-cards="1">
+          <div style="width:74%;min-width:230px;background:#141327;border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:16px 18px;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.9);color:#0D0C22;padding:4px 11px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:11px;">Community</div>
+            <h3 style="font-size:17px;line-height:1.3;font-weight:700;color:#fff;margin:0;letter-spacing:-0.01em;">Find Your Community</h3>
+          </div>
+          <div style="width:74%;min-width:230px;background:#141327;border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:16px 18px;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.9);color:#0D0C22;padding:4px 11px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:11px;">Competition</div>
+            <h3 style="font-size:17px;line-height:1.3;font-weight:700;color:#fff;margin:0;letter-spacing:-0.01em;">Compete Every Week</h3>
+          </div>
+          <div style="width:74%;min-width:230px;background:#141327;border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:16px 18px;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.9);color:#0D0C22;padding:4px 11px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:11px;">Fun</div>
+            <h3 style="font-size:17px;line-height:1.3;font-weight:700;color:#fff;margin:0;letter-spacing:-0.01em;">Have Fun, Enjoy the Game</h3>
+          </div>
+          <div style="width:74%;min-width:230px;background:#141327;border:1px solid rgba(255,255,255,0.16);border-radius:14px;padding:16px 18px;">
+            <div style="display:inline-block;background:rgba(255,255,255,0.9);color:#0D0C22;padding:4px 11px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:11px;">Growth</div>
+            <h3 style="font-size:17px;line-height:1.3;font-weight:700;color:#fff;margin:0;letter-spacing:-0.01em;">Climb Toward the Finals</h3>
           </div>
         </div>
+      </div>
 
-        <!-- hero -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:80px 40px;background:#FDFCFB;">
-          <div>
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:20px;">Kenya's Pool League</div>
-            <h1 style="font-size:56px;line-height:1.1;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 22px;">Your game. Your circuit. Your community.</h1>
-            <p style="font-size:19px;line-height:1.6;color:#524B63;margin:0 0 34px;max-width:48ch;">Cuevolution brings pool players together to register, compete and climb — from grassroots nights to the national finals.</p>
-            <div>
-              <a href="Cuevolution Player App.dc.html?screen=register" style="display:inline-block;color:#fff;font-size:16.5px;font-weight:600;padding:15px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+      <!-- Right: one photo panel with standings glass card on top -->
+      <div style="position:relative;border-radius:20px;overflow:hidden;background:#0D0C22;">
+        <div style="position:absolute;inset:0;"><image-slot id="home-standings-bg" placeholder="Player at the table photo"></image-slot></div>
+        <div style="position:relative;z-index:3;height:100%;display:flex;flex-direction:column;padding:24px;pointer-events:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px;">
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fff;">Live Standings</div>
+            <a href="Cuevolution Standings.dc.html" style="flex:none;display:inline-flex;align-items:center;gap:7px;color:#fff;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:9px 17px;border-radius:9999px;border:1px solid rgba(255,255,255,0.5);text-decoration:none;pointer-events:auto;" style-hover="background:rgba(255,255,255,0.14);text-decoration:none;">All standings ›</a>
+          </div>
+          <div style="display:flex;gap:26px;margin-bottom:18px;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,0.18);pointer-events:auto;">
+            <sc-for list="{{ snipTabs }}" as="t" hint-placeholder-count="3">
+              <div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ snipHasRows }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1;background:#141327;border:1px solid rgba(255,255,255,0.16);border-radius:16px;padding:8px;display:flex;flex-direction:column;gap:4px;">
+            <sc-for list="{{ snipRows }}" as="r" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:14px;padding:14px 14px;border-radius:11px;background:{{ r.bg }};">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:{{ r.rankColor }};width:18px;flex:none;">{{ r.rank }}</span>
+                <span style="flex:1;font-size:15px;font-weight:600;color:#fff;">{{ r.name }}</span>
+                <span style="font-size:12.5px;color:rgba(255,255,255,0.75);flex:none;white-space:nowrap;">{{ r.region }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:#F2C55C;flex:none;width:46px;text-align:right;">{{ r.points }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:14px;font-size:12px;color:rgba(255,255,255,0.6);">Cuevo Points, Season 2026 · updated just now</div>
+          </sc-if>
+          <sc-if value="{{ snipNoRows }}" hint-placeholder-val="">
+            <div style="flex:1;background:#141327;border:1px solid rgba(255,255,255,0.16);border-radius:16px;padding:44px 22px;text-align:center;display:flex;flex-direction:column;justify-content:center;">
+              <div style="width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,0.18);color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;">#</div>
+              <h4 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 7px;">No standings yet</h4>
+              <p style="font-size:14px;line-height:1.55;color:rgba(255,255,255,0.78);margin:0 auto;max-width:34ch;">Rankings appear here once the first match results of the season are recorded.</p>
             </div>
-          </div>
-          <div style="width:100%;height:480px;border-radius:20px;background:linear-gradient(135deg,#0D0C22,#2A2942);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;">
-            <img src="assets/hero-player.png" alt="Cuevolution player lining up a shot" style="height:112%;width:auto;max-width:100%;object-fit:contain;object-position:bottom center;" />
-          </div>
+          </sc-if>
         </div>
-
-        <!-- mission -->
-        <div id="mission-1b" style="padding:88px 40px;background:#FAF9FB;">
-          <div style="max-width:760px;margin:0 auto;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:16px;">Why Cuevolution</div>
-            <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 18px;">One community, every level.</h2>
-            <p style="font-size:17px;line-height:1.7;color:#524B63;margin:0;">We bring Kenya's pool players together in one place to interact, compete and showcase their talent — from grassroots nights at the local table all the way to the national stage.</p>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:56px auto 0;">
-            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1b-photo1" shape="rounded" radius="14" placeholder="Community photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Interact</div><div style="font-size:13.5px;color:#6E6D7A;">Find players and teams near you</div></div>
-            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1b-photo2" shape="rounded" radius="14" placeholder="Match photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Compete</div><div style="font-size:13.5px;color:#6E6D7A;">Fixtures, standings and results in real time</div></div>
-            <div style="text-align:center;padding:0 16px;"><div style="width:230px;height:150px;margin:0 auto 16px;"><image-slot id="land1b-photo3" shape="rounded" radius="14" placeholder="Trophy / finals photo"></image-slot></div><div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:6px;">Showcase</div><div style="font-size:13.5px;color:#6E6D7A;">Climb the ranks toward the national finals</div></div>
-          </div>
-        </div>
-
-        <!-- partners -->
-        <div id="partners-1b" style="padding:64px 40px 76px;background:#fff;border-top:1px solid #E7E7E9;">
-          <div style="text-align:center;margin-bottom:36px;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Backed by</div>
-            <h2 style="font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0;">Our partners</h2>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:820px;margin:0 auto;">
-            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 01</div>
-            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 02</div>
-            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 03</div>
-            <div style="height:64px;background:#FAF9FB;border:1px solid #E7E7E9;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">Partner 04</div>
-          </div>
-        </div>
-
-        <!-- feedback -->
-        <div id="feedback-1b" style="padding:76px 40px;background:#FAF9FB;border-top:1px solid #E7E7E9;">
-          <div style="max-width:560px;margin:0 auto;text-align:center;">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:12px;">Tell us what you think</div>
-            <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0 0 10px;">Share feedback</h2>
-            <p style="font-size:14.5px;color:#6E6D7A;margin:0 0 28px;">Ideas, bugs, or anything you want to see on Cuevolution — we read every submission.</p>
-          </div>
-          <form style="max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px;">
-            <input type="text" placeholder="Your name" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
-            <input type="email" placeholder="Your email" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;" />
-            <textarea placeholder="Your feedback" rows="4" style="border:1px solid #DBDBDE;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:14.5px;color:#0D0C22;background:#fff;resize:vertical;"></textarea>
-            <button type="submit" style="align-self:center;color:#fff;font-size:14.5px;font-weight:600;padding:12px 28px;border-radius:9999px;background:#E32219;border:none;cursor:pointer;">Send feedback</button>
-          </form>
-        </div>
-
-        <!-- footer -->
-        <div style="padding:28px 40px;background:#0D0C22;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;">
-          <img src="assets/logo-white.png" alt="Cuevolution" style="height:18px;width:auto;opacity:0.9;" />
-          <div style="display:flex;align-items:center;gap:20px;">
-            <a href="#feedback-1b" style="color:#DBDBDE;font-size:13px;font-weight:600;">Share feedback</a>
-            <div style="font-size:12.5px;color:#6E6D7A;">© 2026 Cuevolution. All rights reserved.</div>
-          </div>
-        </div>
-
       </div>
-    </div>
 
+    </div>
   </div>
 
-  <p style="font-size:12.5px;color:rgba(13,12,34,0.5);margin:26px 0 0;">Try next: "combine <a href="#1a" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1a</a>'s dark hero with <a href="#1b" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1b</a>'s photo" · "make <a href="#1b" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:2px 6px;background:rgba(13,12,34,0.08);color:#0D0C22;border-radius:4px;">1b</a> the final page" · "add a stats strip"</p>
-</section>
+  <!-- upcoming events -->
+  <div style="padding:76px 24px;background:#EDEBE4;">
+    <div style="max-width:1160px;margin:0 auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:34px;">
+        <h2 style="font-size:clamp(28px,4vw,40px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0;">Upcoming Events 2026</h2>
+        <a href="Cuevolution Events.dc.html" style="flex:none;display:inline-flex;align-items:center;gap:8px;color:#0D0C22;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:11px 22px;border-radius:9999px;border:1px solid #0D0C22;text-decoration:none;" style-hover="background:#0D0C22;color:#fff;text-decoration:none;">View all ›</a>
+      </div>
+
+      <div class="cv-events-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-bottom:44px;">
+        <sc-for list="{{ eventsTop }}" as="e" hint-placeholder-count="3">
+          <a href="Cuevolution Events.dc.html" style="text-decoration:none;display:block;" style-hover="text-decoration:none;">
+            <div style="position:relative;border-radius:14px;overflow:hidden;aspect-ratio:1/1;margin-bottom:16px;background:#DBDBDE;">
+              <div style="position:absolute;inset:0;"><image-slot id="{{ e.slotId }}" placeholder="{{ e.slotLabel }}"></image-slot></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+              <span style="background:{{ e.tagBg }};color:{{ e.tagColor }};font-size:10.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 12px;border-radius:9999px;">{{ e.tag }}</span>
+              <span style="border:1px solid #C9C7C0;color:#524B63;font-size:10.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:5px 12px;border-radius:9999px;">{{ e.date }}</span>
+            </div>
+            <h3 style="font-size:21px;line-height:1.25;font-weight:700;letter-spacing:-0.015em;color:#0D0C22;margin:0 0 10px;">{{ e.title }}</h3>
+            <p style="font-size:14.5px;line-height:1.6;color:#524B63;margin:0 0 14px;">{{ e.body }}</p>
+            <span style="display:inline-flex;align-items:center;gap:7px;color:#0D0C22;font-size:11.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Learn more ›</span>
+          </a>
+        </sc-for>
+      </div>
+
+      <div class="cv-events-grid-sm" style="display:grid;grid-template-columns:repeat(4,1fr);gap:22px;">
+        <sc-for list="{{ eventsBottom }}" as="e" hint-placeholder-count="4">
+          <a href="Cuevolution Events.dc.html" style="text-decoration:none;display:block;" style-hover="text-decoration:none;">
+            <div style="position:relative;border-radius:14px;overflow:hidden;aspect-ratio:1/1;margin-bottom:14px;background:#DBDBDE;">
+              <div style="position:absolute;inset:0;"><image-slot id="{{ e.slotId }}" placeholder="{{ e.slotLabel }}"></image-slot></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:11px;">
+              <span style="background:{{ e.tagBg }};color:{{ e.tagColor }};font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 11px;border-radius:9999px;">{{ e.tag }}</span>
+              <span style="border:1px solid #C9C7C0;color:#524B63;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:5px 11px;border-radius:9999px;">{{ e.date }}</span>
+            </div>
+            <h3 style="font-size:17.5px;line-height:1.3;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0;">{{ e.title }}</h3>
+          </a>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- rules preview -->
+  <div style="padding:64px 40px 88px;background:#FAF9FB;">
+      <div style="max-width:1160px;margin:0 auto;">
+        <div style="margin-bottom:36px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Rules</div>
+        <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0D0C22;margin:0 0 10px;">Know the rules.</h2>
+        <p style="font-size:15.5px;line-height:1.6;color:#524B63;margin:0;max-width:48ch;">The format and stage structure Cuevolution runs on, from grassroots nights to national finals.</p>
+      </div>
+
+      <div class="cv-rules-grid" style="display:grid;grid-template-columns:340px 1fr;gap:48px;align-items:start;">
+        <div class="cv-rules-photo" style="width:100%;height:520px;position:sticky;top:24px;"><image-slot id="rules-preview-photo" shape="rounded" radius="18" placeholder="Rules / gameplay photo"></image-slot></div>
+        <div style="display:flex;flex-direction:column;">
+          <sc-for list="{{ ruleItems }}" as="r" hint-placeholder-count="4">
+            <a href="Cuevolution Rules.dc.html" style="display:block;text-decoration:none;border-top:1px solid #E7E7E9;padding:{{ r.pad }};transition:padding 0.18s ease;background:transparent;" style-hover="padding:28px 8px;background:#fff;">
+              <div style="display:flex;align-items:center;gap:24px;">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#9E9EA7;flex:none;width:28px;">{{ r.num }}</span>
+                <span style="font-size:18px;font-weight:700;color:#0D0C22;flex:1;">{{ r.title }}</span>
+                <span style="flex:none;width:34px;height:34px;border-radius:9999px;background:#FDECEA;display:flex;align-items:center;justify-content:center;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#E32219" stroke-width="2"><path d="M5 19 19 5"></path><path d="M9 5h10v10"></path></svg>
+                </span>
+              </div>
+              <p style="font-size:14px;line-height:1.6;color:#6E6D7A;margin:10px 0 0 52px;max-width:56ch;">{{ r.body }}</p>
+            </a>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- sponsors -->
+  <div id="partners" style="padding:64px 40px 76px;background:#fff;border-top:1px solid #E7E7E9;">
+    <div style="text-align:center;margin-bottom:36px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:10px;">Backed by</div>
+      <h2 style="font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#0D0C22;margin:0;">Our sponsors</h2>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:44px;max-width:960px;margin:0 auto;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9E9EA7;filter:grayscale(1);opacity:0.7;">SPONSOR 01</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9E9EA7;filter:grayscale(1);opacity:0.7;">SPONSOR 02</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9E9EA7;filter:grayscale(1);opacity:0.7;">SPONSOR 03</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9E9EA7;filter:grayscale(1);opacity:0.7;">SPONSOR 04</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9E9EA7;filter:grayscale(1);opacity:0.7;">SPONSOR 05</div>
+    </div>
+  </div>
+
+  <!-- CTA row -->
+  <div style="background:#0D0C22;">
+    <div style="padding:64px 40px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;max-width:1160px;margin:0 auto;">
+      <div>
+        <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.01em;color:#fff;margin:0 0 10px;">Ready to pick up a cue?</h2>
+        <p style="font-size:16px;color:#DBDBDE;margin:0;max-width:52ch;">Register today and get drawn into your first fixture at a grassroots night near you.</p>
+      </div>
+      <a href="#" style="flex:none;display:inline-block;color:#fff;font-size:16px;font-weight:600;padding:14px 30px;border-radius:9999px;background:#E32219;">Register to play</a>
+    </div>
+  </div>
+
+  <!-- footer -->
+  <div style="padding:52px 40px 32px;background:#0D0C22;border-top:1px solid rgba(255,255,255,0.08);">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:32px;max-width:1160px;margin:0 auto;padding-bottom:36px;border-bottom:1px solid rgba(255,255,255,0.08);">
+      <div style="grid-column:span 2;min-width:240px;">
+        <img src="assets/logo-white.png" alt="Cuevolution" style="height:20px;width:auto;opacity:0.9;margin-bottom:14px;" />
+        <p style="font-size:13.5px;line-height:1.6;color:#9E9EA7;margin:0 0 16px;max-width:32ch;">Kenya's pool league — from grassroots nights to the national circuit.</p>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <a href="#" aria-label="Instagram" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"></rect><circle cx="12" cy="12" r="4.2"></circle><circle cx="17.4" cy="6.6" r="1.1" fill="#DBDBDE" stroke="none"></circle></svg>
+          </a>
+          <a href="#" aria-label="YouTube" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DBDBDE" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="4"></rect><path d="M10.5 9.2v5.6l4.8-2.8z" fill="#DBDBDE" stroke="none"></path></svg>
+          </a>
+          <a href="#" aria-label="TikTok" style="width:34px;height:34px;border-radius:9999px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#DBDBDE"><path d="M16.6 2h-3.2v14.4a3.1 3.1 0 1 1-2.2-3v-3.3a6.4 6.4 0 1 0 5.4 6.3V9.1a6.6 6.6 0 0 0 4 1.3V7.2a3.9 3.9 0 0 1-4-3.9z"></path></svg>
+          </a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Site</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Landing.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Home</a>
+          <a href="Cuevolution About.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">About</a>
+          <a href="Cuevolution Events.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Events</a>
+          <a href="Cuevolution Players.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Players</a>
+          <a href="Cuevolution Standings.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Standings</a>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">More</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Rules.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rules</a>
+          <a href="Cuevolution Feedback.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Feedback</a>
+          <a href="#" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Shop</a>
+        </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Venues</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Nairobi A &amp; B</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Central &amp; Eastern</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Coast</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Rift Valley</a>
+          <a href="Cuevolution Venues.dc.html" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Nyanza &amp; Western</a>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;margin-bottom:14px;">Account</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <a href="Cuevolution Player App.dc.html?screen=signin" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Sign in</a>
+          <a href="Cuevolution Player App.dc.html?screen=register" style="color:#DBDBDE;font-size:13.5px;font-weight:600;">Register</a>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:12.5px;color:#6E6D7A;margin-top:28px;">© 2026 Cuevolution. All rights reserved.</div>
+  </div>
+
+</div>
+
+</sc-if>
+<sc-if value="{{ isMobilePreview }}" hint-placeholder-val="">
+<div style="min-height:100vh;background:#3A3546;display:flex;align-items:center;justify-content:center;padding:40px 20px;">
+  <div style="width:390px;height:844px;border-radius:36px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,0.4);border:8px solid #0D0C22;">
+    <iframe src="Cuevolution Landing.dc.html" style="width:100%;height:100%;border:none;"></iframe>
+  </div>
+</div>
+</sc-if>
+<button class="cv-device-toggle" onClick="{{ toggleDevice }}" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#0D0C22;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:9999px;padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.25);">{{ deviceToggleLabel }}</button>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:900}}"></script>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:900},&quot;hasStandings&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Standings snippet&quot;}}">
+class Component extends DCLogic {
+  state = { snipTab: 'male', mobileOpen: false, mobilePreview: false };
+  SNIP_DATA = {
+    male: [
+      { rank: 1, name: 'Brian Otieno', region: 'Nairobi A', points: 412 },
+      { rank: 2, name: 'Kevin Mwangi', region: 'Coast', points: 388 },
+      { rank: 3, name: 'Dennis Kip', region: 'Rift Valley', points: 340 },
+      { rank: 4, name: 'Samuel Otieno', region: 'Nairobi B', points: 322 },
+      { rank: 5, name: 'Felix Wanjiru', region: 'Central', points: 298 }
+    ],
+    female: [
+      { rank: 1, name: 'Mercy Achieng', region: 'Nairobi A', points: 430 },
+      { rank: 2, name: 'Faith Wambui', region: 'Coast', points: 375 },
+      { rank: 3, name: 'Grace Chebet', region: 'Rift Valley', points: 330 },
+      { rank: 4, name: 'Winnie Auma', region: 'Central', points: 301 },
+      { rank: 5, name: 'Joy Naliaka', region: 'Western', points: 198 }
+    ],
+    team: []
+  };
+  renderVals() {
+    const S = this.state;
+    const items = [
+      {icon:'🎱', title:'Format & categories', body:'Standard 8-ball, race format. Register into Individual Male, Individual Female, or Teams.'},
+      {icon:'🏁', title:'Grassroots & Regional', body:'Open, round-robin only — grouped by venue then region. No knockouts. Top finishers advance.'},
+      {icon:'🏆', title:'Circuit & Finals', body:'Single knockout bracket per category, capacity-capped. Cuevo Points begin accruing at Circuit.'},
+      {icon:'🤝', title:'Conduct', body:'Fair play and good sportsmanship toward opponents, venues and officials at every stage.'}
+    ];
+    const ruleItems = items.map((it,i)=>({
+      ...it, num: '0'+(i+1), pad: '20px 8px'
+    }));
+
+    const hasStandingsOverall = this.props.hasStandings ?? true;
+    const cats = [['male','Male'],['female','Female'],['team','Teams']];
+    const snipTabs = cats.map(([key,label]) => ({
+      label, onClick: () => this.setState({ snipTab: key }),
+      style: `padding:0 0 12px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap;color:${S.snipTab===key?'#fff':'rgba(255,255,255,0.6)'};border-bottom:2px solid ${S.snipTab===key?'#fff':'transparent'};margin-bottom:-1px;`
+    }));
+    const rawRows = hasStandingsOverall ? (this.SNIP_DATA[S.snipTab] || []) : [];
+    const snipRows = rawRows.map(r => ({
+      ...r, rankColor: r.rank === 1 ? '#F2C55C' : 'rgba(255,255,255,0.6)', bg: r.rank === 1 ? 'rgba(255,255,255,0.16)' : 'transparent'
+    }));
+
+    const TAG = {
+      Tournament: { bg: '#FDECEA', color: '#A81810' },
+      Grassroots: { bg: '#E8F1E9', color: '#2D5A3D' },
+      Circuit:    { bg: '#EAF2FE', color: '#1D4ED8' },
+      Social:     { bg: '#FCEFCB', color: '#7A5A10' }
+    };
+    const withTag = (e, i, prefix) => ({ ...e, tagBg: TAG[e.tag].bg, tagColor: TAG[e.tag].color, slotId: 'home-event-' + prefix + i, slotLabel: e.title + ' photo' });
+    const eventsTop = [
+      { tag:'Tournament', date:'March 14', title:'Nairobi Open — Round of 32', body:'The season opener at Westlands. Individual Male and Female draws run side by side across eight tables.' },
+      { tag:'Grassroots', date:'March 21', title:'Coast Grassroots Night', body:'Open round-robin at Mombasa venues. Register on the day, play three frames, log your first result of the season.' },
+      { tag:'Circuit', date:'April 4', title:'Rift Valley Circuit Qualifier', body:'Top eight from each regional group enter the knockout bracket. Cuevo Points start accruing here.' }
+    ].map((e,i) => withTag(e, i, 'a'));
+    const eventsBottom = [
+      { tag:'Grassroots', date:'April 11', title:'Central Grassroots Night' },
+      { tag:'Social', date:'April 18', title:'Teams Exhibition Evening' },
+      { tag:'Circuit', date:'May 2', title:'Nyanza Circuit Qualifier' },
+      { tag:'Tournament', date:'May 23', title:'National Finals — Day One' }
+    ].map((e,i) => withTag(e, i, 'b'));
+
+    return {
+      ruleItems, eventsTop, eventsBottom,
+      snipTabs, snipRows, snipHasRows: snipRows.length > 0, snipNoRows: snipRows.length === 0,
+      mobileMenuDisplay: this.state.mobileOpen ? 'flex' : 'none', toggleMenu: () => this.setState(s => ({ mobileOpen: !s.mobileOpen })), isDesktopPreview: !this.state.mobilePreview, isMobilePreview: this.state.mobilePreview, deviceToggleLabel: this.state.mobilePreview ? 'Desktop view' : 'Mobile preview', toggleDevice: () => this.setState(s => ({ mobilePreview: !s.mobilePreview })) };
+  }
+}
+</script>
 </body>
 </html>

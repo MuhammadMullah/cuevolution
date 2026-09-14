@@ -10,8 +10,8 @@ defmodule CuevolutionWeb.AdminManagementLiveTest do
     assert {:error, {:redirect, %{to: "/admin/login"}}} = live(conn, ~p"/admin/admins")
   end
 
-  test "redirects non-super-admins to the dashboard", %{conn: conn} do
-    conn = log_in_admin(conn, insert(:admin, role: "tournament_manager"))
+  test "redirects admins without user-management permission to the dashboard", %{conn: conn} do
+    conn = log_in_admin(conn, insert(:admin, role: "regional_coordinator"))
 
     assert {:error, {:redirect, %{to: "/admin/dashboard"}}} = live(conn, ~p"/admin/admins")
   end
@@ -27,6 +27,19 @@ defmodule CuevolutionWeb.AdminManagementLiveTest do
     assert html =~ "Venue Representative"
   end
 
+  test "tournament directors cannot manage super admins", %{conn: conn} do
+    director = insert(:admin, role: "tournament_director")
+    super_admin = insert(:admin, role: "super_admin", email: "super@cuevolution.test")
+    conn = log_in_admin(conn, director)
+
+    {:ok, _view, html} = live(conn, ~p"/admin/admins")
+
+    assert html =~ "Protected — Super Admin accounts cannot be managed by Tournament Directors."
+    assert html =~ "disabled"
+    refute html =~ ~s(phx-click="toggle_suspend" phx-value-id="#{super_admin.id}")
+    refute html =~ ~s(phx-click="remove" phx-value-id="#{super_admin.id}")
+  end
+
   test "inviting an admin creates a pending record and enqueues the setup email", %{conn: conn} do
     conn = log_in_admin(conn, insert(:admin, role: "super_admin"))
 
@@ -35,11 +48,11 @@ defmodule CuevolutionWeb.AdminManagementLiveTest do
     html =
       view
       |> form("#invite-admin-form", %{
-        "admin" => %{"email" => "manager@cuevolution.test", "role" => "tournament_manager"}
+        "admin" => %{"email" => "manager@cuevolution.test", "role" => "tournament_director"}
       })
       |> render_submit()
 
-    assert html =~ "Invitation sent to manager@cuevolution.test as Tournament Manager."
+    assert html =~ "Invitation sent to manager@cuevolution.test as Tournament Director."
     assert html =~ "manager@cuevolution.test"
     assert html =~ "Invited"
 

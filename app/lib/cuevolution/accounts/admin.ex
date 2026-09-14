@@ -5,8 +5,20 @@ defmodule Cuevolution.Accounts.Admin do
   alias Cuevolution.Accounts.PasswordValidator
   alias Cuevolution.Accounts.PhoneNumber
 
-  @roles ~w(super_admin tournament_manager regional_coordinator venue_representative)
+  @roles ~w(super_admin tournament_director regional_coordinator venue_representative)
   @invitable_roles @roles -- ["super_admin"]
+  @permissions %{
+    manage_admins: ["super_admin", "tournament_director"],
+    manage_super_admins: ["super_admin"],
+    manage_fixtures: ["super_admin", "regional_coordinator", "venue_representative"],
+    record_results: ["super_admin", "regional_coordinator", "venue_representative"],
+    approve_results: ["super_admin", "regional_coordinator"],
+    manage_stages: ["super_admin", "tournament_director", "regional_coordinator"],
+    manage_groups: ["super_admin", "tournament_director", "regional_coordinator"],
+    view_directory: ["super_admin", "tournament_director", "regional_coordinator"],
+    anonymize_users: ["super_admin", "tournament_director"],
+    manage_venues: ["super_admin", "tournament_director", "regional_coordinator"]
+  }
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -15,6 +27,8 @@ defmodule Cuevolution.Accounts.Admin do
     field :email, :string
     field :role, :string
     field :mobile_number, :string
+    field :suspended_at, :utc_datetime
+    field :removed_at, :utc_datetime
     field :hashed_password, :string
     field :password, :string, virtual: true
     field :password_confirmation, :string, virtual: true
@@ -24,12 +38,38 @@ defmodule Cuevolution.Accounts.Admin do
 
   def roles, do: @roles
   def invitable_roles, do: @invitable_roles
+  def permissions, do: @permissions
 
-  @doc ~S(Human-readable label for a role value, e.g. "tournament_manager" -> "Tournament Manager".)
+  def can?(%__MODULE__{role: role} = admin, permission),
+    do: active?(admin) and role in Map.get(@permissions, permission, [])
+
+  def can?(_, _), do: false
+
+  def manageable_by?(%__MODULE__{role: actor_role}, %__MODULE__{role: target_role}) do
+    actor_role == "super_admin" or
+      (actor_role == "tournament_director" and target_role != "super_admin")
+  end
+
+  def manageable_by?(_, _), do: false
+
+  def active?(%__MODULE__{suspended_at: nil, removed_at: nil}), do: true
+  def active?(%__MODULE__{}), do: false
+
+  def suspended?(%__MODULE__{suspended_at: %DateTime{}}), do: true
+  def suspended?(%__MODULE__{}), do: false
+
+  def removed?(%__MODULE__{removed_at: %DateTime{}}), do: true
+  def removed?(%__MODULE__{}), do: false
+
+  @doc ~S(Human-readable label for a role value, e.g. "tournament_director" -> "Tournament Director".)
   def role_label(role) do
-    role
-    |> String.split("_")
-    |> Enum.map_join(" ", &String.capitalize/1)
+    case role do
+      "super_admin" -> "Super Admin"
+      "tournament_director" -> "Tournament Director"
+      "regional_coordinator" -> "Regional Coordinator"
+      "venue_representative" -> "Venue Representative"
+      _ -> role |> String.split("_") |> Enum.map_join(" ", &String.capitalize/1)
+    end
   end
 
   @doc "Whether `admin` has been invited but hasn't yet completed account setup."

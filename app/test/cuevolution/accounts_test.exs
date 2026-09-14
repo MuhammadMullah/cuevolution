@@ -55,7 +55,7 @@ defmodule Cuevolution.AccountsTest do
     end
 
     test "rejects an invited admin who hasn't completed setup yet, same generic error" do
-      admin = insert(:admin, hashed_password: nil, role: "tournament_manager")
+      admin = insert(:admin, hashed_password: nil, role: "tournament_director")
 
       assert Accounts.authenticate_admin(admin.email, "whatever") ==
                {:error, :invalid_credentials}
@@ -69,11 +69,11 @@ defmodule Cuevolution.AccountsTest do
       assert {:ok, invited} =
                Accounts.invite_admin(
                  inviter,
-                 %{"email" => "new-admin@cuevolution.test", "role" => "tournament_manager"},
+                 %{"email" => "new-admin@cuevolution.test", "role" => "tournament_director"},
                  &"https://cuevolution.test/admin/setup/#{&1}"
                )
 
-      assert invited.role == "tournament_manager"
+      assert invited.role == "tournament_director"
       assert invited.hashed_password == nil
       assert Admin.pending?(invited)
 
@@ -110,7 +110,7 @@ defmodule Cuevolution.AccountsTest do
       assert {:error, changeset} =
                Accounts.invite_admin(
                  inviter,
-                 %{"email" => existing.email, "role" => "tournament_manager"},
+                 %{"email" => existing.email, "role" => "tournament_director"},
                  &"https://cuevolution.test/admin/setup/#{&1}"
                )
 
