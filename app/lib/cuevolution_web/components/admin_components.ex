@@ -12,8 +12,8 @@ defmodule CuevolutionWeb.AdminComponents do
   use Phoenix.Component
   use CuevolutionWeb, :verified_routes
 
-  alias Phoenix.LiveView.JS
   alias Cuevolution.Accounts.Admin
+  alias Phoenix.LiveView.JS
 
   @doc "The small uppercase mono label used above page/section titles."
   attr :class, :string, default: nil

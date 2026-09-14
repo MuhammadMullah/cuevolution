@@ -60,10 +60,10 @@ defmodule Cuevolution.Accounts do
   with their own route helper rather than this context hardcoding a path.
   """
   def invite_admin(%Admin{} = inviter, attrs, setup_url_fun) when is_function(setup_url_fun, 1) do
-    if not Admin.can?(inviter, :manage_admins) do
-      {:error, :unauthorized}
-    else
+    if Admin.can?(inviter, :manage_admins) do
       do_invite_admin(inviter, attrs, setup_url_fun)
+    else
+      {:error, :unauthorized}
     end
   end
 

@@ -13,6 +13,7 @@ defmodule CuevolutionWeb.AdminAuth do
   import Phoenix.Controller
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
 
   @admin_session_key :admin_token
 
@@ -105,7 +106,7 @@ defmodule CuevolutionWeb.AdminAuth do
 
   @doc "LiveView hook for role-based admin routes. Each event still re-checks permissions before mutation."
   def on_mount({:ensure_permission, permission}, _params, _session, socket) do
-    if Cuevolution.Accounts.Admin.can?(socket.assigns.current_admin, permission) do
+    if Admin.can?(socket.assigns.current_admin, permission) do
       {:cont, socket}
     else
       socket =

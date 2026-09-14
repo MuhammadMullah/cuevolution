@@ -10,8 +10,8 @@ defmodule CuevolutionWeb.AdminDashboardLive do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Accounts.Player
-  alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Competitions.Fixture
+  alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications.Notification
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
