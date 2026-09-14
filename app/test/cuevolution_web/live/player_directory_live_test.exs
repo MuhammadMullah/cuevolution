@@ -37,6 +37,21 @@ defmodule CuevolutionWeb.PlayerDirectoryLiveTest do
     refute html =~ player_b.username
   end
 
+  test "loads the region filter from the query string", %{conn: conn} do
+    region_a = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "nairobi-a")
+    region_b = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "coast")
+
+    player_a = insert(:player, region_id: region_a.id, username: "queryregionplayer")
+    player_b = insert(:player, region_id: region_b.id, username: "otherqueryplayer")
+
+    conn = log_in_admin(conn)
+    {:ok, _view, html} = live(conn, ~p"/admin/players?region_id=#{region_a.id}")
+
+    assert html =~ player_a.username
+    refute html =~ player_b.username
+    assert html =~ ~s(name="filter[region_id]")
+  end
+
   test "lists teams alongside players, and the Kind filter isolates each", %{conn: conn} do
     player = insert(:player, username: "soloplayer")
     team = insert(:team, name: "Westlands Cue Kings")

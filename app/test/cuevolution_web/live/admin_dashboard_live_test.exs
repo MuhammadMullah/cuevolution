@@ -23,4 +23,23 @@ defmodule CuevolutionWeb.AdminDashboardLiveTest do
     assert html =~ "category-mix-chart"
     assert html =~ "Pipeline by stage"
   end
+
+  test "clicking a region chart row opens its directory filter", %{conn: conn} do
+    admin = insert(:admin)
+    region = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "nairobi-a")
+    insert(:player, region_id: region.id, username: "chartregionplayer")
+    token = Accounts.generate_admin_session_token(admin)
+
+    conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+    {:ok, view, _html} = live(conn, ~p"/admin/dashboard")
+
+    {:ok, _directory_view, html} =
+      view
+      |> element("a", region.name)
+      |> render_click()
+      |> follow_redirect(conn)
+
+    assert html =~ "chartregionplayer"
+    assert html =~ ~s(name="filter[region_id]")
+  end
 end

@@ -32,16 +32,17 @@
       </div>
     </div>
     <div>
-      <div
+      <.link
         :for={region <- @region_chart.regions}
-        class="grid grid-cols-[minmax(120px,220px)_1fr_42px] items-center gap-x-2 rounded-xl px-2 py-1.5 sm:grid-cols-[minmax(180px,240px)_1fr_48px] sm:px-1"
+        navigate={~p"/admin/players?region_id=#{region.id}"}
+        class="group grid grid-cols-[minmax(120px,220px)_1fr_42px] items-center gap-x-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-ink-50 sm:grid-cols-[minmax(180px,240px)_1fr_48px] sm:px-1"
       >
-        <div class="self-start pt-0.5 text-sm font-semibold text-ink-700 sm:text-[15px]">
+        <div class="self-start pt-0.5 text-sm font-semibold text-ink-700 transition-colors group-hover:text-ink-950 sm:text-[15px]">
           {region.name}
         </div>
         <div class="min-w-0">
           <div
-            class="flex h-6 overflow-hidden rounded-[6px]"
+            class="flex h-6 overflow-hidden rounded-[6px] transition duration-150 group-hover:brightness-110"
             style={"width:#{if Enum.max_by(@region_chart.regions, & &1.total).total == 0, do: 0, else: round(region.total / Enum.max_by(@region_chart.regions, & &1.total).total * 100)}%"}
           >
             <div
@@ -60,14 +61,19 @@
             >
             </div>
           </div>
-          <div class="mt-0.5 text-[11px] text-ink-400 sm:text-xs">
-            {region.male} male · {region.female} female · {region.teams} in teams
+          <div class="mt-0.5 text-[11px] text-ink-400 group-hover:text-ink-600 sm:text-xs">
+            <span class="group-hover:hidden">
+              {region.male} male · {region.female} female · {region.teams} in teams
+            </span>
+            <span class="hidden font-semibold text-red-600 group-hover:inline">
+              View players →
+            </span>
           </div>
         </div>
-        <div class="text-right font-mono text-[15px] font-semibold text-ink-950">
+        <div class="text-right font-mono text-[15px] font-semibold text-ink-950 transition-colors group-hover:text-red-600">
           {region.total}
         </div>
-      </div>
+      </.link>
     </div>
     <div class="mt-2 text-[11px] text-ink-400 sm:text-xs">
       Player registrations grouped by region

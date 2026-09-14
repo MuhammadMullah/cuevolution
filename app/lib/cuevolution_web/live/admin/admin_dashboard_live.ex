@@ -18,7 +18,6 @@ defmodule CuevolutionWeb.AdminDashboardLive do
   alias CuevolutionWeb.AdminComponents
 
   @week_seconds 7 * 24 * 60 * 60
-  @day_seconds 24 * 60 * 60
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -35,7 +34,6 @@ defmodule CuevolutionWeb.AdminDashboardLive do
 
   defp stat_tiles do
     week_ago = DateTime.add(DateTime.utc_now(), -@week_seconds, :second)
-    day_ago = DateTime.add(DateTime.utc_now(), -@day_seconds, :second)
 
     players_total = Repo.aggregate(active_players_query(), :count)
 
@@ -46,15 +44,6 @@ defmodule CuevolutionWeb.AdminDashboardLive do
     teams_this_week = Repo.aggregate(from(t in Team, where: t.inserted_at >= ^week_ago), :count)
 
     regions_total = Repo.aggregate(from(r in Cuevolution.Accounts.Region), :count)
-
-    notifications_sent_total =
-      Repo.aggregate(from(n in Notification, where: n.status == "sent"), :count)
-
-    notifications_sent_24h =
-      Repo.aggregate(
-        from(n in Notification, where: n.status == "sent" and n.inserted_at >= ^day_ago),
-        :count
-      )
 
     [
       %{
@@ -85,12 +74,6 @@ defmodule CuevolutionWeb.AdminDashboardLive do
         label: "Pending results",
         value: to_string(pending_results()),
         delta: "fixtures awaiting entry",
-        delta_class: "text-ink-500"
-      },
-      %{
-        label: "Notifications sent",
-        value: to_string(notifications_sent_total),
-        delta: "#{notifications_sent_24h} in the last 24h",
         delta_class: "text-ink-500"
       }
     ]
@@ -144,7 +127,14 @@ defmodule CuevolutionWeb.AdminDashboardLive do
         teams = count_for(team_rows, region.name)
         total = male + female + teams
 
-        %{name: region.name, male: male, female: female, teams: teams, total: total}
+        %{
+          id: region.id,
+          name: region.name,
+          male: male,
+          female: female,
+          teams: teams,
+          total: total
+        }
       end)
       |> Enum.sort_by(& &1.total, :desc)
 
