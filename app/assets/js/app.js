@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/cuevolution"
 import topbar from "../vendor/topbar"
 import Cropper from "../vendor/cropper.min.js"
+import * as echarts from "echarts"
 
 // Exposed globally rather than imported directly in the .PhotoCropper
 // colocated hook (lib/cuevolution_web/live/player/registration_live.html.heex)
@@ -32,11 +33,62 @@ import Cropper from "../vendor/cropper.min.js"
 // stable relative import path back to assets/vendor/.
 window.Cropper = Cropper
 
+const chartColors = ["#0D0C22", "#E32219", "#D9A02B"]
+
+const EChart = {
+  mounted() {
+    this.chart = echarts.init(this.el)
+    this.resizeObserver = new ResizeObserver(() => this.chart?.resize())
+    this.resizeObserver.observe(this.el)
+    this.renderChart()
+  },
+  updated() {
+    this.renderChart()
+  },
+  destroyed() {
+    this.resizeObserver?.disconnect()
+    this.chart?.dispose()
+  },
+  renderChart() {
+    const data = JSON.parse(this.el.dataset.chartData || "{}")
+    const type = this.el.dataset.chartType
+    const common = {textStyle: {fontFamily: "IBM Plex Mono, monospace"}}
+
+    const options = {
+      region: {
+        ...common,
+        grid: {left: 72, right: 16, top: 12, bottom: 28},
+        tooltip: {trigger: "axis", axisPointer: {type: "shadow"}},
+        legend: {show: false},
+        xAxis: {type: "value", splitLine: {lineStyle: {color: "#F3F3F4"}}, axisLabel: {color: "#9E9EA7"}},
+        yAxis: {type: "category", data: data.categories || [], axisLabel: {color: "#524B63"}, axisLine: {show: false}, axisTick: {show: false}},
+        series: (data.series || []).map((series, index) => ({...series, type: "bar", stack: "players", barMaxWidth: 22, itemStyle: {color: chartColors[index], borderRadius: index === 1 ? [0, 4, 4, 0] : [4, 0, 0, 4]}}))
+      },
+      trend: {
+        ...common,
+        grid: {left: 36, right: 14, top: 18, bottom: 34},
+        tooltip: {trigger: "axis"},
+        xAxis: {type: "category", data: data.labels || [], boundaryGap: false, axisLabel: {color: "#9E9EA7", interval: 2}, axisLine: {lineStyle: {color: "#E7E7E9"}}, axisTick: {show: false}},
+        yAxis: {type: "value", minInterval: 1, splitLine: {lineStyle: {color: "#F3F3F4"}}, axisLabel: {color: "#9E9EA7"}},
+        series: [{type: "line", data: data.values || [], smooth: true, symbol: "circle", symbolSize: 7, itemStyle: {color: "#E32219"}, lineStyle: {width: 3, color: "#E32219"}, areaStyle: {color: "rgba(227,34,25,.12)"}}]
+      },
+      category: {
+        ...common,
+        tooltip: {trigger: "item"},
+        legend: {bottom: 0, left: "center", textStyle: {color: "#524B63"}},
+        series: [{type: "pie", radius: ["48%", "72%"], center: ["50%", "46%"], avoidLabelOverlap: true, itemStyle: {borderColor: "#fff", borderWidth: 3}, label: {show: false}, data: data || [], color: chartColors}]
+      }
+    }
+
+    this.chart.setOption(options[type] || {}, true)
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, EChart},
 })
 
 // Show progress bar on live navigation and form submits
@@ -87,4 +139,3 @@ if (process.env.NODE_ENV === "development") {
     window.liveReloader = reloader
   })
 }
-

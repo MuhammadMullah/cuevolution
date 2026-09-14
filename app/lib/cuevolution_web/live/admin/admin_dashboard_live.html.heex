@@ -14,7 +14,103 @@
     />
   </div>
 
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
+  <AdminComponents.card class="mb-4 p-4 sm:p-5">
+    <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <h2 class="text-[15px] font-bold tracking-tight text-ink-950">Players per region</h2>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="inline-flex items-center gap-2 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-700 sm:text-[13px]">
+          <i class="size-2 rounded-[3px] bg-ink-950"></i>Individual male
+        </span>
+        <span class="inline-flex items-center gap-2 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-700 sm:text-[13px]">
+          <i class="size-2 rounded-[3px] bg-red-600"></i>Individual female
+        </span>
+        <span class="inline-flex items-center gap-2 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-700 sm:text-[13px]">
+          <i class="size-2 rounded-[3px] bg-[#D9A02B]"></i>Team players
+        </span>
+      </div>
+    </div>
+    <div>
+      <div
+        :for={region <- @region_chart.regions}
+        class="grid grid-cols-[minmax(120px,220px)_1fr_42px] items-center gap-x-2 rounded-xl px-2 py-1.5 sm:grid-cols-[minmax(180px,240px)_1fr_48px] sm:px-1"
+      >
+        <div class="self-start pt-0.5 text-sm font-semibold text-ink-700 sm:text-[15px]">
+          {region.name}
+        </div>
+        <div class="min-w-0">
+          <div
+            class="flex h-6 overflow-hidden rounded-[6px]"
+            style={"width:#{if Enum.max_by(@region_chart.regions, & &1.total).total == 0, do: 0, else: round(region.total / Enum.max_by(@region_chart.regions, & &1.total).total * 100)}%"}
+          >
+            <div
+              class="bg-ink-950"
+              style={"width:#{if region.total == 0, do: 0, else: region.male / region.total * 100}%"}
+            >
+            </div>
+            <div
+              class="bg-red-600"
+              style={"width:#{if region.total == 0, do: 0, else: region.female / region.total * 100}%"}
+            >
+            </div>
+            <div
+              class="bg-[#D9A02B]"
+              style={"width:#{if region.total == 0, do: 0, else: region.teams / region.total * 100}%"}
+            >
+            </div>
+          </div>
+          <div class="mt-0.5 text-[11px] text-ink-400 sm:text-xs">
+            {region.male} male · {region.female} female · {region.teams} in teams
+          </div>
+        </div>
+        <div class="text-right font-mono text-[15px] font-semibold text-ink-950">
+          {region.total}
+        </div>
+      </div>
+    </div>
+    <div class="mt-2 text-[11px] text-ink-400 sm:text-xs">
+      Player registrations grouped by region
+    </div>
+  </AdminComponents.card>
+
+  <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <AdminComponents.card>
+      <div class="mb-3">
+        <h2 class="text-[15px] font-bold tracking-tight text-ink-950">
+          Registrations, this month
+        </h2>
+        <p class="mt-1 text-[12.5px] text-ink-400">
+          New player accounts created since the start of the month
+        </p>
+      </div>
+      <div
+        id="registration-trend-chart"
+        phx-hook="EChart"
+        data-chart-type="trend"
+        data-chart-data={Jason.encode!(@registration_chart)}
+        class="h-[250px] w-full"
+      >
+      </div>
+    </AdminComponents.card>
+
+    <AdminComponents.card>
+      <div class="mb-3">
+        <h2 class="text-[15px] font-bold tracking-tight text-ink-950">Category mix</h2>
+        <p class="mt-1 text-[12.5px] text-ink-400">Current active players and teams</p>
+      </div>
+      <div
+        id="category-mix-chart"
+        phx-hook="EChart"
+        data-chart-type="category"
+        data-chart-data={Jason.encode!(@category_chart)}
+        class="h-[250px] w-full"
+      >
+      </div>
+    </AdminComponents.card>
+  </div>
+
+  <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
     <AdminComponents.card>
       <h2 class="mb-3.5 text-[15px] font-bold tracking-tight text-ink-950">Needs attention</h2>
       <div
@@ -52,7 +148,7 @@
         </div>
       </div>
       <div :if={@pipeline_bars == []} class="py-[18px] text-center text-[13.5px] text-ink-400">
-        Pipeline tracking will appear here once draws & results are wired up.
+        Pipeline data will appear as players enter stages.
       </div>
     </AdminComponents.card>
   </div>
