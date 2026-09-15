@@ -35,17 +35,17 @@
       <.link
         :for={region <- @region_chart.regions}
         navigate={~p"/admin/players?region_id=#{region.id}"}
-        class="group grid grid-cols-2 items-center gap-x-2 gap-y-1 rounded-xl px-2 py-1.5 transition-colors hover:bg-ink-50 sm:grid-cols-[minmax(180px,240px)_1fr_48px] sm:gap-y-0 sm:px-1"
+        class="group grid grid-cols-2 items-center gap-x-2 gap-y-1 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-ink-50 sm:grid-cols-[126px_1fr_52px] sm:gap-x-3.5 sm:gap-y-0 sm:px-2.5 sm:py-1"
       >
-        <div class="text-sm font-semibold text-ink-700 transition-colors group-hover:text-ink-950 sm:col-start-1 sm:self-start sm:pt-0.5 sm:text-[15px]">
+        <div class="text-sm font-semibold text-ink-700 transition-colors group-hover:text-ink-950 sm:col-start-1 sm:self-start sm:pt-0.5 sm:text-[13px]">
           {region.name}
         </div>
-        <div class="text-right font-mono text-[15px] font-semibold text-ink-950 transition-colors group-hover:text-red-600 sm:col-start-3">
+        <div class="text-right font-mono text-[15px] font-semibold text-ink-950 transition-colors group-hover:text-red-600 sm:col-start-3 sm:text-sm">
           {region.total}
         </div>
         <div class="col-span-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1">
           <div
-            class="flex h-6 overflow-hidden rounded-[6px] transition duration-150 group-hover:brightness-110"
+            class="flex h-4 overflow-hidden rounded-[4px] transition duration-150 group-hover:brightness-110"
             style={"width:#{if Enum.max_by(@region_chart.regions, & &1.total).total == 0, do: 0, else: round(region.total / Enum.max_by(@region_chart.regions, & &1.total).total * 100)}%"}
           >
             <div
@@ -80,7 +80,87 @@
     </div>
   </AdminComponents.card>
 
-  <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+  <AdminComponents.card class="mb-4 p-4 sm:p-5">
+    <div class="mb-3.5 flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-[15px] font-bold tracking-tight text-ink-950">Players per venue</h2>
+      <.form
+        for={@venue_filter_form}
+        id="venue-filter-form"
+        phx-change="venue_filter"
+        class="flex flex-wrap items-center gap-2"
+      >
+        <.input
+          field={@venue_filter_form[:q]}
+          placeholder="Search venue…"
+          phx-debounce="300"
+          class="w-[170px] rounded-full border border-ink-200 bg-white px-3.5 py-2 text-[13px] text-ink-950 placeholder:text-ink-400 outline-none focus:border-red-500"
+        />
+        <.input
+          field={@venue_filter_form[:region_id]}
+          type="select"
+          options={@venue_chart.region_options}
+          class="cursor-pointer rounded-full border border-ink-200 bg-white px-3 py-2 text-[13px] text-ink-700 outline-none focus:border-red-500"
+        />
+        <button
+          type="button"
+          phx-click="venue_sort_toggle"
+          class="whitespace-nowrap rounded-full border border-ink-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          {@venue_chart.sort_label}
+        </button>
+      </.form>
+    </div>
+
+    <div class="mb-2.5 flex flex-wrap gap-6 border-b border-ink-100 pb-3.5">
+      <div :for={tile <- @venue_chart.tiles}>
+        <div class="mb-0.5 text-xs text-ink-400">{tile.label}</div>
+        <div class="font-mono text-lg font-semibold text-ink-950">{tile.value}</div>
+      </div>
+    </div>
+
+    <div>
+      <.link
+        :for={venue <- @venue_chart.rows}
+        navigate={~p"/admin/venues/#{venue.id}/players"}
+        class="group grid grid-cols-[20px_1fr_auto] items-center gap-x-2 gap-y-1 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-ink-50 sm:grid-cols-[20px_190px_1fr_52px] sm:gap-x-3.5 sm:gap-y-0 sm:px-2.5 sm:py-1"
+      >
+        <div class="text-right font-mono text-xs text-ink-300 sm:col-start-1">{venue.rank}</div>
+        <div class="min-w-0 truncate text-sm font-semibold text-ink-700 transition-colors group-hover:text-ink-950 sm:col-start-2 sm:text-[13px]">
+          {venue.name}
+        </div>
+        <div class="text-right font-mono text-[15px] font-semibold text-ink-950 transition-colors group-hover:text-red-600 sm:col-start-4 sm:text-sm">
+          {venue.total}
+        </div>
+        <div class="col-span-3 min-w-0 sm:col-span-1 sm:col-start-3 sm:row-start-1">
+          <div
+            class="h-3.5 rounded-[4px] bg-[#5761B4] transition-[width] duration-150 group-hover:brightness-110"
+            style={"width:#{venue.bar_pct}%;min-width:3px;"}
+          >
+          </div>
+          <div class="mt-0.5 text-[11px] text-ink-400 group-hover:text-ink-600 sm:text-xs">
+            {venue.region_name}
+          </div>
+        </div>
+      </.link>
+      <div :if={@venue_chart.rows == []} class="py-6 text-center text-[13.5px] text-ink-400">
+        No venues match that search.
+      </div>
+    </div>
+
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <span class="text-xs text-ink-400">{@venue_chart.footer}</span>
+      <button
+        :if={@venue_chart.has_more}
+        type="button"
+        phx-click="venue_show_more"
+        class="whitespace-nowrap rounded-full border border-ink-200 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+      >
+        {@venue_chart.more_label}
+      </button>
+    </div>
+  </AdminComponents.card>
+
+  <div class="mb-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
     <AdminComponents.card>
       <div class="mb-3">
         <h2 class="text-[15px] font-bold tracking-tight text-ink-950">
@@ -105,13 +185,41 @@
         <h2 class="text-[15px] font-bold tracking-tight text-ink-950">Category mix</h2>
         <p class="mt-1 text-[12.5px] text-ink-400">Current active players and teams</p>
       </div>
-      <div
-        id="category-mix-chart"
-        phx-hook="EChart"
-        data-chart-type="category"
-        data-chart-data={Jason.encode!(@category_chart)}
-        class="h-[250px] w-full"
-      >
+      <div class="flex flex-wrap items-center gap-5">
+        <div class="relative size-[120px] flex-none">
+          <svg viewBox="0 0 100 100" class="size-[120px] -rotate-90">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#F3F3F4" stroke-width="14" />
+            <circle
+              :for={seg <- @category_mix.segments}
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke={seg.color}
+              stroke-width="14"
+              stroke-dasharray={seg.dash}
+              stroke-dashoffset={seg.offset}
+            />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="font-mono text-[19px] font-semibold leading-none text-ink-950">
+              {@category_mix.total}
+            </span>
+            <span class="text-center text-[11px] leading-tight text-ink-400">players</span>
+          </div>
+        </div>
+        <div class="min-w-[150px] flex-1">
+          <div
+            :for={seg <- @category_mix.segments}
+            class="flex items-center gap-2.5 border-b border-ink-100 py-[7px]"
+          >
+            <span class="size-[9px] flex-none rounded-[2px]" style={"background:#{seg.color}"}>
+            </span>
+            <span class="flex-1 text-[13px] font-semibold text-ink-700">{seg.label}</span>
+            <span class="font-mono text-[13px] text-ink-500">{seg.value}</span>
+            <span class="w-[34px] text-right font-mono text-xs text-ink-400">{seg.pct}%</span>
+          </div>
+        </div>
       </div>
     </AdminComponents.card>
   </div>

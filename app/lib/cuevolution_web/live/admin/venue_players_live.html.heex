@@ -1,0 +1,223 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:directory} flash={@flash}>
+  <.link
+    navigate={~p"/admin/dashboard"}
+    class="mb-3.5 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-950"
+  >
+    ← Back to dashboard
+  </.link>
+
+  <AdminComponents.eyebrow class="mb-1.5">Venue</AdminComponents.eyebrow>
+  <div class="mb-1 flex flex-wrap items-baseline justify-between gap-3">
+    <h1 class="text-[clamp(22px,4vw,30px)] font-bold tracking-tight text-ink-950">
+      {@venue.name}
+    </h1>
+    <.link
+      navigate={~p"/admin/venues?region_id=#{@venue.region_id}"}
+      class="whitespace-nowrap rounded-full border border-ink-200 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+    >
+      Manage {@venue.region.name} venues
+    </.link>
+  </div>
+  <p class="mb-[22px] text-sm text-ink-500">
+    {@venue.region.name} · {List.first(@tiles).value} registered players
+  </p>
+
+  <div class="mb-5 grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-3">
+    <div
+      :for={tile <- @tiles}
+      class="rounded-2xl border border-ink-200 bg-white p-4 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div class="mb-1.5 text-xs text-ink-400">{tile.label}</div>
+      <div class="font-mono text-lg font-semibold text-ink-950 sm:text-xl">{tile.value}</div>
+    </div>
+  </div>
+
+  <div class="mb-3 flex flex-wrap items-center gap-2.5">
+    <.form
+      for={@filter_form}
+      id="venue-players-filter-form"
+      phx-change="filter"
+      class="min-w-[220px] flex-1"
+    >
+      <.input
+        field={@filter_form[:q]}
+        placeholder="Search players at this venue…"
+        phx-debounce="300"
+        class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+      />
+    </.form>
+    <div class="flex flex-wrap gap-2">
+      <button
+        :for={{label, value} <- @kinds}
+        type="button"
+        phx-click="set_kind"
+        phx-value-kind={value}
+        class={[
+          "rounded-full border px-3.5 py-2 text-[13px] font-semibold",
+          (value == @kind && "border-ink-950 bg-ink-950 text-white") ||
+            "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+        ]}
+      >
+        {label}
+      </button>
+    </div>
+  </div>
+
+  <div class="mb-2.5 font-mono text-[13px] text-ink-500">{@count_label}</div>
+
+  <div
+    :if={@rows != []}
+    class="rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <div
+      :for={row <- @rows}
+      phx-click="open_player"
+      phx-value-id={row.id}
+      class="flex cursor-pointer items-center gap-3.5 border-b border-ink-100 px-4 py-3 last:border-0 hover:bg-ink-50"
+    >
+      <PlayerComponents.avatar name={row.avatar_name} src={row.avatar_src} size="size-9" />
+      <div class="min-w-0 flex-1">
+        <div class="text-[14.5px] font-semibold text-ink-950">{row.name}</div>
+        <div class="text-[12.5px] text-ink-400">{row.sub}</div>
+      </div>
+      <PlayerComponents.stage_badge :if={row.stage} stage={row.stage.name} />
+    </div>
+  </div>
+  <div
+    :if={@rows == []}
+    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-10 text-center shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <p class="text-[14px] text-ink-500">No players at this venue match those filters.</p>
+  </div>
+
+  <div :if={@has_more} class="mt-3.5 text-center">
+    <button
+      type="button"
+      phx-click="show_more"
+      class="rounded-full border border-ink-200 bg-white px-[18px] py-2.5 text-[13.5px] font-semibold text-ink-700 hover:bg-ink-50"
+    >
+      {@more_label}
+    </button>
+  </div>
+
+  <div
+    :if={@modal_player}
+    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-950/50 px-4 py-4 sm:items-center sm:py-8"
+    phx-click-away="close_player_modal"
+  >
+    <div class="max-h-[calc(100dvh-2rem)] w-full max-w-[560px] overflow-y-auto rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-4rem)]">
+      <div class="relative rounded-t-2xl bg-ink-950 px-5 py-5 text-white sm:px-6">
+        <button
+          type="button"
+          phx-click="close_player_modal"
+          class="absolute right-4 top-4 flex size-[30px] items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+        >
+          ✕
+        </button>
+        <div class="flex items-center gap-3.5 pr-10">
+          <PlayerComponents.avatar
+            name={"#{@modal_player.first_name} #{@modal_player.last_name}"}
+            src={ProfilePicture.url(@modal_player.profile_picture_path)}
+            size="size-14"
+            class="text-lg"
+          />
+          <div class="min-w-0 flex-1">
+            <div class="text-[20px] font-bold tracking-tight">
+              {@modal_player.first_name} {@modal_player.last_name}
+            </div>
+            <div class="text-[13px] text-ink-400">Player · {@modal_player.region.name}</div>
+          </div>
+          <PlayerComponents.stage_badge :if={@modal_stage} stage={@modal_stage.name} />
+        </div>
+      </div>
+
+      <div class="p-5 sm:p-6">
+        <div class="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+          <div
+            :for={{label, value} <- player_fields(@modal_player, @modal_stage)}
+            class="min-w-0 border-b border-ink-100 py-2.5 last:border-0"
+          >
+            <div class="text-[11.5px] text-ink-400">{label}</div>
+            <div class="break-words text-sm font-semibold text-ink-950">{value}</div>
+          </div>
+        </div>
+
+        <h3 class="mb-2.5 mt-4 text-[13.5px] font-bold tracking-tight text-ink-950">
+          Notification delivery history
+        </h3>
+        <div :if={@modal_notifications != []} class="mb-1 flex flex-col">
+          <div
+            :for={n <- @modal_notifications}
+            class="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 py-2 text-[13px] last:border-0"
+          >
+            <span class="font-semibold text-ink-950">
+              {n.event_type} <span class="font-normal text-ink-500">· {n.channel}</span>
+            </span>
+            <span class="font-mono text-[11px] text-ink-500">{n.status} · {n.updated_at}</span>
+          </div>
+        </div>
+        <div
+          :if={@modal_notifications == []}
+          class="mb-1 rounded-xl border border-ink-100 px-4 py-5 text-center text-[13px] text-ink-400"
+        >
+          No notifications sent yet.
+        </div>
+
+        <div
+          :if={
+            Admin.can?(@current_admin, :anonymize_users) and is_nil(@modal_player.anonymized_at) and
+              is_nil(@anonymize_warnings)
+          }
+          class="mt-4"
+        >
+          <button
+            type="button"
+            phx-click="confirm_anonymize"
+            class="w-full rounded-full border border-red-300 bg-white px-[22px] py-3 text-[14.5px] font-semibold text-red-700 hover:bg-red-50"
+          >
+            Anonymize this record
+          </button>
+        </div>
+
+        <div
+          :if={@anonymize_warnings}
+          class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-[15px] py-[13px]"
+        >
+          <div :if={@anonymize_warnings != []}>
+            <div class="mb-1.5 text-[13px] font-bold text-amber-900">Before you anonymize:</div>
+            <ul class="mb-0 list-disc pl-[18px] text-[13px] leading-relaxed text-amber-800">
+              <li :if={:captain in @anonymize_warnings}>
+                This player is a team captain — anonymizing them does not reassign the captaincy.
+              </li>
+              <li :if={:pending_fixtures in @anonymize_warnings}>
+                This player has a fixture with no result recorded yet.
+              </li>
+            </ul>
+          </div>
+          <p
+            :if={@anonymize_warnings == []}
+            class="m-0 text-[13px] leading-relaxed text-amber-800"
+          >
+            This will permanently remove {@modal_player.first_name} {@modal_player.last_name}'s personal details. Historical results and points remain intact.
+          </p>
+          <div class="mt-3 flex gap-2">
+            <button
+              type="button"
+              phx-click="anonymize"
+              class="rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700"
+            >
+              Yes, anonymize
+            </button>
+            <button
+              type="button"
+              phx-click="cancel_anonymize"
+              class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminComponents.app_shell>

@@ -73,12 +73,6 @@ const EChart = {
         xAxis: {type: "category", data: data.labels || [], boundaryGap: false, axisLabel: {color: "#9E9EA7", fontSize: axisFontSize, interval: compact ? 4 : 2}, axisLine: {lineStyle: {color: "#E7E7E9"}}, axisTick: {show: false}},
         yAxis: {type: "value", minInterval: 1, splitLine: {lineStyle: {color: "#F3F3F4"}}, axisLabel: {color: "#9E9EA7", fontSize: axisFontSize}},
         series: [{type: "line", data: data.values || [], smooth: true, symbol: "circle", symbolSize: 7, itemStyle: {color: "#E32219"}, lineStyle: {width: 3, color: "#E32219"}, areaStyle: {color: "rgba(227,34,25,.12)"}}]
-      },
-      category: {
-        ...common,
-        tooltip: {trigger: "item"},
-        legend: {bottom: 0, left: "center", itemGap: compact ? 8 : 10, textStyle: {color: "#524B63", fontSize: axisFontSize}},
-        series: [{type: "pie", radius: [compact ? "42%" : "48%", compact ? "66%" : "72%"], center: ["50%", compact ? "42%" : "46%"], avoidLabelOverlap: true, itemStyle: {borderColor: "#fff", borderWidth: 3}, label: {show: false}, data: data || [], color: chartColors}]
       }
     }
 
