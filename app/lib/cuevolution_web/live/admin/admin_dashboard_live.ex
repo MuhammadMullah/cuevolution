@@ -260,33 +260,54 @@ defmodule CuevolutionWeb.AdminDashboardLive do
     } = socket.assigns
 
     query = search |> to_string() |> String.trim() |> String.downcase()
-
-    filtered =
-      all
-      |> Enum.filter(fn v ->
-        (is_nil(region_id) or v.region_id == region_id) and
-          (query == "" or String.contains?(String.downcase(v.name), query))
-      end)
-      |> sort_venues(sort)
-
+    filtered = all |> filter_venues(region_id, query) |> sort_venues(sort)
     shown = Enum.take(filtered, show)
     max_total = filtered |> Enum.map(& &1.total) |> Enum.max(fn -> 1 end) |> max(1)
+    rows = venue_rows(shown, max_total)
+    remaining = length(filtered) - length(rows)
+    region_name = region_id && venue_region_name(regions, region_id)
 
-    rows =
-      shown
-      |> Enum.with_index(1)
-      |> Enum.map(fn {v, index} ->
-        %{
-          id: v.id,
-          rank: index,
-          name: v.name,
-          region_id: v.region_id,
-          region_name: v.region_name,
-          total: v.total,
-          bar_pct: round(v.total / max_total * 100)
-        }
-      end)
+    assign(socket,
+      venue_chart: %{
+        tiles: venue_metric_tiles(all),
+        rows: rows,
+        region_options: [{"All regions", ""} | Enum.map(regions, &{&1.name, &1.id})],
+        sort_label: if(sort == :desc, do: "Most first", else: "Fewest first"),
+        footer: venue_footer(rows, filtered, region_name, query, search),
+        has_more: remaining > 0,
+        more_label: "Show #{min(@venue_show_step, remaining)} more"
+      }
+    )
+  end
 
+  defp filter_venues(all, region_id, query) do
+    Enum.filter(all, fn v ->
+      (is_nil(region_id) or v.region_id == region_id) and
+        (query == "" or String.contains?(String.downcase(v.name), query))
+    end)
+  end
+
+  defp venue_rows(shown, max_total) do
+    shown
+    |> Enum.with_index(1)
+    |> Enum.map(fn {v, index} ->
+      %{
+        id: v.id,
+        rank: index,
+        name: v.name,
+        region_id: v.region_id,
+        region_name: v.region_name,
+        total: v.total,
+        bar_pct: round(v.total / max_total * 100)
+      }
+    end)
+  end
+
+  defp venue_region_name(regions, region_id) do
+    regions |> Enum.find(&(&1.id == region_id)) |> then(&(&1 && &1.name))
+  end
+
+  defp venue_metric_tiles(all) do
     total_active = length(all)
 
     avg_players =
@@ -294,31 +315,17 @@ defmodule CuevolutionWeb.AdminDashboardLive do
 
     under_ten = Enum.count(all, &(&1.total < 10))
 
-    region_name =
-      region_id && regions |> Enum.find(&(&1.id == region_id)) |> then(&(&1 && &1.name))
+    [
+      %{label: "Active venues", value: to_string(total_active)},
+      %{label: "Avg players / venue", value: to_string(avg_players)},
+      %{label: "Under 10 players", value: to_string(under_ten)}
+    ]
+  end
 
-    remaining = length(filtered) - length(rows)
-
-    footer =
-      "Showing #{length(rows)} of #{length(filtered)}" <>
-        if(region_name, do: " in #{region_name}", else: " venues") <>
-        if(query != "", do: " matching \"#{String.trim(search)}\"", else: "")
-
-    assign(socket,
-      venue_chart: %{
-        tiles: [
-          %{label: "Active venues", value: to_string(total_active)},
-          %{label: "Avg players / venue", value: to_string(avg_players)},
-          %{label: "Under 10 players", value: to_string(under_ten)}
-        ],
-        rows: rows,
-        region_options: [{"All regions", ""} | Enum.map(regions, &{&1.name, &1.id})],
-        sort_label: if(sort == :desc, do: "Most first", else: "Fewest first"),
-        footer: footer,
-        has_more: remaining > 0,
-        more_label: "Show #{min(@venue_show_step, remaining)} more"
-      }
-    )
+  defp venue_footer(rows, filtered, region_name, query, search) do
+    "Showing #{length(rows)} of #{length(filtered)}" <>
+      if(region_name, do: " in #{region_name}", else: " venues") <>
+      if(query != "", do: " matching \"#{String.trim(search)}\"", else: "")
   end
 
   defp sort_venues(list, :desc), do: Enum.sort_by(list, &{-&1.total, String.downcase(&1.name)})
