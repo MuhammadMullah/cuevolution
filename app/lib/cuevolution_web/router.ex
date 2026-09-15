@@ -115,6 +115,7 @@ defmodule CuevolutionWeb.Router do
       live "/players", PlayerDirectoryLive, :index
       live "/players/:id", PlayerDetailLive, :show
       live "/teams/:id", TeamDetailLive, :show
+      live "/venues/:id/players", VenuePlayersLive, :show
     end
 
     live_session :admin_venue_management,

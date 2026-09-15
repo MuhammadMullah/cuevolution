@@ -38,12 +38,13 @@ defmodule Cuevolution.Venues do
   def venue_name_taken_in_region?(_region_id, _name), do: false
 
   @doc """
-  All venues (active and inactive), optionally filtered by `:region_id`, for
-  the admin management view.
+  All venues, optionally filtered by `:region_id` and/or `:active`, for the
+  admin management view.
   """
   def list_venues(filters \\ %{}) do
     Venue
     |> filter_by_region(filters[:region_id])
+    |> filter_by_active(filters[:active])
     |> order_by(asc: :name)
     |> preload(:region)
     |> Repo.all()
@@ -51,6 +52,16 @@ defmodule Cuevolution.Venues do
 
   defp filter_by_region(query, nil), do: query
   defp filter_by_region(query, region_id), do: where(query, region_id: ^region_id)
+
+  defp filter_by_active(query, nil), do: query
+  defp filter_by_active(query, active), do: where(query, active: ^active)
+
+  @doc "Fetches a venue by id, preloaded with its region — raises if not found."
+  def get_venue!(id) do
+    Venue
+    |> preload(:region)
+    |> Repo.get!(id)
+  end
 
   @doc "Creates a venue (spec 004 FR-001)."
   def create_venue(attrs) do

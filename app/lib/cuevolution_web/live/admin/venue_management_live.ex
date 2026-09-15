@@ -14,9 +14,9 @@ defmodule CuevolutionWeb.VenueManagementLive do
   alias Cuevolution.Venues.Venue
   alias CuevolutionWeb.AdminComponents
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     regions = Accounts.list_regions()
-    region = List.first(regions)
+    region = Enum.find(regions, &(&1.id == params["region_id"])) || List.first(regions)
 
     {:ok,
      socket

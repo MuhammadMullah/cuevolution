@@ -109,6 +109,17 @@ defmodule Cuevolution.VenuesTest do
       {queries, _result} = with_query_count(fn -> Venues.list_venues() end)
       assert queries == 2
     end
+
+    test "filters by active when given" do
+      active = insert(:venue, active: true)
+      inactive = insert(:venue, active: false)
+
+      results = Venues.list_venues(%{active: true})
+
+      ids = Enum.map(results, & &1.id)
+      assert active.id in ids
+      refute inactive.id in ids
+    end
   end
 
   defp with_query_count(fun) do
