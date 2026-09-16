@@ -155,6 +155,27 @@
           <h2 class="mb-1 text-[15px] font-bold tracking-tight text-ink-950">Region & venue</h2>
           <p class="mb-4 text-[13.5px] text-ink-500">Where you play your matches.</p>
 
+          <div
+            :if={@venue_deactivated?}
+            class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-[15px] py-[13px]"
+          >
+            <div class="mb-1.5 text-[13px] font-bold text-amber-900">Your venue has closed</div>
+            <p class="mb-2.5 text-[13px] leading-relaxed text-amber-800">
+              Pick a new preferred venue below to keep receiving draws.
+            </p>
+            <div :if={@deactivation_suggestions != []} class="flex flex-wrap gap-1.5">
+              <button
+                :for={venue <- @deactivation_suggestions}
+                type="button"
+                phx-click="change_venue"
+                phx-value-venue_id={venue.id}
+                class="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-amber-800 hover:bg-amber-100"
+              >
+                {venue.name}
+              </button>
+            </div>
+          </div>
+
           <div :if={@region_locked?}>
             <div class="mb-3.5 flex flex-col items-start gap-2 text-[13px] text-ink-500 sm:flex-row sm:items-center">
               <span class="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-ink-500">

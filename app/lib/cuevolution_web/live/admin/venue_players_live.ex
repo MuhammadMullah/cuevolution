@@ -168,8 +168,8 @@ defmodule CuevolutionWeb.VenuePlayersLive do
   end
 
   defp venue_players_query(venue_id, kind, search) do
-    Player
-    |> where([p], p.preferred_venue_id == ^venue_id and is_nil(p.anonymized_at))
+    venue_id
+    |> Accounts.list_players_by_preferred_venue()
     |> filter_by_kind(kind)
     |> filter_by_search(search)
     |> order_by(asc: :username)
@@ -227,7 +227,7 @@ defmodule CuevolutionWeb.VenuePlayersLive do
   end
 
   defp venue_tiles(venue_id) do
-    base = from p in Player, where: p.preferred_venue_id == ^venue_id and is_nil(p.anonymized_at)
+    base = Accounts.list_players_by_preferred_venue(venue_id)
 
     total = Repo.aggregate(base, :count)
 

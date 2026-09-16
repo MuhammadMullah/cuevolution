@@ -1204,4 +1204,16 @@ defmodule Cuevolution.Competitions do
     )
     |> Repo.exists?()
   end
+
+  @doc """
+  Checks whether a venue already has any draws associated with it.
+
+  A venue cannot be deactivated once it has a scheduled fixture or a Grassroots
+  group that has already been paired for play.
+
+  """
+  def venue_has_draws?(venue_id) do
+    Repo.exists?(from f in Fixture, where: f.venue_id == ^venue_id) or
+      Repo.exists?(from g in Group, where: g.venue_id == ^venue_id)
+  end
 end

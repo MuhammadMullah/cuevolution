@@ -1,5 +1,6 @@
 defmodule CuevolutionWeb.VenueManagementLiveTest do
   use CuevolutionWeb.ConnCase, async: true
+  use Oban.Testing, repo: Cuevolution.Repo
 
   import Phoenix.LiveViewTest
 
@@ -63,14 +64,21 @@ defmodule CuevolutionWeb.VenueManagementLiveTest do
     refute html =~ "Old Name"
   end
 
-  test "deactivates and reactivates a venue", %{conn: conn} do
+  test "deactivates and reactivates a venue, with no draws made", %{conn: conn} do
     venue = insert(:venue, region_id: default_region().id, active: true)
     conn = log_in_admin(conn)
 
     {:ok, view, _html} = live(conn, ~p"/admin/venues")
 
+    html =
+      view
+      |> element("button[phx-click=request_deactivate][phx-value-id='#{venue.id}']")
+      |> render_click()
+
+    assert html =~ "Deactivate &quot;#{venue.name}&quot;?"
+
     view
-    |> element("button[phx-click=deactivate][phx-value-id='#{venue.id}']")
+    |> element("button[phx-click=confirm_deactivate]")
     |> render_click()
 
     assert Repo.get!(Cuevolution.Venues.Venue, venue.id).active == false
@@ -80,6 +88,59 @@ defmodule CuevolutionWeb.VenueManagementLiveTest do
     |> render_click()
 
     assert Repo.get!(Cuevolution.Venues.Venue, venue.id).active == true
+  end
+
+  test "blocks deactivation once draws exist for the venue", %{conn: conn} do
+    venue = insert(:venue, region_id: default_region().id, active: true)
+    fixture = insert(:fixture, venue_id: venue.id)
+    conn = log_in_admin(conn)
+
+    {:ok, view, _html} = live(conn, ~p"/admin/venues")
+
+    html =
+      view
+      |> element("button[phx-click=request_deactivate][phx-value-id='#{venue.id}']")
+      |> render_click()
+
+    assert html =~ "Can&#39;t deactivate"
+    refute has_element?(view, "button[phx-click=confirm_deactivate]")
+    assert Repo.get!(Cuevolution.Venues.Venue, venue.id).active == true
+
+    assert fixture.id
+  end
+
+  test "admin picks a suggested venue when deactivating, and the player is notified", %{
+    conn: conn
+  } do
+    region = default_region()
+    venue = insert(:venue, region_id: region.id, active: true)
+    suggestion = insert(:venue, region_id: region.id, name: "Suggested Venue", active: true)
+    player = insert(:player, region_id: region.id, preferred_venue_id: venue.id)
+    conn = log_in_admin(conn)
+
+    {:ok, view, _html} = live(conn, ~p"/admin/venues")
+
+    view
+    |> element("button[phx-click=request_deactivate][phx-value-id='#{venue.id}']")
+    |> render_click()
+
+    view
+    |> element("button[phx-click=toggle_suggestion][phx-value-id='#{suggestion.id}']")
+    |> render_click()
+
+    view
+    |> element("button[phx-click=confirm_deactivate]")
+    |> render_click()
+
+    assert Repo.get!(Cuevolution.Venues.Venue, venue.id).active == false
+
+    assert [%{suggested_venue_id: suggested_id}] =
+             Repo.all(Cuevolution.Venues.VenueDeactivationSuggestion)
+
+    assert suggested_id == suggestion.id
+
+    assert_enqueued(worker: Cuevolution.Notifications.Workers.SendEmailWorker)
+    assert Repo.get_by!(Cuevolution.Notifications.Notification, player_id: player.id)
   end
 
   test "switching region tabs scopes the venue list", %{conn: conn} do

@@ -8,7 +8,12 @@ defmodule CuevolutionWeb.VenueManagementLive do
   """
   use CuevolutionWeb, :live_view
 
+  require Logger
+
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Competitions
+  alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Venues
   alias Cuevolution.Venues.Venue
@@ -23,6 +28,7 @@ defmodule CuevolutionWeb.VenueManagementLive do
      |> assign(page_title: "Venue Management", regions: regions, region: region)
      |> assign(:editing_venue, nil)
      |> assign_form(Venue.changeset(%Venue{}, %{}))
+     |> clear_deactivation_state()
      |> load_venues()
      |> load_custom_venues()}
   end
@@ -35,6 +41,7 @@ defmodule CuevolutionWeb.VenueManagementLive do
      |> assign(:region, region)
      |> assign(:editing_venue, nil)
      |> assign_form(Venue.changeset(%Venue{}, %{}))
+     |> clear_deactivation_state()
      |> load_venues()
      |> load_custom_venues()}
   end
@@ -90,11 +97,57 @@ defmodule CuevolutionWeb.VenueManagementLive do
     end
   end
 
-  def handle_event("deactivate", %{"id" => id}, socket) do
-    venue = Repo.get!(Venue, id)
-    {:ok, _venue} = Venues.deactivate_venue(venue)
+  def handle_event("request_deactivate", %{"id" => id}, socket) do
+    if Admin.can?(socket.assigns.current_admin, :manage_venues) do
+      venue = Repo.get!(Venue, id)
 
-    {:noreply, socket |> put_flash(:info, "\"#{venue.name}\" deactivated.") |> load_venues()}
+      {:noreply,
+       assign(socket,
+         deactivating_venue: venue,
+         deactivate_blocked?: Competitions.venue_has_draws?(venue.id),
+         suggestion_options: Venues.list_active_venues_in_region(venue.region_id, venue.id),
+         selected_suggestion_ids: []
+       )}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to deactivate venues.")}
+    end
+  end
+
+  def handle_event("toggle_suggestion", %{"id" => id}, socket) do
+    selected = socket.assigns.selected_suggestion_ids
+    updated = if id in selected, do: List.delete(selected, id), else: [id | selected]
+
+    {:noreply, assign(socket, :selected_suggestion_ids, updated)}
+  end
+
+  def handle_event("cancel_deactivate", _params, socket) do
+    {:noreply, clear_deactivation_state(socket)}
+  end
+
+  def handle_event("confirm_deactivate", _params, socket) do
+    venue = socket.assigns.deactivating_venue
+    suggested_ids = socket.assigns.selected_suggestion_ids
+
+    case Venues.deactivate_venue(venue, suggested_ids) do
+      {:ok, venue} ->
+        notify_affected_players(venue)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "\"#{venue.name}\" deactivated.")
+         |> clear_deactivation_state()
+         |> load_venues()}
+
+      {:error, :draws_exist} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :error,
+           "\"#{venue.name}\" can't be deactivated — draws already exist for it."
+         )
+         |> clear_deactivation_state()
+         |> load_venues()}
+    end
   end
 
   def handle_event("activate", %{"id" => id}, socket) do
@@ -120,6 +173,40 @@ defmodule CuevolutionWeb.VenueManagementLive do
            "A venue named \"#{name}\" already exists in #{socket.assigns.region.name}."
          )}
     end
+  end
+
+  defp clear_deactivation_state(socket) do
+    assign(socket,
+      deactivating_venue: nil,
+      deactivate_blocked?: false,
+      suggestion_options: [],
+      selected_suggestion_ids: []
+    )
+  end
+
+  defp notify_affected_players(venue) do
+    suggested_names =
+      venue.id
+      |> Venues.list_suggestions_for_venue()
+      |> Enum.map(& &1.name)
+
+    payload = %{venue_name: venue.name, suggested_venues: suggested_names}
+
+    venue.id
+    |> Accounts.list_players_by_preferred_venue()
+    |> Repo.all()
+    |> Enum.each(&dispatch_venue_deactivated(&1, payload))
+  end
+
+  defp dispatch_venue_deactivated(player, payload) do
+    Notifications.dispatch(player, :venue_deactivated, payload)
+  rescue
+    error ->
+      Logger.error(
+        "venue_deactivated dispatch failed for player #{player.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   defp load_venues(socket) do

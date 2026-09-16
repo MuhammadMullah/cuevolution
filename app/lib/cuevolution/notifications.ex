@@ -26,7 +26,8 @@ defmodule Cuevolution.Notifications do
   @allowed_payload_keys %{
     "registration_confirmation" => [],
     "fixture_assignment" => ~w(opponent_name venue date time),
-    "team_assignment" => ~w(team_name captain_name)
+    "team_assignment" => ~w(team_name captain_name),
+    "venue_deactivated" => ~w(venue_name suggested_venues)
   }
 
   @doc """
