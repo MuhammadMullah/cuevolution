@@ -2,15 +2,18 @@
 	email {$CADDY_EMAIL}
 }
 
-# Container names here must match APP_CONTAINER_NAME in each environment's
-# deploy/app/.env (see deploy/README.md) — that's what makes each app
-# reachable by name on the shared "web" network.
+# Container name here must match APP_CONTAINER_NAME in deploy/app/.env (see
+# deploy/README.md) — that's what makes the app reachable by name on the
+# shared "web" network.
 
-staging.sportpesapool.ke {
-	reverse_proxy cuevolution-staging:4000
-}
-
+# DNS-01 via Cloudflare: proves ownership by creating a TXT record through
+# the Cloudflare API, so this cert can be (re)issued whether or not DNS
+# currently points here — the key to a zero-downtime cutover.
 sportpesapool.ke {
+	tls {
+		dns cloudflare {$CF_API_TOKEN}
+	}
+
 	handle {
 		reverse_proxy cuevolution-production:4000
 	}

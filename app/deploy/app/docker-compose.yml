@@ -1,24 +1,46 @@
-# Per-environment app + database stack — the same file is deployed twice
-# on the shared server (once for staging, once for production), each in
-# its own directory with its own .env (see deploy/README.md). No reverse
-# proxy or published ports here — deploy/caddy/ is the single shared Caddy
-# instance in front of both, since two Caddy instances can't both bind
-# 80/443 on one host. APP_CONTAINER_NAME must be distinct per environment
-# so Caddy can address each app container unambiguously on the shared
+# Production app stack: Phoenix web + Oban worker + Cloud SQL Auth Proxy,
+# deployed once on the VM (see deploy/README.md). No reverse proxy or
+# published ports here — deploy/caddy/ is the shared Caddy instance in front
+# of it. APP_CONTAINER_NAME is what Caddy's Caddyfile addresses on the shared
 # "web" network.
+#
+# cloud-sql-proxy needs no mounted credentials: it picks up the VM's attached
+# service account automatically from the instance metadata server (see
+# infra/modules/cuevolution-runtime/compute.tf), the same way
+# lib/cuevolution/accounts/profile_picture/storage/gcs/requester/live.ex
+# authenticates to GCS.
+#
+# DATABASE_URL and CUEVOLUTION_SECRETS_JSON (SECRET_KEY_BASE,
+# SMTP_USERNAME/PASSWORD, AFRICASTALKING_API_KEY/USERNAME) are NOT set here —
+# deploy.sh exports them into the shell environment right before `docker
+# compose up`, fetched fresh from Secret Manager each time, the same secrets
+# Cloud Run's --set-secrets already reads. They're deliberately absent from
+# .env so nothing secret sits on disk here.
+x-app-env: &app_env
+  DB_SSL: "false"
+  PHX_HOST: ${DOMAIN}
+  PORT: "4000"
+  POOL_SIZE: ${POOL_SIZE:-10}
+  PROFILE_PICTURE_STORAGE: ${PROFILE_PICTURE_STORAGE:-gcs}
+  GCS_BUCKET: ${GCS_BUCKET}
+  GCS_SIGNING_SERVICE_ACCOUNT: ${GCS_SIGNING_SERVICE_ACCOUNT}
+  MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp_auth}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+  AFRICASTALKING_SENDER_ID: ${AFRICASTALKING_SENDER_ID}
+  DATABASE_URL: ${DATABASE_URL}
+  CUEVOLUTION_SECRETS_JSON: ${CUEVOLUTION_SECRETS_JSON}
 
 services:
-  db:
-    image: postgres:17-alpine
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    command:
+      - ${CLOUDSQL_CONNECTION_NAME}
+      - --address=0.0.0.0
+      - --port=5432
+      - --health-check
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/readiness"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -28,30 +50,38 @@ services:
     container_name: ${APP_CONTAINER_NAME}
     restart: unless-stopped
     depends_on:
-      db:
+      cloud-sql-proxy:
         condition: service_healthy
     networks:
       default: {}
       web: {}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     environment:
-      DATABASE_URL: ecto://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      PHX_HOST: ${DOMAIN}
+      <<: *app_env
       PHX_SERVER: "true"
-      PORT: "4000"
-      POOL_SIZE: ${POOL_SIZE:-10}
-      PROFILE_PICTURE_STORAGE: ${PROFILE_PICTURE_STORAGE:-gcs}
-      GCS_BUCKET: ${GCS_BUCKET}
-      GCS_SIGNING_SERVICE_ACCOUNT: ${GCS_SIGNING_SERVICE_ACCOUNT}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
-      POSTMARK_API_KEY: ${POSTMARK_API_KEY}
-      AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY}
-      AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME}
-      AFRICASTALKING_SENDER_ID: ${AFRICASTALKING_SENDER_ID}
+      OBAN_QUEUES: "false"
+
+  # Same image and shared env as `app`, but PHX_SERVER/OBAN_QUEUES must stay
+  # unset — not set to an empty string, since runtime.exs's
+  # `if System.get_env("PHX_SERVER")` and `in ~w(false 0)` checks both treat
+  # any *set* value, including "", as present. Left unset, the worker keeps
+  # Oban's real queues/plugins from config/config.exs but never binds an HTTP
+  # listener, and it never joins the "web" network Caddy proxies to (see
+  # config/runtime.exs's "Oban role" comment for why web disables queues but
+  # the worker doesn't).
+  worker:
+    image: ${IMAGE}
+    restart: unless-stopped
+    depends_on:
+      cloud-sql-proxy:
+        condition: service_healthy
+    environment: *app_env
 
 networks:
   web:
     external: true
-
-volumes:
-  postgres_data:
