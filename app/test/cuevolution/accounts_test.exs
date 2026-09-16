@@ -792,6 +792,44 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "admin_change_venue/3" do
+    test "updates the player's venue and logs the admin action" do
+      player = insert(:player)
+      venue = insert(:venue, region_id: player.region_id)
+      admin = insert(:admin, role: "super_admin")
+
+      assert {:ok, updated} = Accounts.admin_change_venue(player, venue.id, admin)
+      assert updated.preferred_venue_id == venue.id
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          entity_id: player.id,
+          action_type: "change_player_venue"
+        )
+
+      assert log.admin_id == admin.id
+      assert log.prior_value == %{"preferred_venue_id" => player.preferred_venue_id}
+      assert log.new_value == %{"preferred_venue_id" => venue.id}
+    end
+
+    test "returns {:error, :unauthorized} and writes no log for an admin without :manage_players" do
+      player = insert(:player)
+      venue = insert(:venue, region_id: player.region_id)
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:error, :unauthorized} = Accounts.admin_change_venue(player, venue.id, admin)
+      refute Repo.get_by(Cuevolution.Accounts.AdminActionLog, entity_id: player.id)
+    end
+
+    test "returns {:error, changeset} for an invalid venue_id" do
+      player = insert(:player)
+      admin = insert(:admin, role: "super_admin")
+
+      assert {:error, changeset} = Accounts.admin_change_venue(player, nil, admin)
+      refute changeset.valid?
+    end
+  end
+
   describe "deactivate_player/1" do
     test "clears PII and sets anonymized_at, without an admin action log" do
       player = insert(:player)
