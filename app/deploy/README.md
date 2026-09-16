@@ -41,6 +41,11 @@ GitHub only ever looks for workflows at the repository root.
   (`terraform output vm_service_account`) — it needs
   `roles/iam.serviceAccountTokenCreator` on itself to sign V4 URLs, which
   `compute.tf` already grants.
+- `POOL_SIZE` defaults to `3`, deliberately small: `db-f1-micro` allows
+  only ~25 total connections, and while Cloud Run is still live in parallel
+  (see "Zero-downtime DNS cutover" below) it's already using a chunk of
+  that budget. A higher value here caused real `too_many_connections`
+  failures during initial setup. Raise it once Cloud Run is decommissioned.
 - `DATABASE_URL` and `CUEVOLUTION_SECRETS_JSON` (`SECRET_KEY_BASE`,
   `SMTP_USERNAME`/`PASSWORD`, `AFRICASTALKING_API_KEY`/`USERNAME`) are never
   written to `.env` on disk. `deploy.sh` fetches them fresh from Secret
