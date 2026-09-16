@@ -31,6 +31,12 @@ x-app-env: &app_env
   CUEVOLUTION_SECRETS_JSON: ${CUEVOLUTION_SECRETS_JSON}
 
 services:
+  # No container-internal healthcheck here: this image is distroless (no
+  # shell, no wget/curl/ls — verified by hand) so a docker-compose
+  # HEALTHCHECK can never run inside it. depends_on below only waits for
+  # the process to start, not for Cloud SQL connectivity; Postgrex/Ecto's
+  # own connection-pool retries cover the gap (typically ready in ~1s
+  # anyway, per its own startup logs).
   cloud-sql-proxy:
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
     restart: unless-stopped
@@ -38,12 +44,6 @@ services:
       - ${CLOUDSQL_CONNECTION_NAME}
       - --address=0.0.0.0
       - --port=5432
-      - --health-check
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9090/readiness"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   app:
     image: ${IMAGE}
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
     depends_on:
       cloud-sql-proxy:
-        condition: service_healthy
+        condition: service_started
     networks:
       default: {}
       web: {}
@@ -79,7 +79,7 @@ services:
     restart: unless-stopped
     depends_on:
       cloud-sql-proxy:
-        condition: service_healthy
+        condition: service_started
     environment: *app_env
 
 networks:
