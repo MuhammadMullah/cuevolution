@@ -1,229 +1,234 @@
-# Legacy deployment reference
+# Production deployment: GCE VM + Docker Compose + Caddy
 
-> This document describes the retired single-server Docker/Caddy deployment.
-> The active deployment is Cloud Run managed by Terraform in `infra/` and
-> GitHub Actions. Profile pictures now use private GCS buckets and V4 signed
-> URLs; follow `infra/README.md` for the current setup.
+This replaces Cloud Run for production compute — see `infra/README.md` for
+the still-active Terraform-managed pieces: Cloud SQL and the GCS uploads
+bucket, both unchanged by this move. The VM itself — service account,
+static IP, firewall rules — is provisioned
+by Terraform (`infra/modules/cuevolution-runtime/compute.tf`); everything
+below is what happens on top of that VM, one time, plus what the CI/CD
+workflow does on every push.
 
-One Debian server hosting both environments, one shared reverse proxy in
-front of two independent app+database stacks:
+Single server, one environment (production). Two containers from the same
+release image (Phoenix web + Oban worker), a Cloud SQL Auth Proxy sidecar,
+and a Caddy reverse proxy — see `app/deploy/app/docker-compose.yml`.
 
-| Branch    | Workflow                                   | Environment  | Domain                       |
-| --------- | ------------------------------------------- | ------------ | ------------------------------ |
-| `develop` | `.github/workflows/deploy-staging.yml`      | `staging`    | `staging.sportpesapool.ke`  |
-| `main`    | `.github/workflows/deploy-production.yml`   | `production` | `sportpesapool.ke`          |
-
-Every pull request (regardless of target branch) also runs `.github/workflows/ci.yml`
-— format check, `mix compile --warnings-as-errors`, `mix credo --strict`,
-`mix test`. Both deploy workflows run the same checks (via the shared
-`.github/workflows/test.yml`) before building or deploying anything, so a
-broken `develop`/`main` push never reaches the server even if branch
-protection isn't configured.
+Every pull request runs `.github/workflows/ci.yml` — format check,
+`mix compile --warnings-as-errors`, `mix credo --strict`, `mix test`. The
+deploy workflow (`.github/workflows/deploy-vm.yml`) runs the same checks
+(via the shared `.github/workflows/test.yml`) before building or deploying
+anything.
 
 On push, the deploy workflow builds the Docker image from `app/Dockerfile`,
-pushes it to GHCR, copies `app/deploy/app/docker-compose.yml` to that
-environment's own directory on the server, then SSHes in to pull the new
-image, run migrations, and restart just that stack. It never touches the
-shared Caddy stack (`app/deploy/caddy/`) — that's server-level infra,
-deployed once during setup, not per-deploy.
+pushes it to GHCR, SSHes into the VM, pulls the new image, runs migrations,
+and restarts the `app`/`worker` containers. It never touches the Caddy
+stack (`app/deploy/caddy/`) — that's provisioned once during setup, not
+per-deploy.
 
 Note: `.github/workflows/` lives at the repo root, one level up from this
 `app/` directory, even though everything else deploy-related is in here —
 GitHub only ever looks for workflows at the repository root.
 
-## Why one shared Caddy instead of one per environment
+## Why the DB and storage env vars look the way they do
 
-Two Caddy containers can't both bind ports 80/443 on the same host. So the
-topology is: one Caddy stack (`deploy/caddy/`) doing TLS termination and
-routing by domain, and two independent app+db stacks (`deploy/app/`,
-deployed twice under different directories/`.env`s) that Caddy reverse-proxies
-to by container name over a shared Docker network called `web`. The two
-app stacks never talk to each other or share a database — only Caddy
-bridges them.
+- `cloud-sql-proxy` needs no mounted key file: it authenticates as the VM's
+  attached service account automatically via the instance metadata server —
+  the same mechanism `lib/cuevolution/accounts/profile_picture/storage/gcs/requester/live.ex`
+  already uses for GCS, so that file needs no changes for this move.
+- `DATABASE_URL` points at `cloud-sql-proxy:5432` (a plain TCP Ecto URL) with
+  `DB_SSL=false` — the proxy itself encrypts the hop to Cloud SQL; the
+  app→proxy hop stays inside the VM's private Docker network.
+- `GCS_SIGNING_SERVICE_ACCOUNT` must be the VM's service account email
+  (`terraform output vm_service_account`) — it needs
+  `roles/iam.serviceAccountTokenCreator` on itself to sign V4 URLs, which
+  `compute.tf` already grants.
+- `DATABASE_URL` and `CUEVOLUTION_SECRETS_JSON` (`SECRET_KEY_BASE`,
+  `SMTP_USERNAME`/`PASSWORD`, `AFRICASTALKING_API_KEY`/`USERNAME`) are never
+  written to `.env` on disk. `deploy.sh` fetches them fresh from Secret
+  Manager on every deploy — the exact same secrets Cloud Run's
+  `--set-secrets` already reads (`secrets.tf`'s `application` and
+  `vm_database_url` secrets), just pulled via `gcloud` using the VM's
+  attached service account instead of a Cloud Run mount.
 
 ## One-time server setup
 
-All of this happens once, on the single server, in this order (Caddy needs
-the app containers' network to exist, and needs DNS pointed at it before
-it can request certificates).
+All of this happens once, on the VM Terraform created.
 
-1. **Install Docker.** Follow [Docker's install guide](https://docs.docker.com/engine/install/)
-   for Debian; the `docker compose` plugin (v2, not the standalone
-   `docker-compose` binary) needs to be present — check with
-   `docker compose version`.
+1. **Provision the VM.** From `infra/envs/production`:
 
-2. **Create a deploy user** (or reuse an existing one) that's in the
-   `docker` group, and generate an SSH keypair for GitHub Actions to use:
+   ```
+   terraform apply
+   ```
+
+   This creates the VM, its service account, a static external IP, and
+   firewall rules for 80/443/22 — Cloud Run keeps serving traffic
+   unaffected; nothing existing is touched. Docker Engine, the compose
+   plugin, and the `gcloud` CLI install automatically on first boot via the
+   instance's startup script (`gcloud` needs no login on the VM — it picks
+   up the attached service account from the metadata server automatically).
+   Note the outputs `vm_ip`, `vm_service_account`, `db_connection_name`,
+   `vm_database_url_secret_id`.
+
+2. **Add your SSH key.** GCE VMs take SSH keys via instance/project
+   metadata rather than a manually managed `authorized_keys` file:
 
    ```
    ssh-keygen -t ed25519 -f deploy_key -N ""
+   gcloud compute instances add-metadata cuevolution-production-vm \
+     --project=<project_id> --zone=<zone> \
+     --metadata=ssh-keys="deploy=$(cat deploy_key.pub)"
    ```
 
-   Add `deploy_key.pub` to that user's `~/.ssh/authorized_keys` on the
-   server. `deploy_key` (the private half) becomes the `SSH_PRIVATE_KEY`
-   secret below — never commit it. The same key/user is used for both
-   environments, since it's the same server.
+   `deploy_key` (the private half) becomes the `SSH_PRIVATE_KEY` secret
+   below — never commit it.
 
-3. **Create the shared Docker network** the reverse proxy and both app
-   stacks all join:
+3. **Create the shared Docker network** the reverse proxy and the app stack
+   both join:
 
    ```
-   docker network create web
+   ssh deploy@<vm_ip> docker network create web
    ```
 
-4. **Point DNS** for both `staging.sportpesapool.ke` and the bare
-   `sportpesapool.ke` at the server's IP — required before Caddy can
-   obtain Let's Encrypt certificates for either. For the apex domain
-   specifically, make sure it has **only** that one A record — a
-   registrar's default parking/forwarding records left in place alongside
-   it will make certificate issuance (and traffic) unreliable, since
-   requests can land on any of the listed IPs.
-
-5. **Deploy the shared Caddy stack** (once — not part of either app's CI/CD):
+4. **Deploy the Caddy stack** (once). DNS does **not** need to point here
+   yet — the Caddyfile uses a DNS-01 challenge via the Cloudflare API
+   (`caddy-dns/cloudflare`, built by `deploy/caddy/Dockerfile`), so it can
+   fetch a real cert for `sportpesapool.ke` while Cloud Run is still the
+   one actually serving that domain. This is what makes the eventual
+   cutover zero-downtime — see "Zero-downtime DNS cutover" below.
 
    ```
-   sudo mkdir -p /opt/caddy && sudo chown $(whoami) /opt/caddy
+   ssh deploy@<vm_ip> 'sudo mkdir -p /opt/caddy && sudo chown $(whoami) /opt/caddy'
+   scp app/deploy/caddy/docker-compose.yml app/deploy/caddy/Caddyfile \
+       app/deploy/caddy/Dockerfile app/deploy/caddy/.env.example \
+     deploy@<vm_ip>:/opt/caddy/
+   ssh deploy@<vm_ip>
+   cd /opt/caddy && mv .env.example .env   # fill in CADDY_EMAIL and CF_API_TOKEN
+   docker compose --env-file .env up -d --build
+   docker compose logs caddy   # confirm it obtained the certificate, no errors
    ```
 
-   Copy `app/deploy/caddy/docker-compose.yml`, `app/deploy/caddy/Caddyfile`,
-   `app/deploy/caddy/.env.example` (as `.env`, filled in), and the
-   `app/deploy/caddy/social-protection-tools/` directory (see above — the
-   compose file mounts it, so it must exist) from this repo to `/opt/caddy`
-   on the server, then:
+5. **Mail credentials.** Production uses `MAIL_PROVIDER=smtp_auth`
+   (`config/runtime.exs`), which relays through `smtp.gmail.com:587` with a
+   Gmail account/app-password. Nothing to do here — `SMTP_USERNAME`/
+   `SMTP_PASSWORD` already live inside the `application` Secret Manager
+   secret Cloud Run reads from, and `deploy.sh` (step 7) fetches that same
+   secret. No new credentials, no copy-paste.
+
+6. **Create the app directory and copy the compose file + deploy script:**
 
    ```
-   cd /opt/caddy
-   docker compose --env-file .env up -d
+   ssh deploy@<vm_ip> 'sudo mkdir -p /opt/cuevolution-production && sudo chown $(whoami) /opt/cuevolution-production'
+   scp app/deploy/app/docker-compose.yml app/deploy/app/.env.example app/deploy/app/deploy.sh \
+     deploy@<vm_ip>:/opt/cuevolution-production/
+   ssh deploy@<vm_ip>
+   cd /opt/cuevolution-production && mv .env.example .env && chmod +x deploy.sh
    ```
 
-6. **For each environment** (staging, then production):
+   Fill in `.env` — see the comments in `app/deploy/app/.env.example` for
+   where each value comes from (`terraform output`, or `production.tfvars`
+   for the bucket name). Notice what's *not* there: `DATABASE_URL` and the
+   app secrets aren't in this file at all — `deploy.sh` fetches them fresh
+   from Secret Manager every run. This file is **never** touched by CI
+   except its `IMAGE=` line, and never leaves the server.
 
-   - Create an AWS S3 bucket for it (a **separate** bucket per
-     environment — don't share one), with default settings (**Block all
-     public access** left ON — the bucket stays private; the app serves
-     photos through short-lived presigned URLs rather than a public
-     endpoint, see `lib/cuevolution/accounts/profile_picture/storage/s3.ex`).
+7. **First deploy:**
 
-     Create an IAM user (or role, if the server itself runs on AWS) with
-     an inline policy scoped to just that bucket (email no longer goes
-     through AWS — see Postmark setup below):
+   ```
+   cd /opt/cuevolution-production
+   ./deploy.sh ghcr.io/muhammadmullah/cuevolution:production
+   ```
 
-     ```json
-     {
-       "Version": "2012-10-17",
-       "Statement": [
-         {
-           "Effect": "Allow",
-           "Action": ["s3:PutObject", "s3:GetObject"],
-           "Resource": "arn:aws:s3:::<bucket-name>/*"
-         }
-       ]
-     }
-     ```
+   This sets `IMAGE=` in `.env`, exports `DATABASE_URL`/
+   `CUEVOLUTION_SECRETS_JSON` from Secret Manager for just this run, pulls,
+   migrates, restarts `app`/`worker`, and smoke-tests `/health/readiness`.
+   After this, pushes to `main` handle everything automatically.
 
-     Generate an access key for that IAM user (Security credentials →
-     Access keys) and note the bucket's region — both go in `.env` below.
+   The app is now fully live on the VM, behind a Caddy that already holds a
+   valid cert for the real domain — just not receiving any public traffic
+   yet, since DNS still points at Cloud Run. Verify it end-to-end without
+   touching DNS by adding a temporary line to your own machine's
+   `/etc/hosts` (`<vm_ip> sportpesapool.ke`), then browsing
+   `https://sportpesapool.ke` as if you were a real visitor: login, a
+   profile picture upload (exercises GCS), an Oban-backed action (exercises
+   the `worker` container). Remove the `/etc/hosts` line when done.
 
-     The same least-privilege policy applies when the app runs on Cloud Run:
-     keep the bucket private and grant each environment only `s3:PutObject`
-     and `s3:GetObject` on its own `arn:aws:s3:::<bucket-name>/*` path. Do
-     not grant bucket-wide administration, delete, or public-read access.
-
-   - **Set up Postmark** (sends over Postmark's HTTPS API, not SMTP — SMTP
-     hit a wall of issues on this host: port `587` was blocked outright at
-     the network level, and the alternate port `2525` kept failing with
-     an opaque `tls_failed` that turned out to be Erlang's `:ssl` app
-     defaulting to `verify_peer` with no CA bundle supplied. The HTTPS API
-     sidesteps all of that):
-     - Create a server in the Postmark account (Servers → create one per
-       environment, e.g. "staging" / "production", so bounces/activity
-       don't mix) and copy its **Server API Token** (Servers → your
-       server → API Tokens) — this becomes `POSTMARK_API_KEY` below.
-     - Verify a Sender Signature: either a single email address (Sender
-       Signatures → Add, then click the confirmation link it emails you),
-       or an entire domain via DKIM/Return-Path DNS records (Sender
-       Signatures → Domains — lets you send from any address
-       `@your-domain` without re-verifying each one). This becomes
-       `MAIL_FROM_ADDRESS` below.
-     - New Postmark accounts start in **trial mode** with a sending cap
-       and Postmark's own review before full sending is unlocked —
-       request approval under your account's settings once you're ready
-       for real traffic.
-
-   - Create the app directory:
-
-     ```
-     sudo mkdir -p /opt/cuevolution-staging   # or -production
-     sudo chown $(whoami) /opt/cuevolution-staging
-     ```
-
-   - Copy `app/deploy/app/.env.example` from this repo to
-     `/opt/cuevolution-staging/.env` (or `-production`) and fill in real
-     values — `APP_CONTAINER_NAME` and `DOMAIN` especially need to match
-     what's in `app/deploy/caddy/Caddyfile` exactly, or Caddy won't be
-     able to reach this app. `SECRET_KEY_BASE`: generate with
-     `mix phx.gen.secret`. This file is **never** touched by CI except for
-     its `IMAGE=` line, and never leaves the server.
-
-   - **First deploy is manual**, since `docker-compose.yml`/`.env` don't
-     exist until the step above, and the app needs *a* image reference
-     before the workflow's `sed` can update it:
-
-     ```
-     cd /opt/cuevolution-staging   # or -production
-     echo "IMAGE=ghcr.io/<owner>/cuevolution:staging" >> .env   # or :production
-     docker compose --env-file .env pull
-     docker compose --env-file .env run --rm app bin/migrate
-     docker compose --env-file .env up -d
-     ```
-
-     After this, pushes to `develop`/`main` handle everything automatically.
-
-7. **Make the GHCR package pullable from the server.** Images push to
+8. **Make the GHCR package pullable from the VM.** Images push to
    `ghcr.io/<owner>/cuevolution` as *private* by default. Either:
-   - Make the package public (Package settings on GitHub → Change visibility) — simplest, fine if the source isn't sensitive, or
-   - `docker login ghcr.io` on the server with a [PAT](https://github.com/settings/tokens)
-     that has `read:packages` scope.
+   - Make the package public (Package settings on GitHub → Change
+     visibility) — simplest, fine if the source isn't sensitive, or
+   - `docker login ghcr.io` on the VM with a
+     [PAT](https://github.com/settings/tokens) that has `read:packages`
+     scope.
 
 ## GitHub configuration
 
-Create two [GitHub Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)
-named `staging` and `production` (Settings → Environments), each with its
-own value for the same four secret names:
+Create a `production` [GitHub Environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)
+(Settings → Environments) with:
 
-| Secret             | Value                                                   |
-| ------------------- | -------------------------------------------------------- |
-| `SSH_HOST`          | The server's IP or hostname — **the same value in both environments**, since it's one server |
-| `SSH_USER`          | The deploy user created above — also the same in both   |
-| `SSH_PRIVATE_KEY`   | Contents of `deploy_key` (the private key, not `.pub`)  |
-| `SSH_PORT`          | Usually `22`                                             |
+| Secret            | Value                                            |
+| ------------------ | ------------------------------------------------- |
+| `SSH_HOST`         | The VM's static IP (`terraform output vm_ip`)    |
+| `SSH_USER`         | The deploy user from step 2 above                |
+| `SSH_PRIVATE_KEY`  | Contents of `deploy_key` (the private key, not `.pub`) |
+| `SSH_PORT`         | Usually `22`                                     |
 
-Keeping them as two separate GitHub Environments (even though the values
-largely overlap) is still worth it — it's what lets you attach different
-protection rules later (e.g. required reviewers before a production
-deploy) without restructuring the workflows.
-
-No GHCR secret is needed — the workflows push using the automatically
+No GHCR secret is needed — the workflow pushes using the automatically
 provided `GITHUB_TOKEN` (with `packages: write` permission set in the
 workflow itself).
 
-Optionally, add branch protection on `main` (and `develop` if desired)
-requiring the `CI` workflow to pass before merging — this repo's workflow
-files alone can't turn that on; it's a Settings → Branches rule.
+Optionally, add branch protection on `main` requiring the `CI` workflow to
+pass before merging — this repo's workflow files alone can't turn that on;
+it's a Settings → Branches rule.
+
+## Zero-downtime DNS cutover
+
+By this point Cloud Run is still serving `sportpesapool.ke` and the VM is
+fully working and already holds a valid cert for that same domain (step 4's
+DNS-01 challenge doesn't require DNS to point here). That's what makes the
+cutover itself safe:
+
+1. Confirm `deploy-vm.yml` has been run at least once via
+   `workflow_dispatch` and deployed successfully (see "GitHub
+   configuration" above).
+2. At Cloudflare, lower `sportpesapool.ke`'s A record TTL (e.g. to 60s) a
+   few minutes ahead, so the change below propagates fast — this speeds up
+   the transition but isn't required for correctness, since both ends serve
+   the same app/data throughout.
+3. Change the A record to the VM's static IP (`terraform output vm_ip`).
+   Leave Cloud Run running — don't touch `run.tf`/`domain.tf` yet. Every
+   client is now correctly served regardless of whether their resolver has
+   the old or new record cached: Cloud Run still works until decommissioned,
+   and the VM already works and already has its cert.
+4. Watch both: the VM's `docker compose logs -f app worker caddy` and Cloud
+   Run's logs/metrics in the GCP console. Once traffic has visibly shifted
+   and stayed healthy on the VM for a while (comfortably past the old TTL),
+   move on.
+5. Flip `deploy-vm.yml`'s trigger to `push: branches: [main]` and delete or
+   disable `.github/workflows/deploy-production.yml` — the VM is now the
+   real deploy target.
+6. Only afterwards, as a separate change (see "Decommissioning Cloud Run"
+   below), remove the Cloud Run resources.
 
 ## Rolling back
 
-Each deploy is tagged with its commit SHA (`staging-<sha>` /
-`production-<sha>`), not just the floating `staging`/`production` tag. To
-roll back, SSH in and point that environment's `.env` at an older tag:
+Each deploy is tagged with its commit SHA (`production-<sha>`), not just the
+floating `production` tag. To roll back, SSH in and re-run `deploy.sh` with
+an older tag:
 
 ```
-cd /opt/cuevolution-production   # or -staging
-sed -i "s|^IMAGE=.*|IMAGE=ghcr.io/<owner>/cuevolution:production-<old-sha>|" .env
-docker compose --env-file .env up -d
+cd /opt/cuevolution-production
+./deploy.sh ghcr.io/muhammadmullah/cuevolution:production-<old-sha>
 ```
 
 (Skip re-running migrations on rollback unless you're also reverting the
 schema — `bin/migrate` is idempotent but a *down* migration needs
 `bin/cuevolution eval "Cuevolution.Release.rollback(Cuevolution.Repo, <version>)"`
 run manually.)
+
+## Decommissioning Cloud Run
+
+Once the VM has served production successfully for a while, remove the
+now-unused Cloud Run resources (`infra/modules/cuevolution-runtime/run.tf`,
+`domain.tf`, the Cloud Build/Workload-Identity-Federation resources in
+`iam.tf`) and `cloudbuild.yaml` via a separate Terraform change — not
+bundled with standing this VM up, so a `plan`/`apply` here never risks
+touching the still-live Cloud Run service mid-migration.

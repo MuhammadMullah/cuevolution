@@ -1,0 +1,68 @@
+name: Deploy (production VM)
+
+# Manual trigger while this runs alongside deploy-production.yml (Cloud Run)
+# during the migration — see app/deploy/README.md. Flip this to
+# `push: branches: [main]` and retire deploy-production.yml once the VM has
+# been verified end-to-end and DNS points at it.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production-vm
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-and-deploy:
+    name: Build image and deploy to the VM
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tags
+        id: image
+        run: |
+          echo "sha_tag=ghcr.io/muhammadmullah/cuevolution:production-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "floating_tag=ghcr.io/muhammadmullah/cuevolution:production" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: app
+          file: app/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.sha_tag }}
+            ${{ steps.image.outputs.floating_tag }}
+
+      # deploy.sh (checked into app/deploy/app/, already on the VM from
+      # setup) fetches DATABASE_URL/CUEVOLUTION_SECRETS_JSON fresh from
+      # Secret Manager itself, migrates, then restarts app/worker — same
+      # ordering the old Cloud Run pipeline used (cloudbuild.yaml:
+      # migrate -> web -> worker).
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            /opt/cuevolution-production/deploy.sh ${{ steps.image.outputs.sha_tag }}

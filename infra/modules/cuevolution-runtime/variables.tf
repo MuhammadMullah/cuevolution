@@ -157,3 +157,21 @@ variable "db_password_version" {
     error_message = "db_password_version must be 1 or greater."
   }
 }
+
+variable "vm_machine_type" {
+  description = "Machine type for the flat-rate web+worker VM (compute.tf), replacing the Cloud Run web/worker services."
+  type        = string
+  default     = "e2-small"
+}
+
+variable "vm_zone" {
+  description = "Zone for the VM. Defaults to \"<region>-a\" when null."
+  type        = string
+  default     = null
+}
+
+variable "ssh_allowed_cidrs" {
+  description = "CIDR ranges allowed to SSH to the VM (port 22). GitHub Actions runners have no fixed IP range, so this defaults wide open; access is still gated by key-based auth only (no password auth)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
