@@ -432,6 +432,35 @@ defmodule Cuevolution.Accounts do
   end
 
   @doc """
+  Updates `player`'s preferred venue on their behalf, requiring
+  `:manage_players` and logging the change via `log_admin_action/4` — the
+  admin-initiated counterpart to `change_venue/2`. Like `change_venue/2`,
+  never checks `region_locked?/1`: this only ever changes venue within the
+  player's existing region.
+  """
+  def admin_change_venue(%Player{} = player, venue_id, %Admin{} = admin) do
+    if Admin.can?(admin, :manage_players) do
+      prior_venue_id = player.preferred_venue_id
+
+      Multi.new()
+      |> Multi.update(:player, Player.venue_changeset(player, %{preferred_venue_id: venue_id}))
+      |> Multi.run(:log, fn _repo, %{player: updated} ->
+        log_admin_action("change_player_venue", admin, updated,
+          prior_value: %{"preferred_venue_id" => prior_venue_id},
+          new_value: %{"preferred_venue_id" => venue_id}
+        )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{player: player}} -> {:ok, player}
+        {:error, :player, changeset, _changes} -> {:error, changeset}
+      end
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  @doc """
   Updates `player`'s region and preferred venue together, rejecting the
   change once `region_locked?/1` is true — a venue only makes sense within
   the region it belongs to, so changing region always requires picking a

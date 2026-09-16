@@ -35,6 +35,57 @@
       </div>
     </div>
 
+    <div class="border-t border-ink-100 pt-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="text-[11.5px] text-ink-400">Preferred venue</div>
+          <div class="text-sm font-semibold text-ink-950">
+            {venue_label(@player.preferred_venue)}
+          </div>
+        </div>
+        <button
+          :if={Admin.can?(@current_admin, :manage_players) and not @editing_venue}
+          type="button"
+          phx-click="request_edit_venue"
+          class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Edit
+        </button>
+      </div>
+
+      <form
+        :if={@editing_venue}
+        phx-submit="save_venue"
+        class="mt-3 flex flex-wrap items-center gap-2"
+      >
+        <select
+          name="venue_id"
+          class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700"
+        >
+          <option
+            :for={venue <- @venue_options}
+            value={venue.id}
+            selected={venue.id == @venue_form_id}
+          >
+            {venue.name}
+          </option>
+        </select>
+        <button
+          type="submit"
+          class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-800"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          phx-click="cancel_edit_venue"
+          class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Cancel
+        </button>
+      </form>
+    </div>
+
     <div
       :if={
         Admin.can?(@current_admin, :anonymize_users) and is_nil(@player.anonymized_at) and

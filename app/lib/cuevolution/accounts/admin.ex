@@ -17,7 +17,8 @@ defmodule Cuevolution.Accounts.Admin do
     manage_groups: ["super_admin", "tournament_director", "regional_coordinator"],
     view_directory: ["super_admin", "tournament_director", "regional_coordinator"],
     anonymize_users: ["super_admin", "tournament_director"],
-    manage_venues: ["super_admin", "tournament_director", "regional_coordinator"]
+    manage_venues: ["super_admin", "tournament_director", "regional_coordinator"],
+    manage_players: ["super_admin", "tournament_director", "regional_coordinator"]
   }
 
   @primary_key {:id, :binary_id, autogenerate: true}
