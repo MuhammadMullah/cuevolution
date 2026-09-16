@@ -1,10 +1,12 @@
 name: Deploy (production VM)
 
-# Manual trigger while this runs alongside deploy-production.yml (Cloud Run)
-# during the migration — see app/deploy/README.md. Flip this to
-# `push: branches: [main]` and retire deploy-production.yml once the VM has
-# been verified end-to-end and DNS points at it.
+# DNS cut over to the VM on 2026-09-16 (see app/deploy/README.md's
+# "Zero-downtime DNS cutover"). This is now the real deploy target;
+# deploy-production.yml (Cloud Run) is kept manual-only for rollback until
+# the Cloud Run resources themselves are decommissioned.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

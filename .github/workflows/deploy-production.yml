@@ -1,8 +1,10 @@
 name: Deploy (production)
 
+# DNS cut over to the VM on 2026-09-16 (deploy-vm.yml is now the real
+# deploy target — see app/deploy/README.md). Manual-only from here: kept
+# for rollback to Cloud Run until its resources are decommissioned, not
+# for routine deploys.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
