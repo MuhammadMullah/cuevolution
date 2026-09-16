@@ -81,9 +81,12 @@ RUN mix release
 FROM ${RUNNER_IMAGE} AS final
 
 # imagemagick: Cuevolution.Accounts.ProfilePicture shells out to it (via
-# the mogrify library) to resize uploaded profile pictures.
+# the mogrify library) to resize uploaded profile pictures. wget: unused by
+# Cloud Run (its startup/liveness probes hit the container from outside),
+# but the VM's docker-compose HEALTHCHECK (app/deploy/app/docker-compose.yml)
+# runs inside the container and needs something to call with.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates imagemagick \
+  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates imagemagick wget \
   && rm -rf /var/lib/apt/lists/*
 
 # Set the locale

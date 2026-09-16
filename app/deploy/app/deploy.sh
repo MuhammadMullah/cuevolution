@@ -22,4 +22,15 @@ export DATABASE_URL="$(gcloud secrets versions access latest --secret=cuevolutio
 docker compose --env-file .env pull
 docker compose --env-file .env run --rm app bin/migrate
 docker compose --env-file .env up -d
-curl --fail --silent --show-error --retry 5 --retry-delay 5 http://localhost:4000/health/readiness
+
+# Port 4000 is deliberately not published to the host (only reachable on the
+# "web" Docker network, which is how Caddy reaches it) — so the smoke test
+# has to run inside the app container itself, not against host localhost.
+for i in $(seq 1 10); do
+  if docker compose --env-file .env exec -T app wget -qO- http://localhost:4000/health/readiness; then
+    exit 0
+  fi
+  sleep 3
+done
+echo "app did not become healthy in time" >&2
+exit 1
