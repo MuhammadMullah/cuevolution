@@ -136,6 +136,41 @@ defmodule Cuevolution.Notifications.Emails do
   end
 
   @doc """
+  Sent when a player’s preferred venue is deactivated.
+
+  The notification names the venue, suggests any available replacements, and
+  links the player to settings to choose a new preferred venue.
+
+  """
+  def venue_deactivated(player, payload) do
+    %{venue_name: venue_name, suggested_venues: suggested_venues} = payload
+    first_name = esc(player.first_name)
+    venue_name_esc = esc(venue_name)
+
+    base(player)
+    |> subject("Your venue \"#{venue_name}\" has closed")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        <strong>#{venue_name_esc}</strong> is no longer an active venue, so it can't stay your
+        preferred venue.
+      </p>
+      #{suggested_venues_html(suggested_venues)}
+      #{button("Choose My Venue", url("/profile/settings"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    #{venue_name} is no longer an active venue, so it can't stay your preferred venue.
+
+    #{suggested_venues_text(suggested_venues)}
+    Choose a new venue: #{url("/profile/settings")}
+    """)
+  end
+
+  @doc """
   Password-reset link email (spec 011). Sent via a standalone worker, not
   `Notifications.dispatch/3` — see that worker's moduledoc for why.
   """
@@ -217,6 +252,28 @@ defmodule Cuevolution.Notifications.Emails do
   defp url(path), do: Endpoint.url() <> path
 
   defp esc(string), do: string |> Plug.HTML.html_escape() |> to_string()
+
+  defp suggested_venues_html([]) do
+    """
+    <p style="margin:0 0 16px;">Pick any active venue in your region from your settings page.</p>
+    """
+  end
+
+  defp suggested_venues_html(suggested_venues) do
+    items =
+      Enum.map_join(suggested_venues, "", &"<li style=\"margin-bottom:4px;\">#{esc(&1)}</li>")
+
+    """
+    <p style="margin:0 0 8px;">A few suggestions:</p>
+    <ul style="margin:0 0 16px;padding-left:20px;">#{items}</ul>
+    """
+  end
+
+  defp suggested_venues_text([]), do: "Pick any active venue in your region.\n"
+
+  defp suggested_venues_text(suggested_venues) do
+    "Suggestions: " <> Enum.join(suggested_venues, ", ") <> "\n"
+  end
 
   defp fixture_table(opponent, venue, date, time) do
     """

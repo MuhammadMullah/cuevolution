@@ -41,4 +41,8 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorker do
   defp build_email(%{event_type: "team_assignment", player: player, payload: payload}) do
     Emails.team_assignment(player, Support.atomize_payload(payload))
   end
+
+  defp build_email(%{event_type: "venue_deactivated", player: player, payload: payload}) do
+    Emails.venue_deactivated(player, Support.atomize_payload(payload))
+  end
 end

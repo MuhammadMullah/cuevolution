@@ -38,7 +38,8 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
        deactivate_confirmation_text: "",
        deactivate_warnings: nil,
        deactivate_phrase: @deactivate_phrase
-     )}
+     )
+     |> assign(venue_deactivation_assigns(player))}
   end
 
   def handle_params(_params, _uri, socket) do
@@ -109,14 +110,16 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
         player = Repo.preload(player, [:region, :preferred_venue, :team], force: true)
 
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            current_player: player,
            draft_region_id: player.region_id,
            draft_venue_id: player.preferred_venue_id,
            region_venues: Venues.list_active_for_region(player.region_id),
            venue_choice_pending?: false,
            saved_message: "Location updated."
-         )}
+         )
+         |> assign(venue_deactivation_assigns(player))}
 
       {:error, :region_locked} ->
         {:noreply,
@@ -204,15 +207,26 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
         player = Repo.preload(player, [:region, :preferred_venue, :team], force: true)
 
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            current_player: player,
            draft_venue_id: player.preferred_venue_id,
            saved_message: "Venue updated."
-         )}
+         )
+         |> assign(venue_deactivation_assigns(player))}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not update your venue.")}
     end
+  end
+
+  defp venue_deactivation_assigns(player) do
+    deactivated? = not is_nil(player.preferred_venue) and not player.preferred_venue.active
+
+    suggestions =
+      if deactivated?, do: Venues.list_suggestions_for_venue(player.preferred_venue_id), else: []
+
+    %{venue_deactivated?: deactivated?, deactivation_suggestions: suggestions}
   end
 
   defp team_label(nil), do: "No team yet"

@@ -603,6 +603,15 @@ defmodule Cuevolution.Accounts do
     |> Repo.all()
   end
 
+  @doc """
+  Returns the base query for players whose `preferred_venue_id` matches the given venue.
+  Anonymized players are excluded. Callers can add their own filters, ordering,
+  or preloads before running the query.
+  """
+  def list_players_by_preferred_venue(venue_id) do
+    from p in Player, where: p.preferred_venue_id == ^venue_id and is_nil(p.anonymized_at)
+  end
+
   defp dispatch_registration_confirmation(player) do
     Notifications.dispatch(player, :registration_confirmation, %{})
   rescue

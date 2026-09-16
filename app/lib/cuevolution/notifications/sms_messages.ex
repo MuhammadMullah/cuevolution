@@ -27,4 +27,23 @@ defmodule Cuevolution.Notifications.SmsMessages do
 
     "SportPesa National Pool Circuit: You've been added to #{team_name}. Check the app for your roster."
   end
+
+  @doc """
+  Sent when a player’s preferred venue is deactivated.
+
+  `payload` must include `:venue_name` and `:suggested_venues`. The suggestions
+  list may be empty.
+
+  """
+  def venue_deactivated(_player, payload) do
+    %{venue_name: venue_name, suggested_venues: suggested_venues} = payload
+
+    "SportPesa National Pool Circuit: Your venue #{venue_name} has closed.#{suggestion_clause(suggested_venues)} " <>
+      "Update your venue in the app."
+  end
+
+  defp suggestion_clause([]), do: ""
+
+  defp suggestion_clause(suggested_venues),
+    do: " Suggestions: #{Enum.join(suggested_venues, ", ")}."
 end

@@ -44,4 +44,8 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorker do
   defp build_body(%{event_type: "team_assignment", player: player, payload: payload}) do
     SmsMessages.team_assignment(player, Support.atomize_payload(payload))
   end
+
+  defp build_body(%{event_type: "venue_deactivated", player: player, payload: payload}) do
+    SmsMessages.venue_deactivated(player, Support.atomize_payload(payload))
+  end
 end
