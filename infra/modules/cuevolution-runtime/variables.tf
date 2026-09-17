@@ -4,7 +4,7 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Region for Cloud Run, Cloud SQL, Artifact Registry and the uploads bucket. Must support Cloud Run domain mappings and Cloud Run instances."
+  description = "Region for the VM, Cloud SQL, and the uploads bucket."
   type        = string
 }
 
@@ -16,16 +16,6 @@ variable "environment" {
     condition     = can(regex("^[a-z][a-z0-9-]{1,15}$", var.environment))
     error_message = "environment must be 2-16 lowercase letters, digits or hyphens."
   }
-}
-
-variable "github_repository" {
-  description = "GitHub repository in OWNER/REPOSITORY form allowed to deploy this environment."
-  type        = string
-}
-
-variable "image" {
-  description = "Initial container image, pinned by digest. Later deploys are done by Cloud Build."
-  type        = string
 }
 
 variable "application_secrets_secret_id" {
@@ -41,12 +31,6 @@ variable "profile_pictures_bucket" {
 variable "phx_host" {
   description = "Public host name of the web app; also the domain that gets mapped."
   type        = string
-}
-
-variable "map_custom_domain" {
-  description = "Create the Cloud Run domain mapping for phx_host. Turn on at DNS cutover."
-  type        = bool
-  default     = false
 }
 
 variable "mail_provider" {
@@ -80,28 +64,6 @@ variable "africastalking_sender_id" {
   description = "Africa's Talking sender ID."
   type        = string
   default     = "Cuevolution"
-}
-
-variable "web_max_instances" {
-  description = "Maximum web instances. Each opens web_pool_size + 1 database connections; db-f1-micro allows about 25 in total."
-  type        = number
-  default     = 3
-
-  validation {
-    condition     = var.web_max_instances >= 1 && var.web_max_instances <= 10
-    error_message = "web_max_instances must be between 1 and 10."
-  }
-}
-
-variable "web_pool_size" {
-  description = "Ecto pool size per web instance."
-  type        = number
-  default     = 3
-
-  validation {
-    condition     = var.web_pool_size >= 1 && var.web_pool_size <= 10
-    error_message = "web_pool_size must be between 1 and 10."
-  }
 }
 
 variable "db_tier" {
@@ -168,6 +130,11 @@ variable "vm_zone" {
   description = "Zone for the VM. Defaults to \"<region>-a\" when null."
   type        = string
   default     = null
+}
+
+variable "ssh_public_key" {
+  description = "Public half of the deploy SSH keypair, added to the VM's metadata (GCE's ssh-keys mechanism) under the \"deploy\" username. Just the key material, e.g. the contents of deploy_key.pub minus any username prefix."
+  type        = string
 }
 
 variable "ssh_allowed_cidrs" {

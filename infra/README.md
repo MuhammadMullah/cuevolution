@@ -4,30 +4,29 @@ One production environment in project `cuevolution-app`, region
 `europe-west4`. There is no staging, no Cloud NAT, no static egress IP, no VPC
 and no load balancer.
 
+Compute (Phoenix web + Oban worker) runs on a single flat-rate GCE VM, not
+Cloud Run — see `app/deploy/README.md` for the full deployment story (Docker
+Compose stack, Caddy/TLS, CI/CD, rollback). This file covers the Terraform
+side only.
+
 | Component | Resource | Managed by |
 |---|---|---|
-| Web | Cloud Run service `cuevolution-production-web` (scales to zero, request-based billing) | Terraform; image by Cloud Build |
-| Domain | Cloud Run domain mapping `sportpesapool.ke` → web (Preview) | Terraform (`map_custom_domain`) |
-| Background jobs | Cloud Run **instance** `cuevolution-production-worker` running Oban queues (Preview, always on) | Cloud Build (`cloudbuild.yaml`); Terraform owns its service account and IAM |
-| Migrations | Cloud Run job `cuevolution-production-migrate` | Terraform; image by Cloud Build |
+| Compute | GCE VM `cuevolution-production-vm` (web + worker containers) | Terraform (`compute.tf`); deploys via `.github/workflows/deploy-vm.yml` |
 | Database | Cloud SQL PostgreSQL `cuevolution-production-db`, `db-f1-micro`, public IP with no authorized networks, connector-only (project exception to the org's `sql.restrictPublicIp` policy, see `org_policy.tf`) | Terraform |
-| Images | Artifact Registry `cuevolution-images` (keeps 10 newest, deletes > 30 days) | Terraform |
 | Uploads | Private bucket `cuevolution-production-profile-pictures-ew4` | Terraform |
-| Secrets | `cuevolution-production-application-secrets` (JSON, values added by hand) and `cuevolution-production-database-url` (written by Terraform, never stored in state) | Terraform |
+| Secrets | `cuevolution-production-application-secrets` (JSON, values added by hand) and `cuevolution-production-vm-database-url` (written by Terraform, never stored in state) | Terraform |
 
 Code layout: `envs/production` is the only root; `modules/cuevolution-runtime`
-holds the resources, split by concern (`apis.tf`, `iam.tf`, `org_policy.tf`,
-`sql.tf`, `secrets.tf`, `storage.tf`, `run.tf`, `domain.tf`).
+holds the resources, split by concern (`apis.tf`, `compute.tf`, `org_policy.tf`,
+`sql.tf`, `secrets.tf`, `storage.tf`).
 
 ## Running Terraform
 
-Requires Terraform 1.11+ (write-only arguments) and an identity that is a
-verified owner of `sportpesapool.ke` in Google Search Console (for the domain
-mapping).
+Requires Terraform 1.11+ (write-only arguments).
 
 ```bash
 cp infra/envs/production/production.tfvars.example infra/envs/production/production.tfvars
-# fill in image digest, db_name, db_user, mail_from_address
+# fill in db_name, db_user, mail_from_address, ssh_public_key
 
 terraform -chdir=infra/envs/production init \
   -backend-config="bucket=cuevolution-production-tf-state" \
@@ -35,10 +34,18 @@ terraform -chdir=infra/envs/production init \
 terraform -chdir=infra/envs/production plan -var-file=production.tfvars
 ```
 
-Connection budget for `db-f1-micro` (about 25 connections): web
-`web_max_instances` x (`web_pool_size` + 1) + worker (`_WORKER_POOL_SIZE` + 1) +
-migrate job (2) must stay at or below about 22. Defaults: 3 x 4 + 7 + 2 = 21.
+Connection budget for `db-f1-micro` (about 25 connections): the VM is the
+only thing connecting, so `POOL_SIZE` (app) + `POOL_SIZE` (worker) must stay
+comfortably under that — see the `POOL_SIZE` note in `app/deploy/README.md`.
 To grow, set `db_tier = "db-g1-small"` (about 50 connections).
+
+One thing worth knowing if you ever need to remove a `deletion_protection`-guarded
+resource (the VM has it, `google_compute_instance.app`): it's a
+Terraform-provider-side guard, not a real GCP property, and it hard-fails a
+destroy unless flipped to `false` first *while the resource still exists in
+config* — do that as its own preliminary `apply` before deleting the
+resource from config, not in the same step (see "Decommissioning Cloud Run"
+in `app/deploy/README.md` for exactly how this played out removing Cloud Run).
 
 ## Secrets
 
@@ -60,27 +67,39 @@ gcloud secrets versions add cuevolution-production-application-secrets \
 }
 ```
 
-`DATABASE_URL` comes from `cuevolution-production-database-url`, generated
-with the database password. A plain env var overrides the same key in the JSON
-blob. To rotate the database password, bump `db_password_version` and apply,
-then redeploy so new instances read the new secret version.
+`DATABASE_URL` comes from `cuevolution-production-vm-database-url`, generated
+with the database password (same password as the SQL user, just a
+TCP-through-cloud-sql-proxy-shaped URL instead of a Unix socket one). A plain
+env var overrides the same key in the JSON blob. To rotate the database
+password, bump `db_password_version` and apply, then redeploy so the VM
+fetches the new secret version.
 
 Mail must use `smtp_auth`: there is no static egress IP, so the IP-allowlisted
 `smtp_relay` mode cannot work.
 
 ## Deploys
 
-Pushing to `main` runs `.github/workflows/deploy-production.yml`, which submits
-`cloudbuild.yaml`: build and push the image, run the migration job, update the
-web service, then create or update the worker instance with the same plain env
-vars as web (plus its own pool size and signing identity). The workflow
-authenticates through Workload Identity Federation and only jobs running in the
-protected `production` GitHub environment are accepted.
+Pushing to `main` runs `.github/workflows/deploy-vm.yml`: build and push the
+image to GHCR, SSH to the VM, migrate, restart the `app`/`worker` containers.
+See `app/deploy/README.md` for the full setup (one-time server config,
+GitHub secrets, rollback, the zero-downtime DNS cutover this replaced Cloud
+Run with).
 
-GitHub configuration: environment `production` with secrets
-`GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOYER_SERVICE_ACCOUNT` and
-`GCP_PRODUCTION_PROJECT_ID`, plus the repository variable `SMOKE_URL` (empty
-until DNS cutover, then `https://sportpesapool.ke`).
+## Migration from Cloud Run to a VM (completed 2026-09-16)
+
+Full runbook and rationale live in `app/deploy/README.md` (kept there since
+it's mostly about the VM/Docker Compose side, not Terraform). Short version:
+Cloud Run's per-request billing and scale-to-zero didn't fit a flat-rate
+budget, so compute moved to one GCE VM running the same release image as
+both `app` (web) and `worker` containers, behind Caddy with a Cloudflare
+DNS-01 challenge that let it hold a valid cert before DNS ever pointed at
+it — the DNS cutover between Cloud Run and the VM was zero-downtime because
+of that. Cloud Run was verified working in parallel for a while, then its
+46 resources (`run.tf`, `domain.tf`, the Cloud Build/Workload-Identity-Federation
+resources that were in `iam.tf`) were destroyed as a separate, deliberate
+Terraform change — never bundled with provisioning the VM, so no `plan`/`apply`
+along the way risked touching the still-live service. Cloud SQL and the GCS
+bucket were untouched throughout; only the compute layer moved.
 
 ## Migration from africa-south1 (completed 2026-09-13)
 

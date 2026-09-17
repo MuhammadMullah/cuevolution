@@ -9,11 +9,6 @@ variable "region" {
   default     = "europe-west4"
 }
 
-variable "image" {
-  description = "Initial Artifact Registry image pinned by digest; Cloud Build deploys later images."
-  type        = string
-}
-
 variable "mail_from_address" {
   description = "Sender address for outgoing mail."
   type        = string
@@ -41,8 +36,7 @@ variable "db_version" {
   default     = "POSTGRES_18"
 }
 
-variable "map_custom_domain" {
-  description = "Create the sportpesapool.ke domain mapping (turn on at DNS cutover)."
-  type        = bool
-  default     = false
+variable "ssh_public_key" {
+  description = "Public half of the deploy SSH keypair (contents of deploy_key.pub, minus any username prefix — that's added automatically)."
+  type        = string
 }
