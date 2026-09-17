@@ -41,11 +41,12 @@ GitHub only ever looks for workflows at the repository root.
   (`terraform output vm_service_account`) — it needs
   `roles/iam.serviceAccountTokenCreator` on itself to sign V4 URLs, which
   `compute.tf` already grants.
-- `POOL_SIZE` defaults to `3`, deliberately small: `db-f1-micro` allows
-  only ~25 total connections, and while Cloud Run is still live in parallel
-  (see "Zero-downtime DNS cutover" below) it's already using a chunk of
-  that budget. A higher value here caused real `too_many_connections`
-  failures during initial setup. Raise it once Cloud Run is decommissioned.
+- `POOL_SIZE` defaults to `10`: `db-f1-micro` allows only ~25 total
+  connections, and this VM is the only thing connecting now that Cloud Run
+  is decommissioned. While Cloud Run was still live in parallel during the
+  migration, a higher value here caused real `too_many_connections`
+  failures — drop it back to ~3 if Cloud Run is ever temporarily
+  resurrected for a rollback.
 - `DATABASE_URL` and `CUEVOLUTION_SECRETS_JSON` (`SECRET_KEY_BASE`,
   `SMTP_USERNAME`/`PASSWORD`, `AFRICASTALKING_API_KEY`/`USERNAME`) are never
   written to `.env` on disk. `deploy.sh` fetches them fresh from Secret
@@ -199,10 +200,10 @@ cutover itself safe:
    the transition but isn't required for correctness, since both ends serve
    the same app/data throughout.
 3. Change the A record to the VM's static IP (`terraform output vm_ip`).
-   Leave Cloud Run running — don't touch `run.tf`/`domain.tf` yet. Every
-   client is now correctly served regardless of whether their resolver has
-   the old or new record cached: Cloud Run still works until decommissioned,
-   and the VM already works and already has its cert.
+   Leave Cloud Run running — don't remove its Terraform resources yet.
+   Every client is now correctly served regardless of whether their
+   resolver has the old or new record cached: Cloud Run still works until
+   decommissioned, and the VM already works and already has its cert.
 4. Watch both: the VM's `docker compose logs -f app worker caddy` and Cloud
    Run's logs/metrics in the GCP console. Once traffic has visibly shifted
    and stayed healthy on the VM for a while (comfortably past the old TTL),
@@ -231,9 +232,22 @@ run manually.)
 
 ## Decommissioning Cloud Run
 
-Once the VM has served production successfully for a while, remove the
-now-unused Cloud Run resources (`infra/modules/cuevolution-runtime/run.tf`,
-`domain.tf`, the Cloud Build/Workload-Identity-Federation resources in
-`iam.tf`) and `cloudbuild.yaml` via a separate Terraform change — not
-bundled with standing this VM up, so a `plan`/`apply` here never risks
-touching the still-live Cloud Run service mid-migration.
+Done on 2026-09-16, once the VM had served production successfully for a
+while: removed the Cloud Run resources (`run.tf`, `domain.tf`, the Cloud
+Build/Workload-Identity-Federation resources that were in `iam.tf`),
+`cloudbuild.yaml`, and `.github/workflows/deploy-production.yml` — 46
+resources destroyed via Terraform, deliberately as its own separate change
+after DNS cutover and verification, not bundled with standing the VM up.
+Cloud SQL, the GCS bucket, and everything the VM uses were untouched.
+
+One thing worth knowing if you're reading this later: `google_compute_instance.app`
+has `deletion_protection = true`, and the two removed Cloud Run resources
+had it too — that's a Terraform-provider-side guard that hard-fails a
+destroy unless flipped to `false` first *while the resource still exists in
+config*. If you ever need to remove another `deletion_protection`-guarded
+resource, do that flip as its own preliminary `apply` before deleting the
+resource from config, not in the same step.
+
+There's now no quick rollback path to Cloud Run — that infrastructure is
+gone. A serious regression means rolling back the VM's own deploy (see
+"Rolling back" above) or rebuilding Cloud Run from scratch via Terraform.

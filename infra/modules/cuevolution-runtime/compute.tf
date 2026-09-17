@@ -76,6 +76,13 @@ resource "google_compute_instance" "app" {
   machine_type = var.vm_machine_type
   tags         = ["cuevolution-${var.environment}-vm"]
 
+  # Under Terraform's management (not a one-off `gcloud compute instances
+  # add-metadata`) so a later apply can't silently wipe SSH access by
+  # "correcting" drift it doesn't know about.
+  metadata = {
+    ssh-keys = "deploy:${var.ssh_public_key}"
+  }
+
   # Deleting the instance loses nothing stateful (the app is stateless
   # containers; data lives in Cloud SQL/GCS), but require an explicit
   # override so `terraform destroy`/an errant apply can't take production down
