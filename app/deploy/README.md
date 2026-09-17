@@ -165,6 +165,15 @@ All of this happens once, on the VM Terraform created.
      [PAT](https://github.com/settings/tokens) that has `read:packages`
      scope.
 
+Every deploy (`deploy.sh`) stops `app`/`worker` before migrating and starts
+them again afterward — a brief gap with nothing serving traffic, not
+zero-downtime. This is deliberate, not an oversight: `db-f1-micro`'s small
+connection ceiling (~25) can't fit the *old* containers' connection pools
+plus a migration run on top of that at the same time, which took production
+down twice before this ordering was fixed. Only the one-time Cloud Run
+cutover (below) was built for zero downtime; routine deploys after that
+aren't, since there's no blue-green setup here.
+
 ## GitHub configuration
 
 Create a `production` [GitHub Environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)

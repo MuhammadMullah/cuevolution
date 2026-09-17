@@ -20,7 +20,20 @@ export CUEVOLUTION_SECRETS_JSON="$(gcloud secrets versions access latest --secre
 export DATABASE_URL="$(gcloud secrets versions access latest --secret=cuevolution-production-vm-database-url)"
 
 docker compose --env-file .env pull
-docker compose --env-file .env run --rm app bin/migrate
+
+# Stop the running app/worker before migrating: db-f1-micro's small
+# connection ceiling (~25) can't fit their existing pools (POOL_SIZE each)
+# plus a migration run on top of that — this took production down twice
+# before this fix (too_many_connections). This does mean a brief gap
+# with nothing serving traffic during a routine deploy — there's no
+# blue-green here, only the one-time Cloud Run cutover was built for zero
+# downtime, not ongoing deploys.
+docker compose --env-file .env stop app worker
+
+# The migration process only needs a couple of connections, not a full
+# pool — same POOL_SIZE=2 override Cloud Run's migration job used.
+docker compose --env-file .env run --rm -e POOL_SIZE=2 app bin/migrate
+
 docker compose --env-file .env up -d
 
 # Port 4000 is deliberately not published to the host (only reachable on the
