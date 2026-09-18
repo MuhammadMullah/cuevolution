@@ -53,6 +53,15 @@ defmodule Cuevolution.Venues do
     |> Repo.all()
   end
 
+  @doc "Admin venue rows for one region, without loading unused associations or timestamps."
+  def list_admin_venues(region_id) do
+    Venue
+    |> where(region_id: ^region_id)
+    |> order_by(asc: :name)
+    |> select([v], %{id: v.id, name: v.name, active: v.active, region_id: v.region_id})
+    |> Repo.all()
+  end
+
   defp filter_by_region(query, nil), do: query
   defp filter_by_region(query, region_id), do: where(query, region_id: ^region_id)
 

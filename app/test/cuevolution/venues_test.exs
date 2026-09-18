@@ -122,6 +122,19 @@ defmodule Cuevolution.VenuesTest do
     end
   end
 
+  describe "list_admin_venues/1" do
+    test "returns only the fields used by the admin venue list" do
+      region = region("nairobi-a")
+      venue = insert(:venue, region_id: region.id, name: "Admin Venue")
+
+      assert [%{id: id, name: "Admin Venue", active: true, region_id: region_id}] =
+               Venues.list_admin_venues(region.id)
+
+      assert id == venue.id
+      assert region_id == region.id
+    end
+  end
+
   defp with_query_count(fun) do
     test_pid = self()
     counter = :counters.new(1, [])
