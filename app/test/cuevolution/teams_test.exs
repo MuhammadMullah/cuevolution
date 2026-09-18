@@ -2,7 +2,11 @@ defmodule Cuevolution.TeamsTest do
   use Cuevolution.DataCase, async: true
 
   alias Cuevolution.Accounts.Player
+  alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.Stage
   alias Cuevolution.Teams
+
+  defp stage(name), do: Repo.get_by!(Stage, name: name)
 
   describe "create_team/2" do
     test "creates a team with the player as captain, region inherited from the captain" do
@@ -260,6 +264,241 @@ defmodule Cuevolution.TeamsTest do
 
       assert {:error, :roster_full} =
                Teams.override_roster_change(:add, team, ninth_player, admin)
+    end
+
+    test "is triggered the moment the team is drawn into a group — before any fixture or result exists" do
+      region = build(:region)
+      team = insert(:team, region_id: region.id)
+
+      {:ok, group} =
+        Competitions.create_group(%{
+          stage_id: stage("Regional").id,
+          region_id: region.id,
+          category: "team",
+          name: "Pool A"
+        })
+
+      participation =
+        insert(:stage_participation,
+          player_id: nil,
+          team_id: team.id,
+          stage_id: stage("Regional").id,
+          region_id: region.id,
+          category: "team"
+        )
+
+      assert {:ok, _membership} = Competitions.assign_to_group(participation, group)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+
+      assert {:error, :roster_frozen} =
+               Teams.invite_player(team, insert(:player, region_id: team.region_id))
+
+      assert {:error, :roster_frozen} =
+               Teams.remove_player_from_roster(team, insert(:player, region_id: team.region_id))
+    end
+  end
+
+  describe "delete_team/2" do
+    test "releases the roster, cancels pending invitations, and removes the team" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Doomed Team"})
+      captain = Repo.get!(Player, captain.id)
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+
+      assert :ok = Teams.delete_team(team, captain)
+
+      refute Repo.get!(Player, captain.id).team_id
+      refute Repo.get!(Player, member.id).team_id
+      refute Repo.get(Cuevolution.Teams.TeamInvitation, invitation.id)
+      refute Repo.get(Cuevolution.Teams.Team, team.id)
+    end
+
+    test "rejects once the roster is frozen" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      captain = Repo.get!(Player, captain.id)
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+
+      assert {:error, :roster_frozen} = Teams.delete_team(team, captain)
+      assert Repo.get(Cuevolution.Teams.Team, team.id)
+    end
+
+    test "rejects if the acting player isn't the team's captain" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      impostor = insert(:player)
+
+      assert {:error, :not_captain} = Teams.delete_team(team, impostor)
+      assert Repo.get(Cuevolution.Teams.Team, team.id)
+    end
+  end
+
+  describe "invite_player/2" do
+    test "creates a pending invitation, dispatches a notification, and schedules expiry" do
+      team = insert(:team)
+      invitee = insert(:player, notification_preference: "email")
+
+      assert {:ok, invitation} = Teams.invite_player(team, invitee)
+      assert invitation.status == "pending"
+      assert invitation.team_id == team.id
+      assert invitation.player_id == invitee.id
+      refute Repo.get!(Player, invitee.id).team_id
+
+      notification =
+        Repo.get_by!(Cuevolution.Notifications.Notification,
+          player_id: invitee.id,
+          event_type: "team_invitation"
+        )
+
+      assert notification.payload["team_name"] == team.name
+
+      assert_enqueued(
+        worker: Cuevolution.Teams.Workers.ExpireTeamInvitationWorker,
+        args: %{"invitation_id" => invitation.id}
+      )
+    end
+
+    test "allows inviting a player from a different region than the team's (no such restriction exists)" do
+      region_a = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "nairobi-a")
+      region_b = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "coast")
+
+      team = insert(:team, region_id: region_a.id)
+      invitee = insert(:player, region_id: region_b.id)
+
+      assert {:ok, _invitation} = Teams.invite_player(team, invitee)
+    end
+
+    test "rejects inviting a player already on a team" do
+      captain_a = insert(:player)
+      {:ok, team_a} = Teams.create_team(captain_a, %{"name" => "Team A"})
+      team_b = insert(:team)
+      member_of_a = Repo.get!(Player, captain_a.id)
+
+      assert {:error, :already_on_a_team} = Teams.invite_player(team_b, member_of_a)
+      assert Repo.get!(Player, member_of_a.id).team_id == team_a.id
+    end
+
+    test "rejects a duplicate pending invitation to the same player from the same team" do
+      team = insert(:team)
+      invitee = insert(:player)
+
+      assert {:ok, _invitation} = Teams.invite_player(team, invitee)
+      assert {:error, :invitation_already_pending} = Teams.invite_player(team, invitee)
+    end
+
+    test "rejects once the roster is frozen" do
+      team = insert(:team)
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+
+      assert {:error, :roster_frozen} = Teams.invite_player(team, insert(:player))
+    end
+
+    test "rejects once the roster is at the 8-player maximum" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Full Team"})
+
+      for _ <- 1..7 do
+        Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      end
+
+      assert {:error, :roster_full} = Teams.invite_player(team, insert(:player))
+    end
+  end
+
+  describe "accept_invitation/2" do
+    test "adds the player to the roster and marks the invitation accepted" do
+      team = insert(:team)
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+
+      assert {:ok, updated_player} = Teams.accept_invitation(invitation, invitee)
+      assert updated_player.team_id == team.id
+
+      assert Repo.get!(Cuevolution.Teams.TeamInvitation, invitation.id).status == "accepted"
+    end
+
+    test "auto-cancels the player's other pending invitations" do
+      invitee = insert(:player)
+      team_a = insert(:team)
+      team_b = insert(:team)
+      {:ok, invitation_a} = Teams.invite_player(team_a, invitee)
+      {:ok, invitation_b} = Teams.invite_player(team_b, invitee)
+
+      assert {:ok, _player} = Teams.accept_invitation(invitation_a, invitee)
+
+      assert Repo.get!(Cuevolution.Teams.TeamInvitation, invitation_a.id).status == "accepted"
+      assert Repo.get!(Cuevolution.Teams.TeamInvitation, invitation_b.id).status == "cancelled"
+    end
+
+    test "rejects an expired invitation" do
+      team = insert(:team)
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+
+      past = DateTime.utc_now() |> DateTime.add(-3600, :second) |> DateTime.truncate(:second)
+
+      invitation
+      |> Ecto.Changeset.change(expires_at: past)
+      |> Repo.update!()
+
+      assert {:error, :expired} = Teams.accept_invitation(invitation, invitee)
+      refute Repo.get!(Player, invitee.id).team_id
+    end
+
+    test "rejects if the roster filled up before the invitation was accepted" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Almost Full"})
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+
+      for _ <- 1..7 do
+        Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      end
+
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      assert {:error, :roster_full} = Teams.accept_invitation(invitation, invitee)
+      refute team.id == Repo.get!(Player, invitee.id).team_id
+    end
+  end
+
+  describe "decline_invitation/2" do
+    test "marks the invitation declined without touching the roster" do
+      team = insert(:team)
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+
+      assert {:ok, _invitation} = Teams.decline_invitation(invitation, invitee)
+
+      assert Repo.get!(Cuevolution.Teams.TeamInvitation, invitation.id).status == "declined"
+      refute Repo.get!(Player, invitee.id).team_id
+    end
+  end
+
+  describe "cancel_invitation/2" do
+    test "the captain can cancel a pending invitation" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      captain = Repo.get!(Player, captain.id)
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+
+      assert {:ok, _invitation} = Teams.cancel_invitation(invitation, captain)
+      assert Repo.get!(Cuevolution.Teams.TeamInvitation, invitation.id).status == "cancelled"
+    end
+
+    test "rejects if the acting player isn't the team's captain" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      invitee = insert(:player)
+      {:ok, invitation} = Teams.invite_player(team, invitee)
+      impostor = insert(:player)
+
+      assert {:error, :not_captain} = Teams.cancel_invitation(invitation, impostor)
+      assert Repo.get!(Cuevolution.Teams.TeamInvitation, invitation.id).status == "pending"
     end
   end
 

@@ -48,6 +48,20 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorkerTest do
     assert :ok = perform_job(SendSmsWorker, %{"notification_id" => notification.id})
   end
 
+  test "sends the team-invitation sms with the team and captain details" do
+    player = insert(:player, notification_preference: "sms")
+    payload = %{team_name: "The Sharks", captain_name: "Alex Otieno"}
+    [notification] = Notifications.dispatch(player, :team_invitation, payload)
+
+    expect(SmsAdapterMock, :send, fn _mobile_number, body ->
+      assert body =~ "The Sharks"
+      assert body =~ "Alex Otieno"
+      {:ok, %{}}
+    end)
+
+    assert :ok = perform_job(SendSmsWorker, %{"notification_id" => notification.id})
+  end
+
   test "marks the notification failed when the adapter errors, and never crashes the job" do
     player = insert(:player, notification_preference: "sms")
     [notification] = Notifications.dispatch(player, :registration_confirmation, %{})

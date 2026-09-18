@@ -544,6 +544,11 @@ defmodule CuevolutionWeb.PlayerComponents do
   attr :current_player, :map, required: true
   attr :active, :atom, required: true, doc: "one of :fixtures, :standings, :team, :profile"
   attr :flash, :map, required: true
+
+  attr :pending_invitations, :list,
+    default: [],
+    doc: "pending team invitations for the current player — renders the accept/decline banner"
+
   slot :inner_block, required: true
 
   def app_shell(assigns) do
@@ -612,10 +617,68 @@ defmodule CuevolutionWeb.PlayerComponents do
       <.flash_group flash={@flash} />
 
       <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-7 sm:py-10">
+        <.invitation_banner pending_invitations={@pending_invitations} />
         {render_slot(@inner_block)}
       </main>
     </div>
     """
+  end
+
+  @doc """
+  Banner listing the current player's pending team invitations, with
+  accept/decline actions — shown at the top of every player page via
+  `app_shell/1`. The `"accept_invitation"`/`"decline_invitation"` events it
+  emits are handled by a shared hook attached in
+  `CuevolutionWeb.PlayerAuth.on_mount/4`, not by each page's own LiveView.
+  """
+  attr :pending_invitations, :list, required: true
+
+  def invitation_banner(assigns) do
+    ~H"""
+    <div :if={@pending_invitations != []} class="mb-5 flex flex-col gap-2.5">
+      <div
+        :for={invitation <- @pending_invitations}
+        class="flex flex-wrap items-center gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3.5"
+      >
+        <div class="min-w-[200px] flex-1 text-[13.5px] text-ink-700">
+          <span class="font-semibold text-ink-950">{invitation.team.name}</span>
+          invited you to join, sent by
+          <span class="font-semibold text-ink-950">
+            {invitation.team.captain.first_name} {invitation.team.captain.last_name}
+          </span>
+          · expires {time_until(invitation.expires_at)}
+        </div>
+        <div class="flex shrink-0 gap-2">
+          <button
+            type="button"
+            phx-click="decline_invitation"
+            phx-value-id={invitation.id}
+            class="cursor-pointer rounded-full border border-ink-300 bg-white px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-100"
+          >
+            Decline
+          </button>
+          <button
+            type="button"
+            phx-click="accept_invitation"
+            phx-value-id={invitation.id}
+            class="cursor-pointer rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-ink-25 hover:bg-ink-900"
+          >
+            Accept
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp time_until(expires_at) do
+    hours = max(DateTime.diff(expires_at, DateTime.utc_now(), :second), 0) |> div(3600)
+
+    case hours do
+      0 -> "soon"
+      1 -> "in 1 hour"
+      h -> "in #{h} hours"
+    end
   end
 
   attr :active, :boolean, default: false

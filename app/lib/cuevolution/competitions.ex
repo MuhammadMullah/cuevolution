@@ -244,6 +244,13 @@ defmodule Cuevolution.Competitions do
   category mismatch between the participation and the group — groups are
   category-pure so `StageGroupConfig`'s per-category advancer-count cutoff
   means what it says.
+
+  If `participation` belongs to a team, this also locks that team's roster
+  (`Teams.lock_roster/1`) in the same transaction — a team is "drawn" the
+  moment it's placed in a group, strictly before any `Fixture` can exist for
+  it, so this is the earliest point a captain should lose the ability to
+  add/remove players (spec 005's roster freeze moved here from
+  first-recorded-result; see `Teams.check_not_frozen/2`).
   """
   def assign_to_group(%StageParticipation{category: category}, %Group{category: group_category})
       when category != group_category do
@@ -251,12 +258,27 @@ defmodule Cuevolution.Competitions do
   end
 
   def assign_to_group(%StageParticipation{} = participation, %Group{} = group) do
-    %GroupMembership{}
-    |> GroupMembership.changeset(%{
-      group_id: group.id,
-      stage_participation_id: participation.id
-    })
-    |> Repo.insert()
+    Multi.new()
+    |> Multi.insert(
+      :membership,
+      GroupMembership.changeset(%GroupMembership{}, %{
+        group_id: group.id,
+        stage_participation_id: participation.id
+      })
+    )
+    |> Multi.run(:roster_lock, fn _repo, _changes -> lock_roster_if_team(participation) end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{membership: membership}} -> {:ok, membership}
+      {:error, :membership, changeset, _changes} -> {:error, changeset}
+    end
+  end
+
+  defp lock_roster_if_team(%StageParticipation{team_id: nil}), do: {:ok, nil}
+
+  defp lock_roster_if_team(%StageParticipation{team_id: team_id}) do
+    Teams.lock_roster(team_id)
+    {:ok, nil}
   end
 
   @doc """

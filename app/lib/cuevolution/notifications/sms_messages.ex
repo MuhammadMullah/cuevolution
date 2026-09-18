@@ -28,6 +28,14 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "SportPesa National Pool Circuit: You've been added to #{team_name}. Check the app for your roster."
   end
 
+  @doc "Sent when a captain invites the player to join a team's roster."
+  def team_invitation(_player, payload) do
+    %{team_name: team_name, captain_name: captain_name} = payload
+
+    "SportPesa National Pool Circuit: #{captain_name} invited you to join #{team_name}. Sign in to accept/decline " <>
+      "within 48 hours."
+  end
+
   @doc """
   Sent when a player’s preferred venue is deactivated.
 

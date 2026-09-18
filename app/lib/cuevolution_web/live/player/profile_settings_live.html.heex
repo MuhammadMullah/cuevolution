@@ -1,4 +1,9 @@
-<PlayerComponents.app_shell current_player={@current_player} active={:profile} flash={@flash}>
+<PlayerComponents.app_shell
+  current_player={@current_player}
+  active={:profile}
+  flash={@flash}
+  pending_invitations={@pending_invitations}
+>
   <div class="mb-7 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
     <PlayerComponents.avatar
       name={"#{@current_player.first_name} #{@current_player.last_name}"}

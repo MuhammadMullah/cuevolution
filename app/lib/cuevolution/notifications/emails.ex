@@ -135,6 +135,35 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "Sent when a captain invites the player to join a team's roster."
+  def team_invitation(player, payload) do
+    %{team_name: team_name, captain_name: captain_name} = payload
+    first_name = esc(player.first_name)
+    team_name_esc = esc(team_name)
+    captain_name_esc = esc(captain_name)
+
+    base(player)
+    |> subject("You've been invited to join #{team_name}")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        <strong>#{captain_name_esc}</strong> invited you to join <strong>#{team_name_esc}</strong>.
+        Sign in to accept or decline. This invitation expires in 48 hours.
+      </p>
+      #{button("Respond to Invitation", url("/login"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    #{captain_name} invited you to join #{team_name}. Sign in to accept or decline — this
+    invitation expires in 48 hours.
+
+    Sign in: #{url("/login")}
+    """)
+  end
+
   @doc """
   Sent when a player’s preferred venue is deactivated.
 
