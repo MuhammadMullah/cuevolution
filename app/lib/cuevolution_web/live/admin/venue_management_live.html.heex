@@ -206,62 +206,74 @@
     :if={@custom_venue_submissions != []}
     class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <div class="border-b border-ink-100 bg-ink-25 px-4.5 py-4">
-      <div class="mb-1 text-sm font-semibold text-ink-950">Consolidate custom entries</div>
-      <p class="mb-3 text-[12.5px] leading-relaxed text-ink-500">
-        Select the entries that refer to the same place, choose the canonical venue, and update all players at once.
-      </p>
-      <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-        <select
-          id="consolidation-venue"
-          name="venue_id"
-          phx-change="select_consolidation_venue"
-          class="w-full rounded-lg border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15 sm:max-w-sm"
-        >
-          <option value="">Choose canonical venue…</option>
-          <option :for={venue <- @venues} :if={venue.active} value={venue.id}>
-            {venue.name}
-          </option>
-        </select>
-        <button
-          id="consolidate-custom-venues"
-          type="button"
-          phx-click="consolidate_custom_venues"
-          disabled={@selected_custom_player_ids == [] or is_nil(@consolidation_venue_id)}
-          class="w-full cursor-pointer rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-        >
-          Consolidate selected
-        </button>
-      </div>
-    </div>
-    <div
-      :for={player <- @custom_venue_submissions}
-      class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3 last:border-0"
+    <.form
+      for={@consolidation_form}
+      id="custom-venue-consolidation-form"
+      phx-change="update_consolidation_selection"
     >
-      <input
-        id={"custom-venue-player-#{player.id}"}
-        type="checkbox"
-        checked={player.id in @selected_custom_player_ids}
-        phx-click="toggle_custom_player"
-        phx-value-id={player.id}
-        class="size-4 shrink-0 cursor-pointer rounded border-ink-300 text-red-600 focus:ring-red-500"
-        aria-label={"Select custom venue entry for @#{player.username}"}
-      />
-      <div class="min-w-0 flex-1">
-        <div class="text-sm font-semibold text-ink-950">{player.other_venue_name}</div>
-        <div class="text-[12.5px] text-ink-400">
-          Entered by @{player.username} · {@region.name}
+      <div class="border-b border-ink-100 bg-ink-25 px-4.5 py-4">
+        <div class="mb-1 text-sm font-semibold text-ink-950">Consolidate custom entries</div>
+        <p class="mb-3 text-[12.5px] leading-relaxed text-ink-500">
+          Select the entries that refer to the same place, choose the canonical venue, and update all players at once.
+        </p>
+        <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+          <select
+            id="consolidation-venue"
+            name="consolidation[venue_id]"
+            class="w-full rounded-lg border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15 sm:max-w-sm"
+          >
+            <option value="" selected={is_nil(@consolidation_venue_id)}>
+              Choose canonical venue…
+            </option>
+            <option
+              :for={venue <- @venues}
+              :if={venue.active}
+              value={venue.id}
+              selected={@consolidation_venue_id == venue.id}
+            >
+              {venue.name}
+            </option>
+          </select>
+          <button
+            id="consolidate-custom-venues"
+            type="button"
+            phx-click="consolidate_custom_venues"
+            disabled={@selected_custom_player_ids == [] or is_nil(@consolidation_venue_id)}
+            class="w-full cursor-pointer rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+          >
+            Consolidate selected
+          </button>
         </div>
       </div>
-      <button
-        type="button"
-        phx-click="promote"
-        phx-value-name={player.other_venue_name}
-        class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50"
+      <div
+        :for={player <- @custom_venue_submissions}
+        class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3 last:border-0"
       >
-        Add to list
-      </button>
-    </div>
+        <input
+          id={"custom-venue-player-#{player.id}"}
+          type="checkbox"
+          name="consolidation[player_ids][]"
+          value={player.id}
+          checked={player.id in @selected_custom_player_ids}
+          class="size-4 shrink-0 cursor-pointer rounded border-ink-300 text-red-600 focus:ring-red-500"
+          aria-label={"Select custom venue entry for @#{player.username}"}
+        />
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-semibold text-ink-950">{player.other_venue_name}</div>
+          <div class="text-[12.5px] text-ink-400">
+            Entered by @{player.username} · {@region.name}
+          </div>
+        </div>
+        <button
+          type="button"
+          phx-click="promote"
+          phx-value-name={player.other_venue_name}
+          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Add to list
+        </button>
+      </div>
+    </.form>
   </div>
   <div
     :if={@custom_venue_submissions == []}

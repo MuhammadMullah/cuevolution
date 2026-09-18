@@ -200,16 +200,21 @@ defmodule CuevolutionWeb.VenueManagementLiveTest do
     {:ok, view, _html} = live(conn, ~p"/admin/venues")
 
     view
-    |> element("#custom-venue-player-#{first.id}")
-    |> render_click()
+    |> form("#custom-venue-consolidation-form", %{
+      consolidation: %{"player_ids" => [first.id]}
+    })
+    |> render_change()
 
     view
-    |> element("#custom-venue-player-#{second.id}")
-    |> render_click()
+    |> form("#custom-venue-consolidation-form", %{
+      consolidation: %{
+        "player_ids" => [first.id, second.id],
+        "venue_id" => venue.id
+      }
+    })
+    |> render_change()
 
-    view
-    |> element("#consolidation-venue")
-    |> render_change(%{"venue_id" => venue.id})
+    refute has_element?(view, "#consolidate-custom-venues[disabled]")
 
     html =
       view

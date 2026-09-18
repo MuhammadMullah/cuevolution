@@ -26,6 +26,7 @@ defmodule CuevolutionWeb.VenueManagementLive do
     {:ok,
      socket
      |> assign(page_title: "Venue Management", regions: regions, region: region)
+     |> assign(:consolidation_form, to_form(%{}, as: :consolidation))
      |> assign(:selected_custom_player_ids, [])
      |> assign(:consolidation_venue_id, nil)
      |> assign(:editing_venue, nil)
@@ -179,14 +180,12 @@ defmodule CuevolutionWeb.VenueManagementLive do
     end
   end
 
-  def handle_event("toggle_custom_player", %{"id" => id}, socket) do
-    selected = socket.assigns.selected_custom_player_ids
-    updated = if id in selected, do: List.delete(selected, id), else: [id | selected]
-    {:noreply, assign(socket, :selected_custom_player_ids, updated)}
-  end
-
-  def handle_event("select_consolidation_venue", %{"venue_id" => venue_id}, socket) do
-    {:noreply, assign(socket, :consolidation_venue_id, venue_id)}
+  def handle_event("update_consolidation_selection", %{"consolidation" => params}, socket) do
+    {:noreply,
+     assign(socket,
+       selected_custom_player_ids: Map.get(params, "player_ids", []),
+       consolidation_venue_id: Map.get(params, "venue_id", socket.assigns.consolidation_venue_id)
+     )}
   end
 
   def handle_event("consolidate_custom_venues", _params, socket) do
