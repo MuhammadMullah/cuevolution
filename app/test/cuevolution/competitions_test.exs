@@ -284,6 +284,55 @@ defmodule Cuevolution.CompetitionsTest do
 
       assert {:error, :category_mismatch} = Competitions.assign_to_group(participation, group)
     end
+
+    test "locks the team's roster the moment it's assigned to a group" do
+      region = build(:region)
+      team = insert(:team, region_id: region.id)
+
+      {:ok, group} =
+        Competitions.create_group(%{
+          stage_id: stage("Regional").id,
+          region_id: region.id,
+          category: "team",
+          name: "Pool A"
+        })
+
+      participation =
+        insert(:stage_participation,
+          player_id: nil,
+          team_id: team.id,
+          stage_id: stage("Regional").id,
+          region_id: region.id,
+          category: "team"
+        )
+
+      refute Repo.get!(Cuevolution.Teams.Team, team.id).roster_locked_at
+
+      assert {:ok, _membership} = Competitions.assign_to_group(participation, group)
+
+      assert Repo.get!(Cuevolution.Teams.Team, team.id).roster_locked_at
+    end
+
+    test "doesn't touch any team when the participation is an individual player" do
+      region = build(:region)
+
+      {:ok, group} =
+        Competitions.create_group(%{
+          stage_id: stage("Regional").id,
+          region_id: region.id,
+          category: "male",
+          name: "Pool A"
+        })
+
+      participation =
+        insert(:stage_participation,
+          stage_id: stage("Regional").id,
+          region_id: region.id,
+          category: "male"
+        )
+
+      assert {:ok, _membership} = Competitions.assign_to_group(participation, group)
+    end
   end
 
   describe "list_unassigned_participations/2" do

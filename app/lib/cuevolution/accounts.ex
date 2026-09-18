@@ -629,6 +629,7 @@ defmodule Cuevolution.Accounts do
     |> where([p], p.region_id == ^region_id)
     |> where([p], not is_nil(p.other_venue_name) and p.other_venue_name != "")
     |> order_by(asc: :other_venue_name)
+    |> select([p], %{id: p.id, username: p.username, other_venue_name: p.other_venue_name})
     |> Repo.all()
   end
 

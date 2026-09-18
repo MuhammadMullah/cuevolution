@@ -15,7 +15,11 @@ defmodule Cuevolution.Teams do
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
+  alias Cuevolution.Teams.TeamInvitation
+  alias Cuevolution.Teams.Workers.ExpireTeamInvitationWorker
   alias Ecto.Multi
+
+  @invitation_validity_seconds 48 * 60 * 60
 
   @doc """
   Creates a team with `captain` as its Team Captain (spec 005 FR-001), and
@@ -74,10 +78,10 @@ defmodule Cuevolution.Teams do
   task calls out as concurrency-critical.
 
   Once `team.roster_locked_at` is set (spec 005 FR-008 — the freeze applies
-  once the team has at least one recorded Team-category match result, per
-  `Competitions.record_result/3`'s `Teams.lock_roster/1` call), this
-  rejects with `{:error, :roster_frozen}` unless `opts[:override?]` is true
-  (the admin-override path, `override_roster_change/3`).
+  once the team has been drawn into a group, per `Competitions.
+  assign_to_group/2`'s `Teams.lock_roster/1` call; see that function's doc),
+  this rejects with `{:error, :roster_frozen}` unless `opts[:override?]` is
+  true (the admin-override path, `override_roster_change/3`).
   """
   def add_player_to_roster(%Team{} = team, %Player{} = player, opts \\ []) do
     Multi.new()
@@ -146,7 +150,8 @@ defmodule Cuevolution.Teams do
   Same freeze guard as `add_player_to_roster/3` (spec 005 FR-008 covers both
   add and remove, even though only the add-side has its own task number) —
   rejects with `{:error, :roster_frozen}` once `team.roster_locked_at` is
-  set, unless `opts[:override?]` is true.
+  set (from the team's first group draw onward, see `lock_roster/1`),
+  unless `opts[:override?]` is true.
 
   ⚠️ Not specially guarded: removing the captain themselves. Spec 005 has no
   captain-succession/transfer mechanic (explicitly flagged as unresolved in
@@ -161,6 +166,51 @@ defmodule Cuevolution.Teams do
         {1, _} -> {:ok, Repo.get!(Player, player.id)}
         {0, _} -> {:error, :not_on_this_team}
       end
+    end
+  end
+
+  @doc """
+  Deletes `team`, on behalf of `captain` — releases every roster member
+  (including the captain) back to no-team status, in the same transaction
+  as the delete. Any pending invitations for the team are cleaned up for
+  free: `team_invitations.team_id` cascades `on_delete: :delete_all`, so
+  they're removed along with the team rather than left dangling or flipped
+  to "cancelled" first (there's no one left to show a "cancelled" status
+  to once the team itself is gone).
+
+  Only allowed before the team's roster freeze (`team.roster_locked_at`,
+  see `lock_roster/1`) — the same gate `add_player_to_roster/3`/
+  `remove_player_from_roster/3` use, which conveniently also guarantees no
+  `Fixture`/`MatchResult` can exist yet to trip their `:restrict` foreign
+  keys when `stage_participations` cascades from the team delete. No
+  admin-override path: an already-drawn team must go through the admin
+  roster-override flow instead of being deleted.
+
+  Doesn't notify released teammates — matches `remove_player_from_roster/3`,
+  which likewise only notifies on add, never on removal.
+  """
+  def delete_team(%Team{} = team, %Player{} = captain) do
+    cond do
+      team.captain_id != captain.id -> {:error, :not_captain}
+      not is_nil(team.roster_locked_at) -> {:error, :roster_frozen}
+      true -> do_delete_team(team)
+    end
+  end
+
+  defp do_delete_team(team) do
+    Multi.new()
+    |> Multi.update_all(
+      :release_roster,
+      fn _changes ->
+        from(p in Player, where: p.team_id == ^team.id, update: [set: [team_id: nil]])
+      end,
+      []
+    )
+    |> Multi.delete(:team, team)
+    |> Repo.transaction()
+    |> case do
+      {:ok, _changes} -> :ok
+      {:error, :team, changeset, _changes} -> {:error, changeset}
     end
   end
 
@@ -196,13 +246,259 @@ defmodule Cuevolution.Teams do
   end
 
   @doc """
-  Locks `team_id`'s roster once it has a recorded Team-category match result
-  (spec 005 Assumptions: freeze applies "once the team has at least one
-  recorded Match Result") — called by `Competitions.record_result/3`, not
-  directly. Plain conditional `update_all`, no `Multi` needed: not racy,
-  `match_results`' `unique_index(:fixture_id)` already prevents more than
-  one result per fixture, and the `is_nil` guard makes this naturally
-  idempotent regardless.
+  Invites `invitee` to join `team`'s roster — the captain-facing replacement
+  for directly adding a player. Nothing here checks region/venue: teams are
+  open to any registered, unattached player regardless of where they're
+  based (no such restriction exists anywhere in this codebase, by design).
+
+  Same guards as `add_player_to_roster/3` (frozen roster, capacity), plus
+  rejecting a player already on a team outright rather than waiting for the
+  eventual `accept_invitation/2` to discover it. The one-pending-per-team-
+  player DB constraint is enforced via `unique_constraint/3` on the
+  changeset, so a duplicate invite is a normal changeset error, not a raised
+  `Ecto.ConstraintError`.
+
+  On success, dispatches a `:team_invitation` notification (same
+  rescue-and-log policy as `dispatch_team_assignment/2` — never rolls back
+  an already-committed invitation) and schedules
+  `ExpireTeamInvitationWorker` 48 hours out.
+  """
+  def invite_player(%Team{} = team, %Player{} = invitee) do
+    Multi.new()
+    |> Multi.run(:check_not_frozen, fn _repo, _changes -> check_not_frozen(team, []) end)
+    |> Multi.run(:check_capacity, fn repo, _changes ->
+      count = repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
+      if count < @max_roster_size, do: {:ok, count}, else: {:error, :roster_full}
+    end)
+    |> Multi.run(:check_not_on_a_team, fn _repo, _changes ->
+      if is_nil(invitee.team_id), do: {:ok, nil}, else: {:error, :already_on_a_team}
+    end)
+    |> Multi.insert(:invitation, fn _changes ->
+      TeamInvitation.changeset(%TeamInvitation{}, %{
+        team_id: team.id,
+        player_id: invitee.id,
+        invited_by_id: team.captain_id,
+        status: "pending",
+        expires_at: invitation_expiry()
+      })
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{invitation: invitation}} ->
+        dispatch_team_invitation(invitee, team)
+        schedule_invitation_expiry(invitation)
+        {:ok, invitation}
+
+      {:error, :check_not_frozen, :roster_frozen, _changes} ->
+        {:error, :roster_frozen}
+
+      {:error, :check_capacity, :roster_full, _changes} ->
+        {:error, :roster_full}
+
+      {:error, :check_not_on_a_team, :already_on_a_team, _changes} ->
+        {:error, :already_on_a_team}
+
+      {:error, :invitation, %Ecto.Changeset{} = changeset, _changes} ->
+        if Keyword.has_key?(changeset.errors, :team_id) do
+          {:error, :invitation_already_pending}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  defp invitation_expiry do
+    DateTime.utc_now()
+    |> DateTime.add(@invitation_validity_seconds, :second)
+    |> DateTime.truncate(:second)
+  end
+
+  defp schedule_invitation_expiry(invitation) do
+    {:ok, _job} =
+      %{"invitation_id" => invitation.id}
+      |> ExpireTeamInvitationWorker.new(schedule_in: @invitation_validity_seconds)
+      |> Oban.insert()
+
+    :ok
+  end
+
+  defp dispatch_team_invitation(invitee, team) do
+    team = Repo.preload(team, :captain)
+    captain_name = "#{team.captain.first_name} #{team.captain.last_name}"
+
+    Notifications.dispatch(invitee, :team_invitation, %{
+      team_name: team.name,
+      captain_name: captain_name
+    })
+  rescue
+    error ->
+      Logger.error(
+        "team_invitation dispatch failed for player #{invitee.id}: " <>
+          Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      :ok
+  end
+
+  @doc """
+  Accepts a pending `TeamInvitation` on `player`'s behalf. Re-checks
+  `status`/`expires_at` against a fresh read (never trusts a struct the
+  caller may have held onto), then reuses `add_player_to_roster/3` for the
+  actual roster claim rather than duplicating its freeze/capacity/atomic-
+  claim logic.
+
+  On success, marks the invitation accepted and auto-cancels every other
+  pending invitation `player` was holding (they're on a team now) — both via
+  race-safe `status: "pending"`-scoped `update_all`s, so a concurrent
+  expiry/decline/cancel never gets clobbered.
+  """
+  def accept_invitation(%TeamInvitation{} = invitation, %Player{} = player) do
+    with {:ok, invitation} <- fetch_pending(invitation.id, player.id),
+         team <- Repo.get!(Team, invitation.team_id),
+         {:ok, updated_player} <- add_player_to_roster(team, player) do
+      mark_responded(invitation, "accepted")
+      cancel_other_pending_invitations(player.id, invitation.id)
+      {:ok, updated_player}
+    end
+  end
+
+  @doc """
+  Declines a pending `TeamInvitation` on `player`'s behalf.
+  """
+  def decline_invitation(%TeamInvitation{} = invitation, %Player{} = player) do
+    with {:ok, invitation} <- fetch_pending(invitation.id, player.id) do
+      mark_responded(invitation, "declined")
+      {:ok, invitation}
+    end
+  end
+
+  @doc """
+  Cancels a pending `TeamInvitation` on behalf of `captain` — verifies
+  `captain` actually captains the invitation's team before touching it.
+  """
+  def cancel_invitation(%TeamInvitation{} = invitation, %Player{} = captain) do
+    team = Repo.get!(Team, invitation.team_id)
+
+    if team.captain_id == captain.id do
+      case fetch_pending(invitation.id, invitation.player_id) do
+        {:ok, invitation} ->
+          mark_responded(invitation, "cancelled")
+          {:ok, invitation}
+
+        error ->
+          error
+      end
+    else
+      {:error, :not_captain}
+    end
+  end
+
+  defp fetch_pending(invitation_id, player_id) do
+    now = DateTime.utc_now()
+
+    TeamInvitation
+    |> where(
+      [i],
+      i.id == ^invitation_id and i.player_id == ^player_id and i.status == "pending"
+    )
+    |> Repo.one()
+    |> case do
+      nil -> {:error, :not_found}
+      %{expires_at: expires_at} = invitation -> check_not_expired(invitation, expires_at, now)
+    end
+  end
+
+  defp check_not_expired(invitation, expires_at, now) do
+    if DateTime.compare(expires_at, now) == :gt do
+      {:ok, invitation}
+    else
+      {:error, :expired}
+    end
+  end
+
+  defp mark_responded(invitation, status) do
+    TeamInvitation
+    |> where([i], i.id == ^invitation.id and i.status == "pending")
+    |> Repo.update_all(
+      set: [status: status, responded_at: DateTime.utc_now() |> DateTime.truncate(:second)]
+    )
+  end
+
+  defp cancel_other_pending_invitations(player_id, except_invitation_id) do
+    TeamInvitation
+    |> where(
+      [i],
+      i.player_id == ^player_id and i.status == "pending" and i.id != ^except_invitation_id
+    )
+    |> Repo.update_all(
+      set: [status: "cancelled", responded_at: DateTime.utc_now() |> DateTime.truncate(:second)]
+    )
+  end
+
+  @doc """
+  Pending, unexpired invitations for `player_id` — the banner's data source
+  (`CuevolutionWeb.PlayerAuth.on_mount/4`). Preloads `team: :captain` since
+  the banner shows both the team name and who sent the invite.
+  """
+  def list_pending_invitations_for_player(player_id) do
+    now = DateTime.utc_now()
+
+    TeamInvitation
+    |> where([i], i.player_id == ^player_id and i.status == "pending" and i.expires_at > ^now)
+    |> order_by(asc: :inserted_at)
+    |> preload(team: :captain)
+    |> Repo.all()
+  end
+
+  @doc """
+  Pending, unexpired invitations `team_id` has sent — the captain
+  dashboard's "invitations sent" list (with a cancel action).
+  """
+  def list_pending_invitations_for_team(team_id) do
+    now = DateTime.utc_now()
+
+    TeamInvitation
+    |> where([i], i.team_id == ^team_id and i.status == "pending" and i.expires_at > ^now)
+    |> order_by(asc: :inserted_at)
+    |> preload(:player)
+    |> Repo.all()
+  end
+
+  @doc """
+  Looks up a pending invitation for `player_id` by id, scoped so a player
+  can only ever act on their own invitations — used by the accept/decline
+  event hook before calling `accept_invitation/2`/`decline_invitation/2`.
+  Returns `nil` (not an error tuple) so callers can pattern-match a missing
+  invitation the same way as any other "not found" lookup.
+  """
+  def get_pending_invitation_for_player(invitation_id, player_id) do
+    TeamInvitation
+    |> where([i], i.id == ^invitation_id and i.player_id == ^player_id and i.status == "pending")
+    |> Repo.one()
+  end
+
+  @doc """
+  Looks up a pending invitation by id, scoped to `team_id` — the captain
+  dashboard's counterpart to `get_pending_invitation_for_player/2`, used
+  before `cancel_invitation/2` so a captain can only cancel their own
+  team's invitations.
+  """
+  def get_pending_invitation_for_team_and_id(team_id, invitation_id) do
+    TeamInvitation
+    |> where([i], i.id == ^invitation_id and i.team_id == ^team_id and i.status == "pending")
+    |> Repo.one()
+  end
+
+  @doc """
+  Locks `team_id`'s roster — called from two places, both idempotent no-ops
+  once already locked: `Competitions.assign_to_group/2` (the moment a team
+  is first drawn into a group, ahead of any `Fixture` existing for it — this
+  is the primary trigger, superseding spec 005's original "first recorded
+  Match Result" assumption so a captain can no longer add/remove players
+  once the team's been drawn) and `Competitions.record_result/3` (kept as a
+  harmless safety net for any path that somehow reaches a result without a
+  prior group assignment). Plain conditional `update_all`, no `Multi`
+  needed here — the `is_nil` guard alone makes it naturally idempotent.
   """
   def lock_roster(team_id) do
     Team

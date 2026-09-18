@@ -12,6 +12,7 @@ defmodule CuevolutionWeb.PlayerAuth do
   import Phoenix.Controller
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Teams
 
   @player_session_key :player_token
 
@@ -65,7 +66,15 @@ defmodule CuevolutionWeb.PlayerAuth do
     |> clear_session()
   end
 
-  @doc "LiveView `on_mount` hook: same access rule as `require_player/2`, for player-only LiveViews."
+  @doc """
+  LiveView `on_mount` hook: same access rule as `require_player/2`, for
+  player-only LiveViews. Also assigns `:pending_invitations` (the team-
+  invitation banner's data, shown by `PlayerComponents.app_shell/1` on
+  every player page) and attaches a shared `handle_event` hook for
+  `"accept_invitation"`/`"decline_invitation"` — attached here rather than
+  duplicated in every player LiveView's own `handle_event`, since every
+  player LiveView already goes through this same `on_mount`.
+  """
   def on_mount(:ensure_player, _params, session, socket) do
     player =
       case session["player_token"] do
@@ -74,7 +83,17 @@ defmodule CuevolutionWeb.PlayerAuth do
       end
 
     if player do
-      {:cont, Phoenix.Component.assign(socket, :current_player, player)}
+      socket =
+        socket
+        |> Phoenix.Component.assign(:current_player, player)
+        |> assign_pending_invitations(player)
+        |> Phoenix.LiveView.attach_hook(
+          :team_invitation_actions,
+          :handle_event,
+          &handle_invitation_event/3
+        )
+
+      {:cont, socket}
     else
       socket =
         socket
@@ -84,4 +103,79 @@ defmodule CuevolutionWeb.PlayerAuth do
       {:halt, socket}
     end
   end
+
+  defp assign_pending_invitations(socket, player) do
+    Phoenix.Component.assign(
+      socket,
+      :pending_invitations,
+      Teams.list_pending_invitations_for_player(player.id)
+    )
+  end
+
+  defp handle_invitation_event("accept_invitation", %{"id" => id}, socket) do
+    player = socket.assigns.current_player
+
+    socket =
+      case Teams.get_pending_invitation_for_player(id, player.id) do
+        nil ->
+          Phoenix.LiveView.put_flash(socket, :error, "That invitation is no longer available.")
+
+        invitation ->
+          case Teams.accept_invitation(invitation, player) do
+            {:ok, _player} ->
+              socket
+              |> Phoenix.LiveView.put_flash(:info, "You joined the team!")
+              |> Phoenix.LiveView.push_navigate(to: ~p"/team")
+
+            {:error, :roster_frozen} ->
+              Phoenix.LiveView.put_flash(
+                socket,
+                :error,
+                "That team's roster is frozen and can no longer accept new players."
+              )
+
+            {:error, :roster_full} ->
+              Phoenix.LiveView.put_flash(socket, :error, "That team's roster is already full.")
+
+            {:error, :already_on_a_team} ->
+              Phoenix.LiveView.put_flash(socket, :error, "You're already on a team.")
+
+            {:error, _reason} ->
+              Phoenix.LiveView.put_flash(
+                socket,
+                :error,
+                "That invitation is no longer available."
+              )
+          end
+      end
+
+    {:halt, assign_pending_invitations(socket, player)}
+  end
+
+  defp handle_invitation_event("decline_invitation", %{"id" => id}, socket) do
+    player = socket.assigns.current_player
+
+    socket =
+      case Teams.get_pending_invitation_for_player(id, player.id) do
+        nil ->
+          socket
+
+        invitation ->
+          case Teams.decline_invitation(invitation, player) do
+            {:ok, _invitation} ->
+              Phoenix.LiveView.put_flash(socket, :info, "Invitation declined.")
+
+            {:error, _reason} ->
+              Phoenix.LiveView.put_flash(
+                socket,
+                :error,
+                "That invitation is no longer available."
+              )
+          end
+      end
+
+    {:halt, assign_pending_invitations(socket, player)}
+  end
+
+  defp handle_invitation_event(_event, _params, socket), do: {:cont, socket}
 end

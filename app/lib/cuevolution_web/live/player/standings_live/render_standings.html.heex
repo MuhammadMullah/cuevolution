@@ -1,4 +1,9 @@
-<PlayerComponents.app_shell current_player={@current_player} active={:standings} flash={@flash}>
+<PlayerComponents.app_shell
+  current_player={@current_player}
+  active={:standings}
+  flash={@flash}
+  pending_invitations={@pending_invitations}
+>
   <div
     :if={is_nil(@current_player.team_id)}
     class="mb-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-4"

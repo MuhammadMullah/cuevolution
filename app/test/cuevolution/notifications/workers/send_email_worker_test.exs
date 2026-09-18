@@ -54,6 +54,17 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorkerTest do
     assert Repo.get!(Notification, notification.id).status == "sent"
   end
 
+  test "sends the team-invitation email" do
+    player = insert(:player, notification_preference: "email")
+    payload = %{team_name: "The Sharks", captain_name: "Alex Otieno"}
+    [notification] = Notifications.dispatch(player, :team_invitation, payload)
+
+    assert :ok = perform_job(SendEmailWorker, %{"notification_id" => notification.id})
+
+    assert_email_sent(fn email -> email.subject =~ "invited to join The Sharks" end)
+    assert Repo.get!(Notification, notification.id).status == "sent"
+  end
+
   test "a notification already claimed by another attempt is skipped, not re-sent (FR-009/SC-005)" do
     player = insert(:player, notification_preference: "email")
     [notification] = Notifications.dispatch(player, :registration_confirmation, %{})

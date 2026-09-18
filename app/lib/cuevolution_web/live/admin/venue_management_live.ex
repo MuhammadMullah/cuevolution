@@ -210,7 +210,7 @@ defmodule CuevolutionWeb.VenueManagementLive do
   end
 
   defp load_venues(socket) do
-    assign(socket, :venues, Venues.list_venues(%{region_id: socket.assigns.region.id}))
+    assign(socket, :venues, Venues.list_admin_venues(socket.assigns.region.id))
   end
 
   defp load_custom_venues(socket) do

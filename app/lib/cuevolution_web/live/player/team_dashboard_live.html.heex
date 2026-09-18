@@ -1,4 +1,9 @@
-<PlayerComponents.app_shell current_player={@current_player} active={:team} flash={@flash}>
+<PlayerComponents.app_shell
+  current_player={@current_player}
+  active={:team}
+  flash={@flash}
+  pending_invitations={@pending_invitations}
+>
   <PlayerComponents.eyebrow>Your Team</PlayerComponents.eyebrow>
 
   <div class="mb-6 flex flex-wrap items-center gap-3.5">
@@ -59,9 +64,10 @@
   </PlayerComponents.card>
 
   <PlayerComponents.card :if={@is_captain} class="mb-5">
-    <div class="mb-1 text-sm font-semibold text-ink-700">Add a player</div>
+    <div class="mb-1 text-sm font-semibold text-ink-700">Invite a player</div>
     <p class="mb-3 text-[13px] text-ink-400">
-      Captains add already-registered players directly — no invite needed.
+      Invite any registered player, from any venue or region — they'll get a notification and
+      have 48 hours to accept or decline.
     </p>
     <.form for={@add_form} phx-submit="add_player" class="flex flex-wrap gap-2.5">
       <input
@@ -71,8 +77,29 @@
         placeholder="Player username"
         class="min-w-[200px] flex-1 rounded-full border border-ink-300 px-4 py-2.5 font-sans text-[15px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
       />
-      <PlayerComponents.button type="submit" variant="primary">Add</PlayerComponents.button>
+      <PlayerComponents.button type="submit" variant="primary">Invite</PlayerComponents.button>
     </.form>
+
+    <div :if={@sent_invitations != []} class="mt-4 border-t border-ink-100 pt-4">
+      <div class="mb-2 text-[13px] font-semibold text-ink-700">Pending invitations</div>
+      <div
+        :for={invitation <- @sent_invitations}
+        class="flex items-center gap-3 border-b border-ink-100 py-2 text-[13.5px] last:border-b-0"
+      >
+        <div class="min-w-0 flex-1 text-ink-700">
+          @{invitation.player.username}
+        </div>
+        <button
+          type="button"
+          phx-click="cancel_invitation"
+          phx-value-id={invitation.id}
+          data-confirm="Cancel this invitation?"
+          class="cursor-pointer rounded-lg px-2 py-1.5 text-[13px] font-semibold text-ink-400 hover:bg-red-50 hover:text-red-700"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   </PlayerComponents.card>
 
   <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm">
@@ -102,4 +129,20 @@
       </button>
     </div>
   </div>
+
+  <PlayerComponents.card :if={@is_captain} class="mt-5">
+    <div class="mb-1 text-sm font-semibold text-red-700">Danger zone</div>
+    <p class="mb-3 text-[13px] text-ink-400">
+      Deleting the team removes every player from the roster and cancels any pending invitations.
+      This can't be undone, and isn't possible once the team has been drawn into a stage.
+    </p>
+    <button
+      type="button"
+      phx-click="delete_team"
+      data-confirm="Delete this team? This removes every player from the roster and cannot be undone."
+      class="cursor-pointer rounded-full border border-red-200 bg-white px-4 py-2 text-[13px] font-semibold text-red-700 hover:bg-red-50"
+    >
+      Delete team
+    </button>
+  </PlayerComponents.card>
 </PlayerComponents.app_shell>
