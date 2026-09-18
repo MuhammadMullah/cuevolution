@@ -38,6 +38,47 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
     assert html =~ "/ 8"
   end
 
+  test "the captain can rename the team from the team header", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    captain = Repo.get!(Player, captain.id)
+
+    conn = log_in_player(conn, captain)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    assert has_element?(view, "button[aria-label='Edit team name']")
+
+    view
+    |> element("button[phx-click=edit_team_name]")
+    |> render_click()
+
+    assert has_element?(view, "#team-name-form")
+
+    view
+    |> form("#team-name-form", team: %{"name" => "The Great Sharks"})
+    |> render_submit()
+
+    assert has_element?(view, "h1", "The Great Sharks")
+    assert Repo.get!(Cuevolution.Teams.Team, team.id).name == "The Great Sharks"
+  end
+
+  test "a non-captain cannot edit the team name", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+    member = Repo.get!(Player, member.id)
+
+    conn = log_in_player(conn, member)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    refute has_element?(view, "button[aria-label='Edit team name']")
+
+    html = render_click(view, "edit_team_name", %{})
+
+    assert html =~ "Only the captain can update the team name."
+    assert Repo.get!(Cuevolution.Teams.Team, team.id).name == "The Sharks"
+  end
+
   test "the captain invites a registered player by username, who is not yet on the roster",
        %{conn: conn} do
     captain = insert(:player)

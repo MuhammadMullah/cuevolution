@@ -189,4 +189,37 @@ defmodule CuevolutionWeb.VenueManagementLiveTest do
              region_id: region.id
            )
   end
+
+  test "consolidates selected custom submissions into a canonical venue", %{conn: conn} do
+    region = default_region()
+    venue = insert(:venue, region_id: region.id, name: "V1 Sports Bar")
+    first = insert(:player, region_id: region.id, other_venue_name: "V1")
+    second = insert(:player, region_id: region.id, other_venue_name: "V1 bar Langata")
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/venues")
+
+    view
+    |> element("#custom-venue-player-#{first.id}")
+    |> render_click()
+
+    view
+    |> element("#custom-venue-player-#{second.id}")
+    |> render_click()
+
+    view
+    |> element("#consolidation-venue")
+    |> render_change(%{"venue_id" => venue.id})
+
+    html =
+      view
+      |> element("#consolidate-custom-venues")
+      |> render_click()
+
+    assert html =~ "Consolidated 2 custom venue entries."
+    assert Repo.get!(Cuevolution.Accounts.Player, first.id).preferred_venue_id == venue.id
+    assert Repo.get!(Cuevolution.Accounts.Player, second.id).preferred_venue_id == venue.id
+    assert is_nil(Repo.get!(Cuevolution.Accounts.Player, first.id).other_venue_name)
+    assert is_nil(Repo.get!(Cuevolution.Accounts.Player, second.id).other_venue_name)
+  end
 end

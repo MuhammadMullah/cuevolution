@@ -26,6 +26,8 @@ defmodule CuevolutionWeb.VenueManagementLive do
     {:ok,
      socket
      |> assign(page_title: "Venue Management", regions: regions, region: region)
+     |> assign(:selected_custom_player_ids, [])
+     |> assign(:consolidation_venue_id, nil)
      |> assign(:editing_venue, nil)
      |> assign_form(Venue.changeset(%Venue{}, %{}))
      |> clear_deactivation_state()
@@ -39,6 +41,8 @@ defmodule CuevolutionWeb.VenueManagementLive do
     {:noreply,
      socket
      |> assign(:region, region)
+     |> assign(:selected_custom_player_ids, [])
+     |> assign(:consolidation_venue_id, nil)
      |> assign(:editing_venue, nil)
      |> assign_form(Venue.changeset(%Venue{}, %{}))
      |> clear_deactivation_state()
@@ -172,6 +176,50 @@ defmodule CuevolutionWeb.VenueManagementLive do
            :error,
            "A venue named \"#{name}\" already exists in #{socket.assigns.region.name}."
          )}
+    end
+  end
+
+  def handle_event("toggle_custom_player", %{"id" => id}, socket) do
+    selected = socket.assigns.selected_custom_player_ids
+    updated = if id in selected, do: List.delete(selected, id), else: [id | selected]
+    {:noreply, assign(socket, :selected_custom_player_ids, updated)}
+  end
+
+  def handle_event("select_consolidation_venue", %{"venue_id" => venue_id}, socket) do
+    {:noreply, assign(socket, :consolidation_venue_id, venue_id)}
+  end
+
+  def handle_event("consolidate_custom_venues", _params, socket) do
+    case Accounts.admin_assign_custom_venues(
+           socket.assigns.selected_custom_player_ids,
+           socket.assigns.consolidation_venue_id,
+           socket.assigns.current_admin
+         ) do
+      {:ok, count} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           "Consolidated #{count} custom venue entr#{if count == 1, do: "y", else: "ies"}."
+         )
+         |> assign(selected_custom_player_ids: [], consolidation_venue_id: nil)
+         |> load_custom_venues()}
+
+      {:error, :invalid_selection} ->
+        {:noreply, put_flash(socket, :error, "Select at least one custom venue entry.")}
+
+      {:error, :invalid_venue} ->
+        {:noreply, put_flash(socket, :error, "Select an active venue in this region.")}
+
+      {:error, :stale_selection} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Some selected entries have changed. Refresh and try again.")
+         |> assign(selected_custom_player_ids: [], consolidation_venue_id: nil)
+         |> load_custom_venues()}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to update players.")}
     end
   end
 

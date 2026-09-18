@@ -65,6 +65,29 @@ defmodule Cuevolution.Teams do
     end
   end
 
+  @doc """
+  Updates a team's name on behalf of its captain.
+
+  Renaming is intentionally independent of roster locking: a drawn team may
+  still correct or improve its display name without changing its competition
+  membership.
+  """
+  def update_team_name(%Team{} = team, %Player{} = captain, attrs) do
+    cond do
+      team.captain_id != captain.id -> {:error, :not_captain}
+      true -> Repo.update(Team.changeset(team, %{name: normalized_team_name(attrs)}))
+    end
+  end
+
+  def change_team_name(%Team{} = team, attrs \\ %{}) do
+    Team.changeset(team, attrs)
+  end
+
+  defp normalized_team_name(attrs) do
+    name = attrs["name"] || attrs[:name] || ""
+    String.trim(name)
+  end
+
   @max_roster_size 8
 
   @doc """

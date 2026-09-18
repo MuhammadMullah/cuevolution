@@ -49,5 +49,28 @@
     hint={other_venue_msg}
     hint_variant={other_venue_variant}
   />
+  <div
+    :if={@attrs["venue_choice"] == "other" and @venue_suggestions != []}
+    id="other-venue-suggestions"
+    class="mt-[-8px] rounded-xl border border-ink-200 bg-white p-1 shadow-sm"
+  >
+    <div class="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">
+      Venue suggestions
+    </div>
+    <button
+      :for={suggestion <- @venue_suggestions}
+      type="button"
+      phx-click="choose_suggested_venue"
+      phx-value-kind={suggestion.kind}
+      phx-value-id={suggestion.id}
+      phx-value-name={suggestion.name}
+      class="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink-800 hover:bg-ink-50"
+    >
+      <span class="min-w-0 truncate font-medium">{suggestion.name}</span>
+      <span class="shrink-0 text-[12px] text-ink-400">
+        {if suggestion.kind == "venue", do: "Use listed venue", else: "Use this spelling"}
+      </span>
+    </button>
+  </div>
   <.field_error field={@form[:preferred_venue_id]} />
 </div>

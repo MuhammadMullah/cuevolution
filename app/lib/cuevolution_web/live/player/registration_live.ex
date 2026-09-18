@@ -41,6 +41,7 @@ defmodule CuevolutionWeb.RegistrationLive do
        attrs: %{},
        regions: regions,
        venues: [],
+       venue_suggestions: [],
        genders: @genders,
        notification_defs: @notification_defs,
        last_step: @last_step,
@@ -66,6 +67,7 @@ defmodule CuevolutionWeb.RegistrationLive do
     {:noreply,
      socket
      |> assign(:attrs, attrs)
+     |> assign(:venue_suggestions, venue_suggestions(attrs))
      |> touch_target(full_params["_target"])
      |> assign_form(changeset)}
   end
@@ -95,7 +97,42 @@ defmodule CuevolutionWeb.RegistrationLive do
     {:noreply,
      socket
      |> assign(:attrs, attrs)
+     |> assign(:venue_suggestions, if(value == "other", do: venue_suggestions(attrs), else: []))
      |> touch_fields([field])
+     |> assign_form(changeset)}
+  end
+
+  def handle_event("choose_suggested_venue", %{"kind" => "venue", "id" => venue_id}, socket) do
+    attrs =
+      socket.assigns.attrs
+      |> Map.put("preferred_venue_id", venue_id)
+      |> Map.delete("other_venue_name")
+      |> Map.delete("venue_choice")
+
+    changeset = Player.registration_changeset(%Player{}, attrs) |> Map.put(:action, :validate)
+
+    {:noreply,
+     socket
+     |> assign(:attrs, attrs)
+     |> assign(:venue_suggestions, [])
+     |> touch_fields(["preferred_venue_id"])
+     |> assign_form(changeset)}
+  end
+
+  def handle_event("choose_suggested_venue", %{"kind" => "custom", "name" => name}, socket) do
+    attrs =
+      socket.assigns.attrs
+      |> Map.put("venue_choice", "other")
+      |> Map.put("other_venue_name", name)
+      |> Map.delete("preferred_venue_id")
+
+    changeset = Player.registration_changeset(%Player{}, attrs) |> Map.put(:action, :validate)
+
+    {:noreply,
+     socket
+     |> assign(:attrs, attrs)
+     |> assign(:venue_suggestions, venue_suggestions(attrs))
+     |> touch_fields(["other_venue_name"])
      |> assign_form(changeset)}
   end
 
@@ -335,6 +372,16 @@ defmodule CuevolutionWeb.RegistrationLive do
       {"neutral", nil}
     end
   end
+
+  defp venue_suggestions(%{
+         "venue_choice" => "other",
+         "region_id" => region_id,
+         "other_venue_name" => name
+       })
+       when is_binary(region_id) and is_binary(name),
+       do: Accounts.search_venue_options(region_id, name)
+
+  defp venue_suggestions(_attrs), do: []
 
   defp upload_error_message(:too_large), do: "That photo is too large (max 8MB)."
   defp upload_error_message(:not_accepted), do: "Please upload a JPG or PNG."

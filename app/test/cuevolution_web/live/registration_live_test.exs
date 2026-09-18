@@ -223,6 +223,31 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
     refute html =~ "is already on the list"
   end
 
+  test "suggests official and previously submitted venue names while typing Other", %{conn: conn} do
+    region = build(:region)
+    official = insert(:venue, region_id: region.id, name: "V1 Sports Bar")
+    insert(:player, region_id: region.id, other_venue_name: "V1 bar and restaurant Langata")
+
+    {:ok, view, _html} = live(conn, ~p"/register")
+    complete_steps_1_and_2(view)
+    choose_region(view, region.id)
+    choose(view, "venue_choice", "other")
+
+    html = fill(view, %{"other_venue_name" => "V1"})
+    assert html =~ "V1 Sports Bar"
+    assert html =~ "V1 bar and restaurant Langata"
+
+    html =
+      view
+      |> element(
+        "button[phx-click='choose_suggested_venue'][phx-value-kind='venue'][phx-value-id='#{official.id}']"
+      )
+      |> render_click()
+
+    assert html =~ "V1 Sports Bar"
+    refute has_element?(view, "#other-venue-suggestions")
+  end
+
   test "blocks advancing past step 3 with an Other venue name that duplicates a real venue", %{
     conn: conn
   } do

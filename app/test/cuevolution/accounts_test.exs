@@ -830,6 +830,49 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "admin_assign_custom_venues/3" do
+    test "consolidates selected custom submissions into one venue and audits each player" do
+      region = build(:region)
+      venue = insert(:venue, region_id: region.id, name: "V1 Sports Bar")
+      first = insert(:player, region_id: region.id, other_venue_name: "V1")
+      second = insert(:player, region_id: region.id, other_venue_name: "V1 bar Langata")
+      admin = insert(:admin, role: "super_admin")
+
+      assert {:ok, 2} =
+               Accounts.admin_assign_custom_venues([first.id, second.id], venue.id, admin)
+
+      assert Repo.get!(Player, first.id).preferred_venue_id == venue.id
+      assert is_nil(Repo.get!(Player, first.id).other_venue_name)
+      assert Repo.get!(Player, second.id).preferred_venue_id == venue.id
+      assert is_nil(Repo.get!(Player, second.id).other_venue_name)
+
+      assert Repo.aggregate(
+               from(log in AdminActionLog,
+                 where:
+                   log.action_type == "consolidate_custom_venue" and
+                     log.admin_id == ^admin.id
+               ),
+               :count,
+               :id
+             ) == 2
+    end
+
+    test "rejects a selection from another region without changing players" do
+      region = build(:region)
+      other_region = build(:region)
+      venue = insert(:venue, region_id: region.id)
+      player = insert(:player, region_id: other_region.id, other_venue_name: "V1")
+      admin = insert(:admin, role: "super_admin")
+
+      assert {:error, :stale_selection} =
+               Accounts.admin_assign_custom_venues([player.id], venue.id, admin)
+
+      persisted = Repo.get!(Player, player.id)
+      assert is_nil(persisted.preferred_venue_id)
+      assert persisted.other_venue_name == "V1"
+    end
+  end
+
   describe "deactivate_player/1" do
     test "clears PII and sets anonymized_at, without an admin action log" do
       player = insert(:player)

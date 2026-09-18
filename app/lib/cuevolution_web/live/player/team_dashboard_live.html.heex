@@ -11,9 +11,49 @@
       {team_initials(@team.name)}
     </div>
     <div class="min-w-[200px] flex-1">
-      <h1 class="mb-0.5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">
-        {@team.name}
-      </h1>
+      <%= if @editing_team_name? do %>
+        <.form for={@team_name_form} id="team-name-form" phx-submit="update_team_name">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <PlayerComponents.input
+              field={@team_name_form[:name]}
+              aria-label="Team name"
+              autofocus
+              class="mb-0 min-w-0 flex-1"
+            />
+            <div class="flex shrink-0 gap-2">
+              <button
+                type="submit"
+                class="cursor-pointer rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                phx-click="cancel_team_name_edit"
+                class="cursor-pointer rounded-full border border-ink-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:bg-ink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </.form>
+      <% else %>
+        <div class="flex items-center gap-2">
+          <h1 class="mb-0.5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">
+            {@team.name}
+          </h1>
+          <button
+            :if={@is_captain}
+            type="button"
+            phx-click="edit_team_name"
+            aria-label="Edit team name"
+            title="Edit team name"
+            class="mt-0.5 inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+          >
+            <.icon name="hero-pencil" class="size-4.5" />
+          </button>
+        </div>
+      <% end %>
       <div class="text-sm text-ink-500">
         {@team.region.name}
         <span :if={@is_captain} class="font-semibold text-red-700">· You are the Captain</span>

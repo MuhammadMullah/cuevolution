@@ -18,6 +18,8 @@ defmodule CuevolutionWeb.TeamDashboardLive do
        |> assign(
          page_title: "My Team",
          add_form: to_form(%{}, as: :roster),
+         team_name_form: to_form(%{}, as: :team),
+         editing_team_name?: false,
          min_roster_size: @min_roster_size
        )
        |> load_team()}
@@ -31,6 +33,44 @@ defmodule CuevolutionWeb.TeamDashboardLive do
       {:noreply, socket |> invite_by_username(username) |> load_team()}
     else
       {:noreply, put_flash(socket, :error, "Only the captain can invite players.")}
+    end
+  end
+
+  def handle_event("edit_team_name", _params, socket) do
+    if socket.assigns.is_captain do
+      {:noreply,
+       assign(socket,
+         editing_team_name?: true,
+         team_name_form: to_form(Teams.change_team_name(socket.assigns.team), as: :team)
+       )}
+    else
+      {:noreply, put_flash(socket, :error, "Only the captain can update the team name.")}
+    end
+  end
+
+  def handle_event("cancel_team_name_edit", _params, socket) do
+    {:noreply, assign(socket, :editing_team_name?, false)}
+  end
+
+  def handle_event("update_team_name", %{"team" => params}, socket) do
+    if socket.assigns.is_captain do
+      case Teams.update_team_name(
+             socket.assigns.team,
+             socket.assigns.current_player,
+             params
+           ) do
+        {:ok, _team} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Team name updated.")
+           |> assign(:editing_team_name?, false)
+           |> load_team()}
+
+        {:error, changeset} ->
+          {:noreply, assign(socket, :team_name_form, to_form(changeset, as: :team))}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Only the captain can update the team name.")}
     end
   end
 
