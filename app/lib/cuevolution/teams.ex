@@ -73,9 +73,10 @@ defmodule Cuevolution.Teams do
   membership.
   """
   def update_team_name(%Team{} = team, %Player{} = captain, attrs) do
-    cond do
-      team.captain_id != captain.id -> {:error, :not_captain}
-      true -> Repo.update(Team.changeset(team, %{name: normalized_team_name(attrs)}))
+    if team.captain_id != captain.id do
+      {:error, :not_captain}
+    else
+      Repo.update(Team.changeset(team, %{name: normalized_team_name(attrs)}))
     end
   end
 

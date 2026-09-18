@@ -502,46 +502,56 @@ defmodule Cuevolution.Accounts do
     if length(players) != length(player_ids) do
       {:error, :stale_selection}
     else
-      Multi.new()
-      |> Multi.update_all(
-        :players,
-        from(p in Player, where: p.id in ^player_ids),
-        set: [preferred_venue_id: venue.id, other_venue_name: nil]
-      )
-      |> Multi.run(:logs, fn repo, _changes ->
-        Enum.reduce_while(players, {:ok, 0}, fn player, {:ok, count} ->
-          result =
-            %AdminActionLog{}
-            |> AdminActionLog.changeset(%{
-              admin_id: admin.id,
-              action_type: "consolidate_custom_venue",
-              entity_type: "Cuevolution.Accounts.Player",
-              entity_id: player.id,
-              prior_value: %{
-                "preferred_venue_id" => player.preferred_venue_id,
-                "other_venue_name" => player.other_venue_name
-              },
-              new_value: %{
-                "preferred_venue_id" => venue.id,
-                "other_venue_name" => nil
-              }
-            })
-            |> repo.insert()
-
-          case result do
-            {:ok, _log} -> {:cont, {:ok, count + 1}}
-            {:error, changeset} -> {:halt, {:error, changeset}}
-          end
-        end)
-      end)
-      |> Repo.transaction()
-      |> case do
-        {:ok, %{players: {count, _}}} -> {:ok, count}
-        {:error, :players, reason, _changes} -> {:error, reason}
-        {:error, :logs, reason, _changes} -> {:error, reason}
-      end
+      persist_custom_venue_assignments(players, player_ids, venue, admin)
     end
   end
+
+  defp persist_custom_venue_assignments(players, player_ids, venue, admin) do
+    Multi.new()
+    |> Multi.update_all(
+      :players,
+      from(p in Player, where: p.id in ^player_ids),
+      set: [preferred_venue_id: venue.id, other_venue_name: nil]
+    )
+    |> Multi.run(:logs, fn repo, _changes ->
+      insert_custom_venue_logs(repo, players, venue, admin)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{players: {count, _}}} -> {:ok, count}
+      {:error, :players, reason, _changes} -> {:error, reason}
+      {:error, :logs, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  defp insert_custom_venue_logs(repo, players, venue, admin) do
+    Enum.reduce_while(players, {:ok, 0}, fn player, {:ok, count} ->
+      player
+      |> custom_venue_log_changeset(venue, admin)
+      |> repo.insert()
+      |> accumulate_custom_venue_log(count)
+    end)
+  end
+
+  defp custom_venue_log_changeset(player, venue, admin) do
+    AdminActionLog.changeset(%AdminActionLog{}, %{
+      admin_id: admin.id,
+      action_type: "consolidate_custom_venue",
+      entity_type: "Cuevolution.Accounts.Player",
+      entity_id: player.id,
+      prior_value: %{
+        "preferred_venue_id" => player.preferred_venue_id,
+        "other_venue_name" => player.other_venue_name
+      },
+      new_value: %{
+        "preferred_venue_id" => venue.id,
+        "other_venue_name" => nil
+      }
+    })
+  end
+
+  defp accumulate_custom_venue_log({:ok, _log}, count), do: {:cont, {:ok, count + 1}}
+  defp accumulate_custom_venue_log({:error, changeset}, _count), do: {:halt, {:error, changeset}}
 
   defp valid_uuid?(id) do
     is_binary(id) and match?({:ok, _}, Ecto.UUID.cast(id))
@@ -700,43 +710,48 @@ defmodule Cuevolution.Accounts do
     if String.length(query) < 2 do
       []
     else
-      pattern = "%" <> escape_like_pattern(query) <> "%"
-
-      official_names =
-        Venue
-        |> where([v], v.region_id == ^region_id and v.active and ilike(v.name, ^pattern))
-        |> order_by(asc: :name)
-        |> limit(6)
-        |> select([v], %{id: v.id, name: v.name, kind: "venue"})
-        |> Repo.all()
-
-      custom_names =
-        Player
-        |> where(
-          [p],
-          p.region_id == ^region_id and not is_nil(p.other_venue_name) and
-            p.other_venue_name != "" and ilike(p.other_venue_name, ^pattern)
-        )
-        |> order_by(asc: :other_venue_name)
-        |> limit(12)
-        |> select([p], %{id: nil, name: p.other_venue_name, kind: "custom"})
-        |> Repo.all()
-
-      (official_names ++
-         Enum.reduce(custom_names, [], fn suggestion, acc ->
-           normalized = String.downcase(String.trim(suggestion.name))
-
-           if Enum.any?(
-                official_names ++ acc,
-                &(String.downcase(String.trim(&1.name)) == normalized)
-              ) do
-             acc
-           else
-             acc ++ [suggestion]
-           end
-         end))
-      |> Enum.take(8)
+      do_search_venue_options(region_id, query)
     end
+  end
+
+  defp do_search_venue_options(region_id, query) do
+    pattern = "%" <> escape_like_pattern(query) <> "%"
+
+    official_names =
+      Venue
+      |> where([v], v.region_id == ^region_id and v.active and ilike(v.name, ^pattern))
+      |> order_by(asc: :name)
+      |> limit(6)
+      |> select([v], %{id: v.id, name: v.name, kind: "venue"})
+      |> Repo.all()
+
+    custom_names =
+      Player
+      |> where(
+        [p],
+        p.region_id == ^region_id and not is_nil(p.other_venue_name) and
+          p.other_venue_name != "" and ilike(p.other_venue_name, ^pattern)
+      )
+      |> order_by(asc: :other_venue_name)
+      |> limit(12)
+      |> select([p], %{id: nil, name: p.other_venue_name, kind: "custom"})
+      |> Repo.all()
+
+    merge_venue_suggestions(official_names, custom_names)
+  end
+
+  defp merge_venue_suggestions(official_names, custom_names) do
+    custom_names
+    |> Enum.reduce(official_names, fn suggestion, acc ->
+      normalized = String.downcase(String.trim(suggestion.name))
+
+      if Enum.any?(acc, &(String.downcase(String.trim(&1.name)) == normalized)) do
+        acc
+      else
+        acc ++ [suggestion]
+      end
+    end)
+    |> Enum.take(8)
   end
 
   defp escape_like_pattern(value), do: String.replace(value, ~w(% _), fn c -> "\\" <> c end)
