@@ -103,6 +103,35 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
     assert invitation.status == "pending"
   end
 
+  test "the captain can search by player name and select an autocomplete suggestion", %{
+    conn: conn
+  } do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    captain = Repo.get!(Player, captain.id)
+    recruit = insert(:player, first_name: "Ada", last_name: "Lovelace", username: "adal")
+
+    conn = log_in_player(conn, captain)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    view
+    |> element("#add-player-form")
+    |> render_change(roster: %{"username" => "Lovelace"})
+
+    assert has_element?(view, "#player-suggestion-#{recruit.id}")
+    assert has_element?(view, "#player-suggestions", "Ada Lovelace")
+
+    view
+    |> element("#player-suggestion-#{recruit.id}")
+    |> render_click()
+
+    html = view |> element("#add-player-form") |> render_submit()
+
+    assert html =~ "Invitation sent to @adal"
+    assert [%{player_id: player_id}] = Teams.list_pending_invitations_for_team(team.id)
+    assert player_id == recruit.id
+  end
+
   test "the invited player accepts and joins the roster; other pending invites are cancelled",
        %{conn: conn} do
     captain = insert(:player)

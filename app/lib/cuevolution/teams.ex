@@ -20,6 +20,7 @@ defmodule Cuevolution.Teams do
   alias Ecto.Multi
 
   @invitation_validity_seconds 48 * 60 * 60
+  @max_roster_size 8
 
   @doc """
   Creates a team with `captain` as its Team Captain (spec 005 FR-001), and
@@ -65,6 +66,122 @@ defmodule Cuevolution.Teams do
     end
   end
 
+  @doc "Creates a team and claims its captain and initial roster on behalf of an authorized admin."
+  def admin_create_team(%Admin{} = admin, attrs) when is_map(attrs) do
+    with :ok <- authorize_admin(admin),
+         {:ok, captain_id} <- valid_player_id(attrs["captain_id"] || attrs[:captain_id]),
+         {:ok, player_ids} <- valid_player_ids(attrs["player_ids"] || attrs[:player_ids]),
+         player_ids <- Enum.uniq([captain_id | player_ids]),
+         :ok <- validate_roster_size(player_ids),
+         {:ok, players} <- available_players(player_ids),
+         captain when not is_nil(captain) <- Enum.find(players, &(&1.id == captain_id)) do
+      do_admin_create_team(admin, captain, players, attrs)
+    else
+      nil -> {:error, :captain_not_found}
+      error -> error
+    end
+  end
+
+  @doc "Adds a player directly to a team on behalf of an authorized admin; no invitation is created."
+  def admin_add_player_to_team(%Admin{} = admin, %Team{} = team, %Player{} = player) do
+    if Admin.can?(admin, :manage_teams) do
+      override_roster_change(:add, team, player, admin)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_admin_create_team(admin, captain, players, attrs) do
+    player_ids = Enum.map(players, & &1.id)
+    name = attrs["name"] || attrs[:name]
+
+    result =
+      Multi.new()
+      |> Multi.insert(
+        :team,
+        Team.changeset(%Team{}, %{
+          name: name,
+          region_id: captain.region_id,
+          captain_id: captain.id
+        })
+      )
+      |> Multi.insert(:stage_participation, fn %{team: team} ->
+        Competitions.enroll_team_in_grassroots_changeset(team)
+      end)
+      |> Multi.update_all(
+        :claim_roster,
+        fn %{team: team} -> claim_players_query(player_ids, team.id) end,
+        []
+      )
+      |> Multi.run(:verify_claim, fn _repo, %{claim_roster: {count, _}} ->
+        if count == length(player_ids), do: {:ok, count}, else: {:error, :already_on_a_team}
+      end)
+      |> Repo.transaction()
+
+    case result do
+      {:ok, %{team: team}} ->
+        Enum.each(players, &dispatch_team_assignment(&1, team))
+
+        Accounts.log_admin_action("admin_create_team", admin, team,
+          new_value: %{"captain_id" => captain.id, "player_ids" => player_ids}
+        )
+
+        {:ok, team}
+
+      {:error, :team, changeset, _changes} ->
+        {:error, changeset}
+
+      {:error, :stage_participation, changeset, _changes} ->
+        {:error, changeset}
+
+      {:error, :verify_claim, :already_on_a_team, _changes} ->
+        {:error, :already_on_a_team}
+    end
+  end
+
+  defp claim_players_query(player_ids, team_id) do
+    from(p in Player,
+      where: p.id in ^player_ids and is_nil(p.team_id),
+      update: [set: [team_id: ^team_id]]
+    )
+  end
+
+  defp available_players(player_ids) do
+    players =
+      Player
+      |> where([p], p.id in ^player_ids and is_nil(p.anonymized_at))
+      |> Repo.all()
+
+    if length(players) == length(player_ids),
+      do: {:ok, players},
+      else: {:error, :player_not_found}
+  end
+
+  defp valid_player_id(value) do
+    if is_binary(value) and match?({:ok, _}, Ecto.UUID.cast(value)),
+      do: {:ok, value},
+      else: {:error, :invalid_player}
+  end
+
+  defp valid_player_ids(values) when is_list(values) do
+    if values != [] and
+         Enum.all?(values, &(is_binary(&1) and match?({:ok, _}, Ecto.UUID.cast(&1)))) do
+      {:ok, values}
+    else
+      {:error, :invalid_players}
+    end
+  end
+
+  defp valid_player_ids(_), do: {:error, :invalid_players}
+
+  defp validate_roster_size(player_ids) do
+    if length(player_ids) <= @max_roster_size, do: :ok, else: {:error, :roster_full}
+  end
+
+  defp authorize_admin(admin) do
+    if Admin.can?(admin, :manage_teams), do: :ok, else: {:error, :unauthorized}
+  end
+
   @doc """
   Updates a team's name on behalf of its captain.
 
@@ -88,8 +205,6 @@ defmodule Cuevolution.Teams do
     name = attrs["name"] || attrs[:name] || ""
     String.trim(name)
   end
-
-  @max_roster_size 8
 
   @doc """
   Adds `player` to `team`'s roster (spec 005 FR-002/FR-003/FR-004).

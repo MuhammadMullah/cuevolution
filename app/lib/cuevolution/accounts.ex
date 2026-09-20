@@ -703,6 +703,30 @@ defmodule Cuevolution.Accounts do
     |> Repo.all()
   end
 
+  @doc "Returns active players matching a team invitation query by name or username."
+  def search_players_for_team_invite(query) when is_binary(query) do
+    query = String.trim(query)
+
+    if String.length(query) < 2 do
+      []
+    else
+      pattern = "%" <> escape_like_pattern(query) <> "%"
+
+      Player
+      |> where([p], is_nil(p.anonymized_at))
+      |> where(
+        [p],
+        ilike(p.username, ^pattern) or
+          ilike(p.first_name, ^pattern) or
+          ilike(p.last_name, ^pattern) or
+          ilike(fragment("? || ' ' || ?", p.first_name, p.last_name), ^pattern)
+      )
+      |> order_by(asc: :first_name, asc: :last_name)
+      |> limit(6)
+      |> Repo.all()
+    end
+  end
+
   @doc "Returns canonical and previously submitted venue names for player typeahead suggestions."
   def search_venue_options(region_id, query) when is_binary(region_id) and is_binary(query) do
     query = String.trim(query)

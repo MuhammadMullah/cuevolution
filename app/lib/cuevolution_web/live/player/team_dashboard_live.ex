@@ -3,6 +3,7 @@ defmodule CuevolutionWeb.TeamDashboardLive do
 
   import Ecto.Query
 
+  alias Cuevolution.Accounts
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Repo
   alias Cuevolution.Teams
@@ -18,6 +19,7 @@ defmodule CuevolutionWeb.TeamDashboardLive do
        |> assign(
          page_title: "My Team",
          add_form: to_form(%{}, as: :roster),
+         player_suggestions: [],
          team_name_form: to_form(%{}, as: :team),
          editing_team_name?: false,
          min_roster_size: @min_roster_size
@@ -34,6 +36,22 @@ defmodule CuevolutionWeb.TeamDashboardLive do
     else
       {:noreply, put_flash(socket, :error, "Only the captain can invite players.")}
     end
+  end
+
+  def handle_event("search_players", %{"roster" => %{"username" => query}}, socket) do
+    {:noreply,
+     assign(socket,
+       add_form: to_form(%{"username" => query}, as: :roster),
+       player_suggestions: Accounts.search_players_for_team_invite(query)
+     )}
+  end
+
+  def handle_event("select_player", %{"username" => username}, socket) do
+    {:noreply,
+     assign(socket,
+       add_form: to_form(%{"username" => username}, as: :roster),
+       player_suggestions: []
+     )}
   end
 
   def handle_event("edit_team_name", _params, socket) do
@@ -134,8 +152,8 @@ defmodule CuevolutionWeb.TeamDashboardLive do
   end
 
   defp invite_by_username(socket, username) do
-    case find_player_by_username(username) do
-      nil -> put_flash(socket, :error, "No player found with that username.")
+    case find_player_by_username_or_name(username) do
+      nil -> put_flash(socket, :error, "No player found with that name or username.")
       player -> put_invite_flash(socket, Teams.invite_player(socket.assigns.team, player), player)
     end
   end
@@ -177,9 +195,14 @@ defmodule CuevolutionWeb.TeamDashboardLive do
     end
   end
 
-  defp find_player_by_username(username) do
+  defp find_player_by_username_or_name(value) do
+    value = String.downcase(String.trim(value))
+
     Repo.one(
-      from p in Player, where: fragment("lower(?)", p.username) == ^String.downcase(username)
+      from p in Player,
+        where:
+          fragment("lower(?)", p.username) == ^value or
+            fragment("lower(? || ' ' || ?)", p.first_name, p.last_name) == ^value
     )
   end
 

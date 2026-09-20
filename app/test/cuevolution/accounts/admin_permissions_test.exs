@@ -22,6 +22,10 @@ defmodule Cuevolution.Accounts.AdminPermissionsTest do
     refute Admin.can?(venue_rep, :manage_venues)
 
     assert Admin.can?(coordinator, :approve_results)
+    assert Admin.can?(super_admin, :manage_teams)
+    assert Admin.can?(director, :manage_teams)
+    assert Admin.can?(coordinator, :manage_teams)
+    refute Admin.can?(venue_rep, :manage_teams)
     refute Admin.can?(coordinator, :anonymize_users)
     refute Admin.can?(venue_rep, :approve_results)
     assert Admin.can?(venue_rep, :manage_fixtures)

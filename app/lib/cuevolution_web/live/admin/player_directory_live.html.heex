@@ -3,6 +3,13 @@
   <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
     Players &amp; teams
   </h1>
+  <.link
+    :if={Cuevolution.Accounts.Admin.can?(@current_admin, :manage_teams)}
+    navigate={~p"/admin/teams/new"}
+    class="mb-4 inline-flex rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-800"
+  >
+    Create team
+  </.link>
 
   <.form
     for={@filter_form}

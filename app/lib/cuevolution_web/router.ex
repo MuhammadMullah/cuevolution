@@ -114,8 +114,16 @@ defmodule CuevolutionWeb.Router do
       ] do
       live "/players", PlayerDirectoryLive, :index
       live "/players/:id", PlayerDetailLive, :show
-      live "/teams/:id", TeamDetailLive, :show
       live "/venues/:id/players", VenuePlayersLive, :show
+    end
+
+    live_session :admin_team_management,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_teams}}
+      ] do
+      live "/teams/new", Admin.TeamCreationLive, :new
+      live "/teams/:id", TeamDetailLive, :show
     end
 
     live_session :admin_venue_management,

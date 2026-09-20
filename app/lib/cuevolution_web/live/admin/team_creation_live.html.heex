@@ -1,0 +1,137 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:directory} flash={@flash}>
+  <.link
+    navigate={~p"/admin/players"}
+    class="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-950"
+  >
+    ← Back to directory
+  </.link>
+
+  <AdminComponents.eyebrow class="mb-1.5">Team management</AdminComponents.eyebrow>
+  <h1 class="mb-1 text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+    Create a team
+  </h1>
+  <p class="mb-5 text-sm text-ink-500">
+    Create the team on behalf of the players. This assigns the roster immediately; no invitations
+    are sent.
+  </p>
+
+  <AdminComponents.card>
+    <.form for={@form} id="admin-team-form" phx-submit="create_team">
+      <.input field={@form[:name]} label="Team name" placeholder="The Sharks" />
+
+      <div class="relative mb-5">
+        <label for="captain-search" class="mb-1.5 block text-sm font-semibold text-ink-700">
+          Captain
+        </label>
+        <input
+          id="captain-search"
+          type="search"
+          value={if @captain, do: "#{@captain.first_name} #{@captain.last_name}", else: ""}
+          placeholder="Search by name or username"
+          autocomplete="off"
+          phx-keyup="search_players"
+          phx-value-kind="captain"
+          phx-debounce="200"
+          class="w-full rounded-lg border border-ink-300 bg-white px-3.5 py-2.5 text-[15px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+        />
+        <div
+          :if={@captain_suggestions != []}
+          id="captain-suggestions"
+          class="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg"
+        >
+          <button
+            :for={player <- @captain_suggestions}
+            id={"captain-suggestion-#{player.id}"}
+            type="button"
+            phx-click="select_captain"
+            phx-value-id={player.id}
+            class="flex w-full cursor-pointer flex-col px-4 py-2 text-left hover:bg-ink-50"
+          >
+            <span class="text-sm font-semibold text-ink-950">
+              {player.first_name} {player.last_name}
+            </span>
+            <span class="font-mono text-xs text-ink-400">@{player.username}</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="relative mb-3">
+        <label for="player-search" class="mb-1.5 block text-sm font-semibold text-ink-700">
+          Players
+        </label>
+        <input
+          id="player-search"
+          type="search"
+          placeholder="Search players to add"
+          autocomplete="off"
+          phx-keyup="search_players"
+          phx-value-kind="player"
+          phx-debounce="200"
+          class="w-full rounded-lg border border-ink-300 bg-white px-3.5 py-2.5 text-[15px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
+        />
+        <div
+          :if={@player_suggestions != []}
+          id="player-suggestions"
+          class="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg"
+        >
+          <button
+            :for={player <- @player_suggestions}
+            id={"player-suggestion-#{player.id}"}
+            type="button"
+            phx-click="select_player"
+            phx-value-id={player.id}
+            class="flex w-full cursor-pointer flex-col px-4 py-2 text-left hover:bg-ink-50"
+          >
+            <span class="text-sm font-semibold text-ink-950">
+              {player.first_name} {player.last_name}
+            </span>
+            <span class="font-mono text-xs text-ink-400">@{player.username}</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="selected-players" class="mb-5 space-y-2">
+        <div
+          :for={player <- @selected_players}
+          class="flex items-center gap-3 rounded-lg bg-ink-50 px-3 py-2"
+        >
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-semibold text-ink-950">
+              {player.first_name} {player.last_name}
+            </div>
+            <div class="font-mono text-xs text-ink-400">@{player.username}</div>
+          </div>
+          <span
+            :if={@captain && player.id == @captain.id}
+            class="text-xs font-semibold text-red-700"
+          >
+            Captain
+          </span>
+          <button
+            :if={!@captain || player.id != @captain.id}
+            type="button"
+            phx-click="remove_player"
+            phx-value-id={player.id}
+            class="rounded px-2 py-1 text-xs font-semibold text-ink-400 hover:bg-red-50 hover:text-red-700"
+          >
+            Remove
+          </button>
+        </div>
+        <p :if={@selected_players == []} class="text-sm text-ink-400">
+          Select a captain and players to build the roster.
+        </p>
+      </div>
+
+      <div class="flex justify-end">
+        <button
+          id="create-team-button"
+          type="submit"
+          class="rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={@captain == nil or @selected_players == []}
+        >
+          Create team and assign roster
+        </button>
+      </div>
+    </.form>
+  </AdminComponents.card>
+</AdminComponents.app_shell>

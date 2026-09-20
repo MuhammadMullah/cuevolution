@@ -109,14 +109,42 @@
       Invite any registered player, from any venue or region — they'll get a notification and
       have 48 hours to accept or decline.
     </p>
-    <.form for={@add_form} phx-submit="add_player" class="flex flex-wrap gap-2.5">
-      <input
-        type="text"
-        name={@add_form[:username].name}
-        value={Phoenix.HTML.Form.normalize_value("text", @add_form[:username].value)}
-        placeholder="Player username"
-        class="min-w-[200px] flex-1 rounded-full border border-ink-300 px-4 py-2.5 font-sans text-[15px] text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-4 focus:ring-red-500/15"
-      />
+    <.form
+      for={@add_form}
+      id="add-player-form"
+      phx-change="search_players"
+      phx-submit="add_player"
+      class="flex flex-wrap items-start gap-2.5"
+    >
+      <div class="relative min-w-[200px] flex-1">
+        <PlayerComponents.input
+          field={@add_form[:username]}
+          id="player-search"
+          placeholder="Search by name or username"
+          autocomplete="off"
+          phx-debounce="200"
+          class="mb-0 rounded-full px-4 py-2.5 placeholder:text-ink-400"
+        />
+        <div
+          :if={@player_suggestions != []}
+          id="player-suggestions"
+          class="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg"
+        >
+          <button
+            :for={player <- @player_suggestions}
+            id={"player-suggestion-#{player.id}"}
+            type="button"
+            phx-click="select_player"
+            phx-value-username={player.username}
+            class="flex w-full cursor-pointer flex-col px-4 py-2 text-left transition-colors hover:bg-ink-50 focus:bg-ink-50 focus:outline-none"
+          >
+            <span class="text-sm font-semibold text-ink-950">
+              {player.first_name} {player.last_name}
+            </span>
+            <span class="font-mono text-xs text-ink-400">@{player.username}</span>
+          </button>
+        </div>
+      </div>
       <PlayerComponents.button type="submit" variant="primary">Invite</PlayerComponents.button>
     </.form>
 

@@ -18,6 +18,7 @@ defmodule Cuevolution.Accounts.Admin do
     view_directory: ["super_admin", "tournament_director", "regional_coordinator"],
     anonymize_users: ["super_admin", "tournament_director"],
     manage_venues: ["super_admin", "tournament_director", "regional_coordinator"],
+    manage_teams: ["super_admin", "tournament_director", "regional_coordinator"],
     manage_players: ["super_admin", "tournament_director", "regional_coordinator"]
   }
 
