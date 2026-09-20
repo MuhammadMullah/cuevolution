@@ -75,6 +75,10 @@ defmodule CuevolutionWeb.TeamDetailLive do
 
       {:error, :roster_frozen} ->
         {:noreply, put_flash(socket, :error, "The roster is frozen.")}
+
+      {:error, :registration_closed} ->
+        {:noreply,
+         put_flash(socket, :error, "That player is registered for the next tournament season.")}
     end
   end
 

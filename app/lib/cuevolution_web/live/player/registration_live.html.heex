@@ -198,6 +198,13 @@
         @attrs["region_id"]
       )} region.
     </p>
+    <div
+      :if={!@current_season_eligible?}
+      class="mx-auto mb-6 max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm leading-relaxed text-amber-900"
+    >
+      Registration is still open, but this account is registered for the next tournament season.
+      You will not participate in the current Grassroots draws.
+    </div>
     <form action={~p"/login"} method="post">
       <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
       <input type="hidden" name="player[login]" value={@attrs["email"]} />

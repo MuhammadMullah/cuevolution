@@ -45,6 +45,15 @@ defmodule Cuevolution.TeamsTest do
   end
 
   describe "add_player_to_roster/2" do
+    test "rejects a player registered after the tournament cutoff" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      late_player = insert(:player, inserted_at: ~N[2026-09-21 08:00:00])
+
+      assert {:error, :registration_closed} = Teams.add_player_to_roster(team, late_player)
+      assert Repo.get!(Player, late_player.id).team_id == nil
+    end
+
     test "adds a registered player with no team to the roster" do
       team = insert(:team)
       player = insert(:player, region_id: team.region_id, notification_preference: "email")

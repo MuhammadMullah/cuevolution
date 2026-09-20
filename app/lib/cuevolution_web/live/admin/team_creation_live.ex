@@ -77,32 +77,49 @@ defmodule CuevolutionWeb.Admin.TeamCreationLive do
       |> Map.put("captain_id", socket.assigns.captain && socket.assigns.captain.id)
       |> Map.put("player_ids", Enum.map(socket.assigns.selected_players, & &1.id))
 
-    case Teams.admin_create_team(socket.assigns.current_admin, params) do
-      {:ok, team} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Team created and roster assigned directly.")
-         |> push_navigate(to: ~p"/admin/teams/#{team.id}")}
+    result = Teams.admin_create_team(socket.assigns.current_admin, params)
+    handle_create_result(result, socket)
+  end
 
-      {:error, :unauthorized} ->
-        {:noreply, put_flash(socket, :error, "You don't have permission to manage teams.")}
+  defp handle_create_result({:ok, team}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, "Team created and roster assigned directly.")
+     |> push_navigate(to: ~p"/admin/teams/#{team.id}")}
+  end
 
-      {:error, reason} when reason in [:invalid_player, :invalid_players, :captain_not_found] ->
-        {:noreply, put_flash(socket, :error, "Choose a valid captain and at least one player.")}
+  defp handle_create_result({:error, :unauthorized}, socket) do
+    {:noreply, put_flash(socket, :error, "You don't have permission to manage teams.")}
+  end
 
-      {:error, :player_not_found} ->
-        {:noreply,
-         put_flash(socket, :error, "One of the selected players is no longer available.")}
+  defp handle_create_result({:error, reason}, socket)
+       when reason in [:invalid_player, :invalid_players, :captain_not_found] do
+    {:noreply, put_flash(socket, :error, "Choose a valid captain and at least one player.")}
+  end
 
-      {:error, :already_on_a_team} ->
-        {:noreply, put_flash(socket, :error, "Every selected player must be unattached.")}
+  defp handle_create_result({:error, :player_not_found}, socket) do
+    {:noreply, put_flash(socket, :error, "One of the selected players is no longer available.")}
+  end
 
-      {:error, :roster_full} ->
-        {:noreply, put_flash(socket, :error, "A team can have no more than 8 players.")}
+  defp handle_create_result({:error, :already_on_a_team}, socket) do
+    {:noreply, put_flash(socket, :error, "Every selected player must be unattached.")}
+  end
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :team))}
-    end
+  defp handle_create_result({:error, :roster_full}, socket) do
+    {:noreply, put_flash(socket, :error, "A team can have no more than 8 players.")}
+  end
+
+  defp handle_create_result({:error, :registration_closed}, socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "All selected players must have registered before the current tournament cutoff."
+     )}
+  end
+
+  defp handle_create_result({:error, changeset}, socket) do
+    {:noreply, assign(socket, :form, to_form(changeset, as: :team))}
   end
 
   defp add_player(players, %Player{} = player) do

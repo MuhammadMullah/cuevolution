@@ -46,6 +46,7 @@ defmodule CuevolutionWeb.RegistrationLive do
        notification_defs: @notification_defs,
        last_step: @last_step,
        registered: false,
+       current_season_eligible?: false,
        terms_accepted: false,
        touched_fields: MapSet.new()
      )
@@ -197,7 +198,13 @@ defmodule CuevolutionWeb.RegistrationLive do
 
     with {:ok, attrs} <- put_uploaded_photo(socket, attrs),
          {:ok, player} <- Accounts.register_player(attrs) do
-      {:noreply, assign(socket, attrs: attrs, registered: true, registered_player: player)}
+      {:noreply,
+       assign(socket,
+         attrs: attrs,
+         registered: true,
+         registered_player: player,
+         current_season_eligible?: Accounts.tournament_eligible?(player)
+       )}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         display_changeset =

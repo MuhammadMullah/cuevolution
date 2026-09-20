@@ -97,6 +97,7 @@ defmodule Cuevolution.Competitions do
 
     Player
     |> Repo.all()
+    |> Enum.filter(&Accounts.tournament_eligible?/1)
     |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
     |> Enum.reduce({0, []}, fn player, {count, errors} ->
       case player |> enroll_player_in_grassroots_changeset() |> Repo.insert() do
@@ -111,6 +112,7 @@ defmodule Cuevolution.Competitions do
 
     Team
     |> Repo.all()
+    |> Enum.filter(&Teams.tournament_eligible_team?/1)
     |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
     |> Enum.reduce({0, []}, fn team, {count, errors} ->
       case team |> enroll_team_in_grassroots_changeset() |> Repo.insert() do
@@ -202,6 +204,11 @@ defmodule Cuevolution.Competitions do
   """
   def advance_to_stage(%StageParticipation{} = participation, %Stage{id: stage_id}) do
     Multi.new()
+    |> Multi.run(:eligibility_check, fn repo, _changes ->
+      if eligible_for_tournament?(repo, participation),
+        do: {:ok, nil},
+        else: {:error, :registration_closed}
+    end)
     |> Multi.run(:capacity_check, fn repo, _changes ->
       check_and_claim_capacity(repo, stage_id, participation.category)
     end)
@@ -210,9 +217,17 @@ defmodule Cuevolution.Competitions do
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{participation: participation}} -> {:ok, participation}
-      {:error, :capacity_check, :capacity_exceeded, _changes} -> {:error, :capacity_exceeded}
-      {:error, _step, changeset, _changes} -> {:error, changeset}
+      {:ok, %{participation: participation}} ->
+        {:ok, participation}
+
+      {:error, :eligibility_check, :registration_closed, _changes} ->
+        {:error, :registration_closed}
+
+      {:error, :capacity_check, :capacity_exceeded, _changes} ->
+        {:error, :capacity_exceeded}
+
+      {:error, _step, changeset, _changes} ->
+        {:error, changeset}
     end
   end
 
@@ -259,6 +274,11 @@ defmodule Cuevolution.Competitions do
 
   def assign_to_group(%StageParticipation{} = participation, %Group{} = group) do
     Multi.new()
+    |> Multi.run(:eligibility_check, fn repo, _changes ->
+      if eligible_for_tournament?(repo, participation),
+        do: {:ok, nil},
+        else: {:error, :registration_closed}
+    end)
     |> Multi.insert(
       :membership,
       GroupMembership.changeset(%GroupMembership{}, %{
@@ -269,9 +289,31 @@ defmodule Cuevolution.Competitions do
     |> Multi.run(:roster_lock, fn _repo, _changes -> lock_roster_if_team(participation) end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{membership: membership}} -> {:ok, membership}
-      {:error, :membership, changeset, _changes} -> {:error, changeset}
+      {:ok, %{membership: membership}} ->
+        {:ok, membership}
+
+      {:error, :eligibility_check, :registration_closed, _changes} ->
+        {:error, :registration_closed}
+
+      {:error, :membership, changeset, _changes} ->
+        {:error, changeset}
     end
+  end
+
+  defp eligible_for_tournament?(repo, %StageParticipation{player_id: player_id, team_id: nil}) do
+    repo.exists?(
+      from p in Player,
+        where: p.id == ^player_id and p.inserted_at < ^Accounts.tournament_registration_cutoff()
+    )
+  end
+
+  defp eligible_for_tournament?(repo, %StageParticipation{team_id: team_id, player_id: nil}) do
+    not repo.exists?(
+      from p in Player,
+        where:
+          p.team_id == ^team_id and
+            p.inserted_at >= ^Accounts.tournament_registration_cutoff()
+    )
   end
 
   defp lock_roster_if_team(%StageParticipation{team_id: nil}), do: {:ok, nil}

@@ -182,6 +182,10 @@ defmodule CuevolutionWeb.TeamDashboardLive do
     )
   end
 
+  defp put_invite_flash(socket, {:error, :registration_closed}, _player) do
+    put_flash(socket, :error, "That player is registered for the next tournament season.")
+  end
+
   defp cancel_invitation_by_id(socket, id) do
     case Teams.get_pending_invitation_for_team_and_id(socket.assigns.team.id, id) do
       nil ->

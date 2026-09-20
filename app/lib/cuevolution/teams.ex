@@ -35,6 +35,14 @@ defmodule Cuevolution.Teams do
   team creation rolls back (FR-007, DB-level, not just a changeset check).
   """
   def create_team(%Player{} = captain, attrs) do
+    if Accounts.tournament_eligible?(captain) do
+      do_create_team(captain, attrs)
+    else
+      {:error, :registration_closed}
+    end
+  end
+
+  defp do_create_team(%Player{} = captain, attrs) do
     name = attrs["name"] || attrs[:name]
 
     changeset =
@@ -74,6 +82,7 @@ defmodule Cuevolution.Teams do
          player_ids <- Enum.uniq([captain_id | player_ids]),
          :ok <- validate_roster_size(player_ids),
          {:ok, players} <- available_players(player_ids),
+         :ok <- validate_tournament_eligibility(players),
          captain when not is_nil(captain) <- Enum.find(players, &(&1.id == captain_id)) do
       do_admin_create_team(admin, captain, players, attrs)
     else
@@ -157,6 +166,12 @@ defmodule Cuevolution.Teams do
       else: {:error, :player_not_found}
   end
 
+  defp validate_tournament_eligibility(players) do
+    if Enum.all?(players, &Accounts.tournament_eligible?/1),
+      do: :ok,
+      else: {:error, :registration_closed}
+  end
+
   defp valid_player_id(value) do
     if is_binary(value) and match?({:ok, _}, Ecto.UUID.cast(value)),
       do: {:ok, value},
@@ -224,6 +239,11 @@ defmodule Cuevolution.Teams do
   """
   def add_player_to_roster(%Team{} = team, %Player{} = player, opts \\ []) do
     Multi.new()
+    |> Multi.run(:check_tournament_eligibility, fn _repo, _changes ->
+      if Accounts.tournament_eligible?(player),
+        do: {:ok, nil},
+        else: {:error, :registration_closed}
+    end)
     |> Multi.run(:check_not_frozen, fn _repo, _changes -> check_not_frozen(team, opts) end)
     |> Multi.run(:check_capacity, fn repo, _changes ->
       count = repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
@@ -242,6 +262,9 @@ defmodule Cuevolution.Teams do
 
       {:error, :check_not_frozen, :roster_frozen, _changes} ->
         {:error, :roster_frozen}
+
+      {:error, :check_tournament_eligibility, :registration_closed, _changes} ->
+        {:error, :registration_closed}
 
       {:error, :check_capacity, :roster_full, _changes} ->
         {:error, :roster_full}
@@ -403,6 +426,14 @@ defmodule Cuevolution.Teams do
   `ExpireTeamInvitationWorker` 48 hours out.
   """
   def invite_player(%Team{} = team, %Player{} = invitee) do
+    if Accounts.tournament_eligible?(invitee) do
+      do_invite_player(team, invitee)
+    else
+      {:error, :registration_closed}
+    end
+  end
+
+  defp do_invite_player(%Team{} = team, %Player{} = invitee) do
     Multi.new()
     |> Multi.run(:check_not_frozen, fn _repo, _changes -> check_not_frozen(team, []) end)
     |> Multi.run(:check_capacity, fn repo, _changes ->
@@ -650,8 +681,27 @@ defmodule Cuevolution.Teams do
   — always derived live from `players.team_id`, never a cached column.
   """
   def eligible?(%Team{} = team) do
-    count = Repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
+    count =
+      Repo.aggregate(
+        from(p in Player,
+          where:
+            p.team_id == ^team.id and
+              p.inserted_at < ^Accounts.tournament_registration_cutoff()
+        ),
+        :count
+      )
+
     count >= @min_roster_size and count <= @max_roster_size
+  end
+
+  @doc "Whether every player on a team is eligible for the current tournament season."
+  def tournament_eligible_team?(%Team{id: team_id}) do
+    not Repo.exists?(
+      from p in Player,
+        where:
+          p.team_id == ^team_id and
+            p.inserted_at >= ^Accounts.tournament_registration_cutoff()
+    )
   end
 
   defp claim_query(player_id, team_id) do

@@ -24,6 +24,19 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Venues.Venue
   alias Ecto.Multi
 
+  # Registration remains open after this point, but those accounts belong to
+  # the next tournament season. Stored timestamps are UTC-naive in this app;
+  # midnight on 21 September 2026 EAT is 21:00 UTC on 20 September.
+  @tournament_registration_cutoff ~N[2026-09-20 21:00:00]
+
+  @doc "Returns the cutoff timestamp for eligibility in the current tournament season."
+  def tournament_registration_cutoff, do: @tournament_registration_cutoff
+
+  @doc "Whether a player registered before the current tournament season cutoff."
+  def tournament_eligible?(%Player{inserted_at: inserted_at}) do
+    NaiveDateTime.compare(inserted_at, @tournament_registration_cutoff) == :lt
+  end
+
   @doc """
   Authenticates an admin by email and password.
 
@@ -267,8 +280,12 @@ defmodule Cuevolution.Accounts do
   def register_player(attrs) do
     Multi.new()
     |> Multi.insert(:player, Player.registration_changeset(%Player{}, attrs))
-    |> Multi.insert(:stage_participation, fn %{player: player} ->
-      Competitions.enroll_player_in_grassroots_changeset(player)
+    |> Multi.run(:stage_participation, fn repo, %{player: player} ->
+      if tournament_eligible?(player) do
+        repo.insert(Competitions.enroll_player_in_grassroots_changeset(player))
+      else
+        {:ok, nil}
+      end
     end)
     |> Repo.transaction()
     |> case do

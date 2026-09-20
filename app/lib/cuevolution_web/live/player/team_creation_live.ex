@@ -23,6 +23,14 @@ defmodule CuevolutionWeb.TeamCreationLive do
       {:error, :already_on_a_team} ->
         {:noreply, put_flash(socket, :error, "You're already on a team.")}
 
+      {:error, :registration_closed} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Your registration is for the next tournament season."
+         )}
+
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :team))}
     end

@@ -356,6 +356,14 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "tournament eligibility" do
+    test "only players registered before 21 September 2026 are eligible" do
+      assert Accounts.tournament_eligible?(%Player{inserted_at: ~N[2026-09-20 20:59:59]})
+      refute Accounts.tournament_eligible?(%Player{inserted_at: ~N[2026-09-20 21:00:00]})
+      refute Accounts.tournament_eligible?(%Player{inserted_at: ~N[2026-09-21 08:00:00]})
+    end
+  end
+
   describe "update_notification_preference/2" do
     test "persists the new preference" do
       player = insert(:player, notification_preference: "email")
