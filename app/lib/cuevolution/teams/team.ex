@@ -10,6 +10,8 @@ defmodule Cuevolution.Teams.Team do
     field :roster_locked_at, :utc_datetime
 
     belongs_to :region, Cuevolution.Accounts.Region
+    belongs_to :match_region, Cuevolution.Accounts.Region
+    belongs_to :match_venue, Cuevolution.Venues.Venue
     belongs_to :captain, Cuevolution.Accounts.Player
     has_many :roster, Cuevolution.Accounts.Player, foreign_key: :team_id
 
@@ -20,5 +22,13 @@ defmodule Cuevolution.Teams.Team do
     team
     |> cast(attrs, [:name, :region_id, :captain_id])
     |> validate_required([:name, :region_id, :captain_id])
+  end
+
+  def location_changeset(team, attrs) do
+    team
+    |> cast(attrs, [:match_region_id, :match_venue_id])
+    |> validate_required([:match_region_id, :match_venue_id])
+    |> foreign_key_constraint(:match_region_id)
+    |> foreign_key_constraint(:match_venue_id)
   end
 end

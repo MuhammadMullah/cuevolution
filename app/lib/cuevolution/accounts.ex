@@ -268,6 +268,18 @@ defmodule Cuevolution.Accounts do
     end
   end
 
+  @doc "Whether an identification number is already registered."
+  def identification_number_taken?(""), do: false
+
+  def identification_number_taken?(identification_number) when is_binary(identification_number) do
+    identification_number = identification_number |> String.trim() |> String.downcase()
+
+    Repo.exists?(
+      from p in Player,
+        where: fragment("lower(trim(?))", p.identification_number) == ^identification_number
+    )
+  end
+
   @doc """
   Registers a player (spec 003 US1), enrolls them into the Grassroots stage
   under their gender category (spec 006 default entry point), and dispatches

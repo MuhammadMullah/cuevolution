@@ -17,6 +17,7 @@ defmodule Cuevolution.Teams do
   alias Cuevolution.Teams.Team
   alias Cuevolution.Teams.TeamInvitation
   alias Cuevolution.Teams.Workers.ExpireTeamInvitationWorker
+  alias Cuevolution.Venues
   alias Ecto.Multi
 
   @invitation_validity_seconds 48 * 60 * 60
@@ -214,6 +215,27 @@ defmodule Cuevolution.Teams do
 
   def change_team_name(%Team{} = team, attrs \\ %{}) do
     Team.changeset(team, attrs)
+  end
+
+  @doc "Updates a team's independent playing region and venue on behalf of its captain."
+  def update_match_location(%Team{} = team, %Player{} = captain, attrs) do
+    if team.captain_id != captain.id do
+      {:error, :not_captain}
+    else
+      region_id = attrs["match_region_id"] || attrs[:match_region_id]
+      venue_id = attrs["match_venue_id"] || attrs[:match_venue_id]
+
+      if Venues.get_active_in_region(venue_id, region_id) do
+        team
+        |> Team.location_changeset(%{
+          match_region_id: region_id,
+          match_venue_id: venue_id
+        })
+        |> Repo.update()
+      else
+        {:error, :invalid_match_location}
+      end
+    end
   end
 
   defp normalized_team_name(attrs) do

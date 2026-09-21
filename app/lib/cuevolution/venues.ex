@@ -19,6 +19,14 @@ defmodule Cuevolution.Venues do
     |> Repo.all()
   end
 
+  @doc "Returns an active venue when it belongs to the selected region."
+  def get_active_in_region(venue_id, region_id)
+      when is_binary(venue_id) and is_binary(region_id) do
+    Repo.get_by(Venue, id: venue_id, region_id: region_id, active: true)
+  end
+
+  def get_active_in_region(_venue_id, _region_id), do: nil
+
   @doc """
   Whether an active venue named `name` already exists in `region_id`,
   case-insensitive and whitespace-trimmed — used to stop registration's

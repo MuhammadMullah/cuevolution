@@ -375,6 +375,25 @@ defmodule CuevolutionWeb.RegistrationLive do
     end
   end
 
+  defp identification_hint(nil, _form), do: {"neutral", nil}
+  defp identification_hint("", _form), do: {"neutral", nil}
+
+  defp identification_hint(identification_number, form) do
+    has_error? =
+      Enum.any?(form.source.errors, fn {field, _} -> field == :identification_number end)
+
+    cond do
+      has_error? ->
+        {"neutral", nil}
+
+      Accounts.identification_number_taken?(identification_number) ->
+        {"danger", "This ID number is already registered"}
+
+      true ->
+        {"neutral", nil}
+    end
+  end
+
   defp other_venue_hint(nil, _region_id), do: {"neutral", nil}
   defp other_venue_hint("", _region_id), do: {"neutral", nil}
   defp other_venue_hint(_name, nil), do: {"neutral", nil}

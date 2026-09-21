@@ -174,6 +174,18 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
     assert html =~ "text-danger"
   end
 
+  test "shows a live identification-number-taken hint", %{conn: conn} do
+    insert(:player, identification_number: "ID-TAKEN-123")
+    {:ok, view, _view_html} = live(conn, ~p"/register")
+
+    complete_steps_1_and_2(view)
+    view |> element("button", "Back") |> render_click()
+
+    html = fill(view, %{"identification_number" => " id-taken-123 "})
+    assert html =~ "This ID number is already registered"
+    assert html =~ "text-danger"
+  end
+
   test "shows a live mobile-number-taken hint", %{conn: conn} do
     insert(:player, mobile_number: "+254712345678")
     {:ok, view, _view_html} = live(conn, ~p"/register")
