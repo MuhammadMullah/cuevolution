@@ -428,6 +428,13 @@ defmodule Cuevolution.Accounts do
     |> Repo.update()
   end
 
+  @doc "Saves a player's identification details required for match verification."
+  def update_player_identification(%Player{} = player, attrs) do
+    player
+    |> Player.identification_changeset(attrs)
+    |> Repo.update()
+  end
+
   @doc "Updates `player`'s region, rejecting the change once `region_locked?/1` is true (spec 003 US3)."
   def change_region(%Player{} = player, region_id) do
     if region_locked?(player) do

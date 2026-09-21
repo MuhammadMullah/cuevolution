@@ -12,6 +12,23 @@
   hint={email_msg}
   hint_variant={email_variant}
 />
+<div class="mt-6 border-t border-ink-100 pt-5">
+  <h2 class="mb-1 text-base font-bold text-ink-950">Identity verification</h2>
+  <p class="mb-4 text-sm text-ink-500">Your ID is checked before you play a match.</p>
+  <PlayerComponents.input
+    field={@form[:identification_type]}
+    type="select"
+    label="ID type"
+    prompt="Select ID type"
+    options={[{"Passport", "passport"}, {"National ID", "national_id"}]}
+  />
+  <PlayerComponents.input
+    field={@form[:identification_number]}
+    label="ID number"
+    placeholder="Enter your ID number"
+    autocomplete="off"
+  />
+</div>
 <% {mobile_variant, mobile_msg} = mobile_hint(@form) %>
 <PlayerComponents.input
   field={@form[:mobile_number]}

@@ -45,7 +45,9 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
         "email" => "jane#{System.unique_integer([:positive])}@example.com",
         "mobile_number" => "0712345678",
         "username" => "janedoe#{System.unique_integer([:positive])}",
-        "password" => "Valid1!Pass"
+        "password" => "Valid1!Pass",
+        "identification_type" => "national_id",
+        "identification_number" => "ID-#{System.unique_integer([:positive])}"
       },
       overrides
     )

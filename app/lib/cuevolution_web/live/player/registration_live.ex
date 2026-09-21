@@ -22,7 +22,14 @@ defmodule CuevolutionWeb.RegistrationLive do
 
   @step_fields %{
     1 => [:first_name, :last_name, :date_of_birth, :location, :gender],
-    2 => [:email, :mobile_number, :username, :password],
+    2 => [
+      :email,
+      :mobile_number,
+      :username,
+      :password,
+      :identification_type,
+      :identification_number
+    ],
     3 => [:region_id, :preferred_venue_id, :other_venue_name],
     4 => [:notification_preference]
   }

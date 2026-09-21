@@ -579,6 +579,8 @@ defmodule Cuevolution.AccountsTest do
         mobile_number: "0712345678",
         location: "Nairobi",
         username: "janedoe#{System.unique_integer([:positive])}",
+        identification_type: "national_id",
+        identification_number: "ID-#{System.unique_integer([:positive])}",
         notification_preference: "email",
         region_id: region.id,
         other_venue_name: "Test Venue",

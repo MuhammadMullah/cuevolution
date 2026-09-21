@@ -50,6 +50,8 @@ defmodule Cuevolution.Factory do
         sequence(:mobile_number, &"+2547#{String.pad_leading(to_string(&1), 8, "0")}"),
       location: "Nairobi",
       username: sequence(:username, &"player#{&1}"),
+      identification_type: "national_id",
+      identification_number: sequence(:identification_number, &"ID#{&1}"),
       notification_preference: "email",
       hashed_password: Bcrypt.hash_pwd_salt("Valid1!Pass"),
       region_id: region.id,
