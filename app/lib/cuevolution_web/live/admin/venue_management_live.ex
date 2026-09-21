@@ -77,7 +77,7 @@ defmodule CuevolutionWeb.VenueManagementLive do
   end
 
   def handle_event("save", %{"venue" => params}, socket) do
-    params = Map.put(params, "region_id", socket.assigns.region.id)
+    params = Map.put_new(params, "region_id", socket.assigns.region.id)
 
     result =
       if venue = socket.assigns.editing_venue do
@@ -89,6 +89,11 @@ defmodule CuevolutionWeb.VenueManagementLive do
     case result do
       {:ok, venue} ->
         verb = if socket.assigns.editing_venue, do: "updated", else: "added to"
+
+        if socket.assigns.editing_venue &&
+             venue.region_id != socket.assigns.editing_venue.region_id do
+          notify_transferred_venue_players(venue, socket.assigns.regions)
+        end
 
         {:noreply,
          socket
@@ -266,6 +271,20 @@ defmodule CuevolutionWeb.VenueManagementLive do
       :custom_venue_submissions,
       Accounts.list_custom_venue_submissions(socket.assigns.region.id)
     )
+  end
+
+  defp notify_transferred_venue_players(venue, regions) do
+    region_name = Enum.find_value(regions, &if(&1.id == venue.region_id, do: &1.name))
+
+    venue.id
+    |> Accounts.list_players_by_preferred_venue()
+    |> Repo.all()
+    |> Enum.each(fn player ->
+      Notifications.dispatch(player, :player_location_updated, %{
+        region_name: region_name,
+        venue_name: venue.name
+      })
+    end)
   end
 
   defp assign_form(socket, changeset) do

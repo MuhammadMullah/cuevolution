@@ -28,6 +28,8 @@ defmodule Cuevolution.Notifications do
     "fixture_assignment" => ~w(opponent_name venue date time),
     "team_assignment" => ~w(team_name captain_name),
     "team_invitation" => ~w(team_name captain_name),
+    "team_player_left" => ~w(team_name player_name roster_count eligible),
+    "player_location_updated" => ~w(region_name venue_name),
     "venue_deactivated" => ~w(venue_name suggested_venues)
   }
 

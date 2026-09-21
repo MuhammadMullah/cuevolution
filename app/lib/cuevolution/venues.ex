@@ -92,9 +92,29 @@ defmodule Cuevolution.Venues do
 
   @doc "Updates a venue's attributes (spec 004 FR-001)."
   def update_venue(%Venue{} = venue, attrs) do
-    venue
-    |> Venue.changeset(attrs)
-    |> Repo.update()
+    changeset = Venue.changeset(venue, attrs)
+
+    if changeset.valid? and Ecto.Changeset.get_change(changeset, :region_id) do
+      new_region_id = Ecto.Changeset.get_field(changeset, :region_id)
+
+      Multi.new()
+      |> Multi.update(:venue, changeset)
+      |> Multi.update_all(
+        :players,
+        from(p in Cuevolution.Accounts.Player,
+          where: p.preferred_venue_id == ^venue.id,
+          update: [set: [region_id: ^new_region_id]]
+        ),
+        []
+      )
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{venue: updated}} -> {:ok, updated}
+        {:error, :venue, changeset, _changes} -> {:error, changeset}
+      end
+    else
+      Repo.update(changeset)
+    end
   end
 
   @doc """

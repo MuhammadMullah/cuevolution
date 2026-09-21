@@ -31,7 +31,9 @@ defmodule CuevolutionWeb.PlayerDetailLive do
        anonymize_warnings: nil,
        editing_venue: false,
        venue_options: [],
-       venue_form_id: nil
+       venue_form_id: nil,
+       region_options: Accounts.list_regions(),
+       region_form_id: nil
      )}
   end
 
@@ -72,21 +74,40 @@ defmodule CuevolutionWeb.PlayerDetailLive do
        assign(socket,
          editing_venue: true,
          venue_options: Venues.list_active_for_region(player.region_id),
-         venue_form_id: player.preferred_venue_id
+         venue_form_id: player.preferred_venue_id,
+         region_form_id: player.region_id
        )}
     else
       {:noreply,
-       put_flash(socket, :error, "You don't have permission to change a player's venue.")}
+       put_flash(socket, :error, "You don't have permission to change a player's location.")}
     end
   end
 
   def handle_event("cancel_edit_venue", _params, socket) do
-    {:noreply, assign(socket, editing_venue: false, venue_options: [], venue_form_id: nil)}
+    {:noreply,
+     assign(socket,
+       editing_venue: false,
+       venue_options: [],
+       venue_form_id: nil,
+       region_form_id: nil
+     )}
   end
 
-  def handle_event("save_venue", %{"venue_id" => venue_id}, socket) do
-    case Accounts.admin_change_venue(
+  def handle_event("draft_location_region", %{"region_id" => region_id}, socket) do
+    {:noreply,
+     assign(socket,
+       region_form_id: region_id,
+       venue_form_id: nil,
+       venue_options: Venues.list_active_for_region(region_id)
+     )}
+  end
+
+  def handle_event("save_venue", %{"venue_id" => venue_id} = params, socket) do
+    region_id = Map.get(params, "region_id", socket.assigns.player.region_id)
+
+    case Accounts.admin_change_location(
            socket.assigns.player,
+           region_id,
            venue_id,
            socket.assigns.current_admin
          ) do
@@ -95,15 +116,24 @@ defmodule CuevolutionWeb.PlayerDetailLive do
 
         {:noreply,
          socket
-         |> assign(player: player, editing_venue: false, venue_options: [], venue_form_id: nil)
-         |> put_flash(:info, "Venue updated.")}
+         |> assign(
+           player: player,
+           editing_venue: false,
+           venue_options: [],
+           venue_form_id: nil,
+           region_form_id: nil
+         )
+         |> put_flash(:info, "Player location updated. Venue updated.")}
 
       {:error, :unauthorized} ->
         {:noreply,
-         put_flash(socket, :error, "You don't have permission to change a player's venue.")}
+         put_flash(socket, :error, "You don't have permission to change a player's location.")}
+
+      {:error, :invalid_location} ->
+        {:noreply, put_flash(socket, :error, "Choose an active venue in the selected region.")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Couldn't update this player's venue.")}
+        {:noreply, put_flash(socket, :error, "Couldn't update this player's location.")}
     end
   end
 

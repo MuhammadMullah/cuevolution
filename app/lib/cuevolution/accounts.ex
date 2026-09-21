@@ -22,6 +22,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
   alias Cuevolution.Venues.Venue
+  alias Cuevolution.Venues
   alias Ecto.Multi
 
   # Registration remains open after this point, but those accounts belong to
@@ -476,25 +477,129 @@ defmodule Cuevolution.Accounts do
   player's existing region.
   """
   def admin_change_venue(%Player{} = player, venue_id, %Admin{} = admin) do
+    do_admin_change_location(
+      player,
+      player.region_id,
+      venue_id,
+      admin,
+      "change_player_venue",
+      fn ->
+        changeset =
+          player
+          |> Player.venue_changeset(%{preferred_venue_id: venue_id})
+          |> Ecto.Changeset.add_error(
+            :preferred_venue_id,
+            "is not an active venue in this region"
+          )
+
+        {:error, changeset}
+      end
+    )
+  end
+
+  @doc "Updates a player's region and preferred venue on behalf of an authorized admin."
+  def admin_change_location(%Player{} = player, region_id, venue_id, %Admin{} = admin) do
+    do_admin_change_location(player, region_id, venue_id, admin, "change_player_location", fn ->
+      {:error, :invalid_location}
+    end)
+  end
+
+  defp do_admin_change_location(
+         %Player{} = player,
+         region_id,
+         venue_id,
+         %Admin{} = admin,
+         action_type,
+         invalid_location
+       ) do
     if Admin.can?(admin, :manage_players) do
       prior_venue_id = player.preferred_venue_id
+      prior_region_id = player.region_id
 
-      Multi.new()
-      |> Multi.update(:player, Player.venue_changeset(player, %{preferred_venue_id: venue_id}))
-      |> Multi.run(:log, fn _repo, %{player: updated} ->
-        log_admin_action("change_player_venue", admin, updated,
-          prior_value: %{"preferred_venue_id" => prior_venue_id},
-          new_value: %{"preferred_venue_id" => venue_id}
+      if venue = Venues.get_active_in_region(venue_id, region_id) do
+        Multi.new()
+        |> Multi.update(
+          :player,
+          Player.region_and_venue_changeset(player, %{
+            region_id: region_id,
+            preferred_venue_id: venue.id
+          })
         )
-      end)
-      |> Repo.transaction()
-      |> case do
-        {:ok, %{player: player}} -> {:ok, player}
-        {:error, :player, changeset, _changes} -> {:error, changeset}
+        |> Multi.run(:log, fn _repo, %{player: updated} ->
+          log_location_change(
+            action_type,
+            admin,
+            updated,
+            prior_region_id,
+            prior_venue_id,
+            region_id,
+            venue.id
+          )
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{player: updated}} ->
+            updated = Repo.preload(updated, [:region, :preferred_venue], force: true)
+
+            if prior_region_id != region_id or prior_venue_id != venue.id do
+              dispatch_location_update(updated)
+            end
+
+            {:ok, updated}
+
+          {:error, :player, changeset, _changes} ->
+            {:error, changeset}
+        end
+      else
+        invalid_location.()
       end
     else
       {:error, :unauthorized}
     end
+  end
+
+  defp log_location_change(
+         "change_player_venue",
+         admin,
+         player,
+         _prior_region_id,
+         prior_venue_id,
+         _region_id,
+         venue_id
+       ) do
+    log_admin_action("change_player_venue", admin, player,
+      prior_value: %{"preferred_venue_id" => prior_venue_id},
+      new_value: %{"preferred_venue_id" => venue_id}
+    )
+  end
+
+  defp log_location_change(
+         action_type,
+         admin,
+         player,
+         prior_region_id,
+         prior_venue_id,
+         region_id,
+         venue_id
+       ) do
+    log_admin_action(action_type, admin, player,
+      prior_value: %{"region_id" => prior_region_id, "preferred_venue_id" => prior_venue_id},
+      new_value: %{"region_id" => region_id, "preferred_venue_id" => venue_id}
+    )
+  end
+
+  defp dispatch_location_update(player) do
+    Notifications.dispatch(player, :player_location_updated, %{
+      region_name: player.region.name,
+      venue_name: player.preferred_venue.name
+    })
+  rescue
+    error ->
+      Logger.error(
+        "player_location_updated dispatch failed for player #{player.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   @doc """

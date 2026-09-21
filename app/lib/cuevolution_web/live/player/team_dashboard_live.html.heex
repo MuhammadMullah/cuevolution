@@ -267,6 +267,22 @@
     </div>
   </div>
 
+  <PlayerComponents.card :if={!@is_captain} class="mt-5">
+    <div class="mb-1 text-sm font-semibold text-red-700">Leave team</div>
+    <p class="mb-3 text-[13px] text-ink-400">
+      The captain will be notified, and the team may become ineligible if its roster drops below 5 players.
+    </p>
+    <button
+      id="leave-team-button"
+      type="button"
+      phx-click="leave_team"
+      data-confirm="Leave this team? The captain will be notified."
+      class="cursor-pointer rounded-full border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-semibold text-red-700 hover:bg-red-100"
+    >
+      Leave team
+    </button>
+  </PlayerComponents.card>
+
   <PlayerComponents.card :if={@is_captain} class="mt-5">
     <div class="mb-1 text-sm font-semibold text-red-700">Danger zone</div>
     <p class="mb-3 text-[13px] text-ink-400">

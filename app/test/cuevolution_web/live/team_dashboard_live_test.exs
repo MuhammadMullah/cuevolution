@@ -119,7 +119,7 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
 
     html =
       view
-      |> form("form", roster: %{"username" => "recruitable"})
+      |> form("#add-player-form", roster: %{"username" => "recruitable"})
       |> render_submit()
 
     assert html =~ "Invitation sent to @recruitable"
@@ -257,6 +257,24 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
     |> render_click()
 
     refute Repo.get!(Player, member.id).team_id
+  end
+
+  test "a non-captain can leave the team", %{conn: conn} do
+    captain = insert(:player, inserted_at: ~N[2026-09-19 00:00:00])
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    member = insert(:player, inserted_at: ~N[2026-09-19 00:00:00], region_id: team.region_id)
+    {:ok, _member} = Teams.add_player_to_roster(team, member)
+    member = Repo.get!(Player, member.id)
+
+    conn = log_in_player(conn, member)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    assert has_element?(view, "#leave-team-button")
+
+    assert {:error, {:live_redirect, %{to: "/team/new"}}} =
+             view |> element("#leave-team-button") |> render_click()
+
+    assert is_nil(Repo.get!(Player, member.id).team_id)
   end
 
   test "a non-captain roster member does not see remove/add controls", %{conn: conn} do

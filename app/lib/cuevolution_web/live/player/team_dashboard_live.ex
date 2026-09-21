@@ -163,6 +163,26 @@ defmodule CuevolutionWeb.TeamDashboardLive do
     end
   end
 
+  def handle_event("leave_team", _params, socket) do
+    case Teams.leave_team(socket.assigns.team, socket.assigns.current_player) do
+      {:ok, _player} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "You left the team.")
+         |> push_navigate(to: ~p"/team/new")}
+
+      {:error, :captain_cannot_leave} ->
+        {:noreply, put_flash(socket, :error, "The captain cannot leave the team.")}
+
+      {:error, :roster_frozen} ->
+        {:noreply,
+         put_flash(socket, :error, "The roster is frozen and you cannot leave this team.")}
+
+      {:error, :not_on_this_team} ->
+        {:noreply, put_flash(socket, :error, "You are no longer on this team.")}
+    end
+  end
+
   def handle_event("cancel_invitation", %{"id" => id}, socket) do
     if socket.assigns.is_captain do
       {:noreply, socket |> cancel_invitation_by_id(id) |> load_team()}

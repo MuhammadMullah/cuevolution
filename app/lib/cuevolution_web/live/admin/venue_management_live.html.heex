@@ -65,6 +65,19 @@
             class="w-full rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
           />
         </div>
+        <select
+          id="venue-edit-region"
+          name="venue[region_id]"
+          class="rounded-lg border border-red-500 px-3 py-2 font-sans text-sm text-ink-950 focus:outline-none"
+        >
+          <option
+            :for={region <- @regions}
+            value={region.id}
+            selected={region.id == @editing_venue.region_id}
+          >
+            {region.name}
+          </option>
+        </select>
         <button
           type="submit"
           class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"

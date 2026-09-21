@@ -185,6 +185,42 @@ defmodule Cuevolution.TeamsTest do
     end
   end
 
+  describe "leave_team/2" do
+    test "releases a non-captain player and notifies the captain with eligibility" do
+      captain =
+        insert(:player,
+          inserted_at: ~N[2026-09-19 00:00:00],
+          notification_preference: "email"
+        )
+
+      {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+      member = insert(:player, inserted_at: ~N[2026-09-19 00:00:00], region_id: team.region_id)
+      assert {:ok, _member} = Teams.add_player_to_roster(team, member)
+
+      assert {:ok, left} = Teams.leave_team(team, Repo.get!(Player, member.id))
+      assert is_nil(left.team_id)
+
+      notification =
+        Repo.get_by!(Cuevolution.Notifications.Notification,
+          player_id: captain.id,
+          event_type: "team_player_left"
+        )
+
+      assert notification.channel == "email"
+      assert notification.payload["team_name"] == team.name
+      assert notification.payload["roster_count"] == 1
+      assert notification.payload["eligible"] == false
+    end
+
+    test "does not allow the captain to leave" do
+      captain = insert(:player, inserted_at: ~N[2026-09-19 00:00:00])
+      {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+
+      assert {:error, :captain_cannot_leave} =
+               Teams.leave_team(team, Repo.get!(Player, captain.id))
+    end
+  end
+
   describe "roster freeze (spec 005 FR-008)" do
     test "add_player_to_roster/3 rejects once the roster is frozen" do
       team = insert(:team)

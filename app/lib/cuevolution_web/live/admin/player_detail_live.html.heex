@@ -56,9 +56,25 @@
       <form
         :if={@editing_venue}
         phx-submit="save_venue"
+        id="player-location-form"
         class="mt-3 flex flex-wrap items-center gap-2"
       >
         <select
+          id="player-region-select"
+          name="region_id"
+          phx-change="draft_location_region"
+          class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700"
+        >
+          <option
+            :for={region <- @region_options}
+            value={region.id}
+            selected={region.id == @region_form_id}
+          >
+            {region.name}
+          </option>
+        </select>
+        <select
+          id="player-venue-select"
           name="venue_id"
           class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700"
         >

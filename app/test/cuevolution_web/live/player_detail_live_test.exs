@@ -71,5 +71,39 @@ defmodule CuevolutionWeb.PlayerDetailLiveTest do
       assert Cuevolution.Repo.get!(Cuevolution.Accounts.Player, player.id).preferred_venue_id ==
                venue.id
     end
+
+    test "an admin can change the player's region and venue and notifies them", %{conn: conn} do
+      player = insert(:player, notification_preference: "email")
+      region = build(:region)
+      venue = insert(:venue, region_id: region.id, name: "Regional Venue")
+      admin = insert(:admin, role: "super_admin")
+      token = Accounts.generate_admin_session_token(admin)
+      conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/players/#{player.id}")
+      view |> element("button", "Edit") |> render_click()
+
+      view
+      |> element("#player-region-select")
+      |> render_change(%{"region_id" => region.id})
+
+      view
+      |> form("#player-location-form")
+      |> render_submit(%{"region_id" => region.id, "venue_id" => venue.id})
+
+      updated = Cuevolution.Repo.get!(Cuevolution.Accounts.Player, player.id)
+      assert updated.region_id == region.id
+      assert updated.preferred_venue_id == venue.id
+
+      notification =
+        Cuevolution.Repo.get_by!(Cuevolution.Notifications.Notification,
+          player_id: player.id,
+          event_type: "player_location_updated"
+        )
+
+      assert notification.channel == "email"
+      assert notification.payload["region_name"] == region.name
+      assert notification.payload["venue_name"] == venue.name
+    end
   end
 end
