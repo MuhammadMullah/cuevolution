@@ -52,7 +52,10 @@ defmodule Cuevolution.Factory do
       username: sequence(:username, &"player#{&1}"),
       notification_preference: "email",
       hashed_password: Bcrypt.hash_pwd_salt("Valid1!Pass"),
-      region_id: region.id
+      region_id: region.id,
+      inserted_at:
+        Cuevolution.Accounts.tournament_registration_cutoff()
+        |> NaiveDateTime.add(-1, :second)
     }
   end
 
