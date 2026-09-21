@@ -355,21 +355,19 @@ defmodule Cuevolution.Teams do
 
   @doc "Allows a non-captain player to leave their team and notifies the captain."
   def leave_team(%Team{} = team, %Player{} = player) do
-    cond do
-      team.captain_id == player.id ->
-        {:error, :captain_cannot_leave}
+    if team.captain_id == player.id do
+      {:error, :captain_cannot_leave}
+    else
+      case remove_player_from_roster(team, player) do
+        {:ok, _updated_player} = result ->
+          roster_count = Repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
+          eligible = roster_count >= @min_roster_size
+          dispatch_player_left(team, player, roster_count, eligible)
+          result
 
-      true ->
-        case remove_player_from_roster(team, player) do
-          {:ok, _updated_player} = result ->
-            roster_count = Repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
-            eligible = roster_count >= @min_roster_size
-            dispatch_player_left(team, player, roster_count, eligible)
-            result
-
-          error ->
-            error
-        end
+        error ->
+          error
+      end
     end
   end
 

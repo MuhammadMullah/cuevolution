@@ -21,8 +21,8 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
-  alias Cuevolution.Venues.Venue
   alias Cuevolution.Venues
+  alias Cuevolution.Venues.Venue
   alias Ecto.Multi
 
   # Registration remains open after this point, but those accounts belong to
@@ -512,49 +512,80 @@ defmodule Cuevolution.Accounts do
          action_type,
          invalid_location
        ) do
-    if Admin.can?(admin, :manage_players) do
-      prior_venue_id = player.preferred_venue_id
-      prior_region_id = player.region_id
-
-      if venue = Venues.get_active_in_region(venue_id, region_id) do
-        Multi.new()
-        |> Multi.update(
-          :player,
-          Player.region_and_venue_changeset(player, %{
-            region_id: region_id,
-            preferred_venue_id: venue.id
-          })
-        )
-        |> Multi.run(:log, fn _repo, %{player: updated} ->
-          log_location_change(
-            action_type,
-            admin,
-            updated,
-            prior_region_id,
-            prior_venue_id,
-            region_id,
-            venue.id
-          )
-        end)
-        |> Repo.transaction()
-        |> case do
-          {:ok, %{player: updated}} ->
-            updated = Repo.preload(updated, [:region, :preferred_venue], force: true)
-
-            if prior_region_id != region_id or prior_venue_id != venue.id do
-              dispatch_location_update(updated)
-            end
-
-            {:ok, updated}
-
-          {:error, :player, changeset, _changes} ->
-            {:error, changeset}
-        end
-      else
-        invalid_location.()
-      end
+    with true <- Admin.can?(admin, :manage_players),
+         %Venue{} = venue <- Venues.get_active_in_region(venue_id, region_id) do
+      persist_location_change(
+        player,
+        venue,
+        region_id,
+        admin,
+        action_type,
+        player.region_id,
+        player.preferred_venue_id
+      )
     else
-      {:error, :unauthorized}
+      false -> {:error, :unauthorized}
+      nil -> invalid_location.()
+    end
+  end
+
+  defp persist_location_change(
+         player,
+         venue,
+         region_id,
+         admin,
+         action_type,
+         prior_region_id,
+         prior_venue_id
+       ) do
+    Multi.new()
+    |> Multi.update(
+      :player,
+      Player.region_and_venue_changeset(player, %{
+        region_id: region_id,
+        preferred_venue_id: venue.id
+      })
+    )
+    |> Multi.run(:log, fn _repo, %{player: updated} ->
+      log_location_change(
+        action_type,
+        admin,
+        updated,
+        prior_region_id,
+        prior_venue_id,
+        region_id,
+        venue.id
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: updated}} ->
+        updated = Repo.preload(updated, [:region, :preferred_venue], force: true)
+
+        maybe_dispatch_location_update(
+          updated,
+          prior_region_id,
+          prior_venue_id,
+          region_id,
+          venue.id
+        )
+
+        {:ok, updated}
+
+      {:error, :player, changeset, _changes} ->
+        {:error, changeset}
+    end
+  end
+
+  defp maybe_dispatch_location_update(
+         updated,
+         prior_region_id,
+         prior_venue_id,
+         region_id,
+         venue_id
+       ) do
+    if prior_region_id != region_id or prior_venue_id != venue_id do
+      dispatch_location_update(updated)
     end
   end
 
