@@ -164,6 +164,71 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "Sent to a team captain when a player leaves the roster."
+  def team_player_left(player, payload) do
+    %{
+      team_name: team_name,
+      player_name: player_name,
+      roster_count: roster_count,
+      eligible: eligible
+    } =
+      payload
+
+    first_name = esc(player.first_name)
+    team_name_esc = esc(team_name)
+    player_name_esc = esc(player_name)
+
+    status =
+      if eligible,
+        do: "The team still meets the minimum roster size.",
+        else: "The team is now below the minimum roster size and is not eligible for draws."
+
+    base(player)
+    |> subject("#{player_name} left #{team_name}")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;"><strong>#{player_name_esc}</strong> has left <strong>#{team_name_esc}</strong>.</p>
+      <p style="margin:0 0 16px;">Your roster now has <strong>#{roster_count} players</strong>. #{status}</p>
+      #{button("View My Team", url("/team"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    #{player_name} has left #{team_name}. Your roster now has #{roster_count} players.
+    #{status}
+
+    View your team: #{url("/team")}
+    """)
+  end
+
+  @doc "Sent when an admin changes a player's region or preferred venue."
+  def player_location_updated(player, payload) do
+    %{region_name: region_name, venue_name: venue_name} = payload
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("Your Cuevolution location was updated")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">An administrator updated your registered location.</p>
+      #{fixture_table("Region", region_name, "Preferred venue", venue_name)}
+      #{button("View My Profile", url("/profile/settings"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    An administrator updated your registered location.
+    Region: #{region_name}
+    Preferred venue: #{venue_name}
+
+    View your profile: #{url("/profile/settings")}
+    """)
+  end
+
   @doc """
   Sent when a player’s preferred venue is deactivated.
 

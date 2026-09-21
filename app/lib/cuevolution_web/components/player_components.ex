@@ -544,6 +544,7 @@ defmodule CuevolutionWeb.PlayerComponents do
   attr :current_player, :map, required: true
   attr :active, :atom, required: true, doc: "one of :fixtures, :standings, :team, :profile"
   attr :flash, :map, required: true
+  attr :identification_form, :map, required: true
 
   attr :pending_invitations, :list,
     default: [],
@@ -620,6 +621,52 @@ defmodule CuevolutionWeb.PlayerComponents do
         <.invitation_banner pending_invitations={@pending_invitations} />
         {render_slot(@inner_block)}
       </main>
+
+      <div
+        :if={
+          is_nil(@current_player.identification_type) or is_nil(@current_player.identification_number)
+        }
+        id="player-identification-modal"
+        class="fixed inset-0 z-50 flex items-end bg-ink-950/60 p-0 sm:items-center sm:justify-center sm:p-4"
+      >
+        <div class="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl sm:p-8">
+          <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+            <.icon name="hero-identification" class="size-6" />
+          </div>
+          <h2 class="mb-2 text-xl font-bold tracking-tight text-ink-950">Verify your identity</h2>
+          <p class="mb-6 text-sm leading-relaxed text-ink-500">
+            Please provide your identification details before you can continue. This is required for match verification.
+          </p>
+          <.form
+            for={@identification_form}
+            id="player-identification-form"
+            phx-change="validate_identification"
+            phx-submit="save_identification"
+            class="flex flex-col"
+          >
+            <.input
+              field={@identification_form[:identification_type]}
+              type="select"
+              label="ID type"
+              prompt="Select ID type"
+              options={[{"Passport", "passport"}, {"National ID", "national_id"}]}
+            />
+            <.input
+              field={@identification_form[:identification_number]}
+              label="ID number"
+              placeholder="Enter your ID number"
+              autocomplete="off"
+            />
+            <button
+              id="save-player-identification"
+              type="submit"
+              class="mt-2 w-full cursor-pointer rounded-full bg-ink-950 px-5 py-3 text-sm font-semibold text-ink-25 transition hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-ink-950/15"
+            >
+              Save identification details
+            </button>
+          </.form>
+        </div>
+      </div>
     </div>
     """
   end

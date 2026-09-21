@@ -8,6 +8,7 @@ defmodule CuevolutionWeb.TeamDashboardLive do
   alias Cuevolution.Repo
   alias Cuevolution.Teams
   alias Cuevolution.Teams.Team
+  alias Cuevolution.Venues
   alias CuevolutionWeb.PlayerComponents
 
   @min_roster_size 5
@@ -21,6 +22,9 @@ defmodule CuevolutionWeb.TeamDashboardLive do
          add_form: to_form(%{}, as: :roster),
          player_suggestions: [],
          team_name_form: to_form(%{}, as: :team),
+         team_location_form: to_form(%{}, as: :team_location),
+         team_match_regions: Accounts.list_regions(),
+         team_location_venues: [],
          editing_team_name?: false,
          min_roster_size: @min_roster_size
        )
@@ -70,6 +74,47 @@ defmodule CuevolutionWeb.TeamDashboardLive do
     {:noreply, assign(socket, :editing_team_name?, false)}
   end
 
+  def handle_event(
+        "draft_match_region",
+        %{"team_location" => %{"match_region_id" => region_id}},
+        socket
+      ) do
+    {:noreply,
+     assign(socket,
+       team_location_form:
+         to_form(
+           %{"match_region_id" => region_id, "match_venue_id" => ""},
+           as: :team_location
+         ),
+       team_location_venues: Venues.list_active_for_region(region_id)
+     )}
+  end
+
+  def handle_event("update_match_location", %{"team_location" => params}, socket) do
+    if socket.assigns.is_captain do
+      case Teams.update_match_location(
+             socket.assigns.team,
+             socket.assigns.current_player,
+             params
+           ) do
+        {:ok, _team} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Team match location updated.")
+           |> load_team()}
+
+        {:error, :invalid_match_location} ->
+          {:noreply, put_flash(socket, :error, "Choose an active venue in the selected region.")}
+
+        {:error, changeset} ->
+          {:noreply, assign(socket, :team_location_form, to_form(changeset, as: :team_location))}
+      end
+    else
+      {:noreply,
+       put_flash(socket, :error, "Only the captain can update the team match location.")}
+    end
+  end
+
   def handle_event("update_team_name", %{"team" => params}, socket) do
     if socket.assigns.is_captain do
       case Teams.update_team_name(
@@ -115,6 +160,26 @@ defmodule CuevolutionWeb.TeamDashboardLive do
       {:noreply, load_team(socket)}
     else
       {:noreply, put_flash(socket, :error, "Only the captain can remove players.")}
+    end
+  end
+
+  def handle_event("leave_team", _params, socket) do
+    case Teams.leave_team(socket.assigns.team, socket.assigns.current_player) do
+      {:ok, _player} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "You left the team.")
+         |> push_navigate(to: ~p"/team/new")}
+
+      {:error, :captain_cannot_leave} ->
+        {:noreply, put_flash(socket, :error, "The captain cannot leave the team.")}
+
+      {:error, :roster_frozen} ->
+        {:noreply,
+         put_flash(socket, :error, "The roster is frozen and you cannot leave this team.")}
+
+      {:error, :not_on_this_team} ->
+        {:noreply, put_flash(socket, :error, "You are no longer on this team.")}
     end
   end
 
@@ -212,18 +277,43 @@ defmodule CuevolutionWeb.TeamDashboardLive do
 
   defp load_team(socket) do
     player = socket.assigns.current_player
-    team = Team |> Repo.get!(player.team_id) |> Repo.preload([:region, :captain, :roster])
+
+    team =
+      Team
+      |> Repo.get!(player.team_id)
+      |> Repo.preload([:region, :match_region, :match_venue, :captain, :roster])
 
     is_captain = team.captain_id == player.id
 
-    assign(socket,
-      team: team,
-      eligible: Teams.eligible?(team),
-      roster_count: length(team.roster),
-      is_captain: is_captain,
-      sent_invitations:
-        if(is_captain, do: Teams.list_pending_invitations_for_team(team.id), else: [])
-    )
+    socket =
+      assign(socket,
+        team: team,
+        eligible: Teams.eligible?(team),
+        roster_count: length(team.roster),
+        is_captain: is_captain,
+        sent_invitations:
+          if(is_captain, do: Teams.list_pending_invitations_for_team(team.id), else: [])
+      )
+
+    if is_captain do
+      assign(socket,
+        team_location_form:
+          to_form(
+            %{
+              "match_region_id" => team.match_region_id || "",
+              "match_venue_id" => team.match_venue_id || ""
+            },
+            as: :team_location
+          ),
+        team_location_venues:
+          if(team.match_region_id,
+            do: Venues.list_active_for_region(team.match_region_id),
+            else: []
+          )
+      )
+    else
+      socket
+    end
   end
 
   defp team_initials(name) do

@@ -3,6 +3,7 @@
   active={:team}
   flash={@flash}
   pending_invitations={@pending_invitations}
+  identification_form={@identification_form}
 >
   <PlayerComponents.eyebrow>Your Team</PlayerComponents.eyebrow>
 
@@ -170,9 +171,77 @@
     </div>
   </PlayerComponents.card>
 
-  <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm">
+  <PlayerComponents.card :if={@is_captain} class="mb-5">
+    <div class="mb-1 text-sm font-semibold text-ink-700">Team match location</div>
+    <p class="mb-4 text-[13px] text-ink-400">
+      Choose the region and venue where your team will play its team matches. This can be changed
+      at any time and does not affect the draw.
+    </p>
+    <.form
+      for={@team_location_form}
+      id="team-location-form"
+      phx-change="draft_match_region"
+      phx-submit="update_match_location"
+      class="flex flex-col gap-3.5"
+    >
+      <div>
+        <label for="team-location-region" class="mb-1.5 block text-sm font-semibold text-ink-700">
+          Region
+        </label>
+        <select
+          id="team-location-region"
+          name="team_location[match_region_id]"
+          class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+        >
+          <option value="">Select a region…</option>
+          <option
+            :for={region <- @team_match_regions}
+            value={region.id}
+            selected={region.id == @team_location_form[:match_region_id].value}
+          >
+            {region.name}
+          </option>
+        </select>
+      </div>
+      <div>
+        <label for="team-location-venue" class="mb-1.5 block text-sm font-semibold text-ink-700">
+          Venue
+        </label>
+        <select
+          id="team-location-venue"
+          name="team_location[match_venue_id]"
+          class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+        >
+          <option value="">Select a venue…</option>
+          <option
+            :for={venue <- @team_location_venues}
+            value={venue.id}
+            selected={venue.id == @team_location_form[:match_venue_id].value}
+          >
+            {venue.name}
+          </option>
+        </select>
+      </div>
+      <div>
+        <PlayerComponents.button type="submit" variant="secondary">
+          Save match location
+        </PlayerComponents.button>
+      </div>
+    </.form>
+  </PlayerComponents.card>
+
+  <div class="mb-3 flex items-baseline justify-between">
+    <h2 class="text-sm font-semibold text-ink-700">Team members</h2>
+    <span class="font-mono text-xs text-ink-400">{@roster_count} / 8</span>
+  </div>
+
+  <div
+    id="team-members"
+    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm"
+  >
     <div
       :for={player <- @team.roster}
+      id={"team-member-#{player.id}"}
       class="flex items-center gap-3.5 border-b border-ink-100 px-4 py-3.5 last:border-b-0"
     >
       <PlayerComponents.avatar name={"#{player.first_name} #{player.last_name}"} size="size-9" />
@@ -197,6 +266,22 @@
       </button>
     </div>
   </div>
+
+  <PlayerComponents.card :if={!@is_captain} class="mt-5">
+    <div class="mb-1 text-sm font-semibold text-red-700">Leave team</div>
+    <p class="mb-3 text-[13px] text-ink-400">
+      The captain will be notified, and the team may become ineligible if its roster drops below 5 players.
+    </p>
+    <button
+      id="leave-team-button"
+      type="button"
+      phx-click="leave_team"
+      data-confirm="Leave this team? The captain will be notified."
+      class="cursor-pointer rounded-full border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-semibold text-red-700 hover:bg-red-100"
+    >
+      Leave team
+    </button>
+  </PlayerComponents.card>
 
   <PlayerComponents.card :if={@is_captain} class="mt-5">
     <div class="mb-1 text-sm font-semibold text-red-700">Danger zone</div>

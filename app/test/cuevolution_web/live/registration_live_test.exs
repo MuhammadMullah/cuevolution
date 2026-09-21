@@ -45,7 +45,9 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
         "email" => "jane#{System.unique_integer([:positive])}@example.com",
         "mobile_number" => "0712345678",
         "username" => "janedoe#{System.unique_integer([:positive])}",
-        "password" => "Valid1!Pass"
+        "password" => "Valid1!Pass",
+        "identification_type" => "national_id",
+        "identification_number" => "ID-#{System.unique_integer([:positive])}"
       },
       overrides
     )
@@ -169,6 +171,18 @@ defmodule CuevolutionWeb.RegistrationLiveTest do
     html = fill(view, %{"email" => "taken@example.com"})
     refute html =~ "✓ available"
     assert html =~ "An account with this email already exists"
+    assert html =~ "text-danger"
+  end
+
+  test "shows a live identification-number-taken hint", %{conn: conn} do
+    insert(:player, identification_number: "ID-TAKEN-123")
+    {:ok, view, _view_html} = live(conn, ~p"/register")
+
+    complete_steps_1_and_2(view)
+    view |> element("button", "Back") |> render_click()
+
+    html = fill(view, %{"identification_number" => " id-taken-123 "})
+    assert html =~ "This ID number is already registered"
     assert html =~ "text-danger"
   end
 

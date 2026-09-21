@@ -204,6 +204,18 @@ defmodule Cuevolution.VenuesTest do
       assert {:ok, updated} = Venues.update_venue(venue, %{name: "Updated"})
       assert updated.name == "Updated"
     end
+
+    test "transfers a venue to another region" do
+      current_region = region("nairobi-a")
+      target_region = region("coast")
+      venue = insert(:venue, region_id: current_region.id)
+      player = insert(:player, region_id: current_region.id, preferred_venue_id: venue.id)
+
+      assert {:ok, updated} = Venues.update_venue(venue, %{region_id: target_region.id})
+      assert updated.region_id == target_region.id
+      assert Repo.get!(Cuevolution.Accounts.Player, player.id).region_id == target_region.id
+      assert Repo.get!(Cuevolution.Accounts.Player, player.id).preferred_venue_id == venue.id
+    end
   end
 
   describe "deactivate_venue/1" do

@@ -18,6 +18,8 @@ defmodule Cuevolution.Accounts.ConcurrentRegistrationTest do
         gender: "female",
         location: "Nairobi",
         notification_preference: "email",
+        identification_type: "national_id",
+        identification_number: "ID-#{System.unique_integer([:positive])}",
         region_id: region.id,
         other_venue_name: "Test Venue",
         password: "Valid1!Pass"

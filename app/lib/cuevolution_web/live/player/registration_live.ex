@@ -22,7 +22,14 @@ defmodule CuevolutionWeb.RegistrationLive do
 
   @step_fields %{
     1 => [:first_name, :last_name, :date_of_birth, :location, :gender],
-    2 => [:email, :mobile_number, :username, :password],
+    2 => [
+      :email,
+      :mobile_number,
+      :username,
+      :password,
+      :identification_type,
+      :identification_number
+    ],
     3 => [:region_id, :preferred_venue_id, :other_venue_name],
     4 => [:notification_preference]
   }
@@ -365,6 +372,25 @@ defmodule CuevolutionWeb.RegistrationLive do
       has_error? -> {"neutral", nil}
       Accounts.email_taken?(email) -> {"danger", "An account with this email already exists"}
       true -> {"success", "✓ available"}
+    end
+  end
+
+  defp identification_hint(nil, _form), do: {"neutral", nil}
+  defp identification_hint("", _form), do: {"neutral", nil}
+
+  defp identification_hint(identification_number, form) do
+    has_error? =
+      Enum.any?(form.source.errors, fn {field, _} -> field == :identification_number end)
+
+    cond do
+      has_error? ->
+        {"neutral", nil}
+
+      Accounts.identification_number_taken?(identification_number) ->
+        {"danger", "This ID number is already registered"}
+
+      true ->
+        {"neutral", nil}
     end
   end
 

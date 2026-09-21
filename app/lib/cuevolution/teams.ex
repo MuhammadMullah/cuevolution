@@ -17,6 +17,7 @@ defmodule Cuevolution.Teams do
   alias Cuevolution.Teams.Team
   alias Cuevolution.Teams.TeamInvitation
   alias Cuevolution.Teams.Workers.ExpireTeamInvitationWorker
+  alias Cuevolution.Venues
   alias Ecto.Multi
 
   @invitation_validity_seconds 48 * 60 * 60
@@ -216,6 +217,27 @@ defmodule Cuevolution.Teams do
     Team.changeset(team, attrs)
   end
 
+  @doc "Updates a team's independent playing region and venue on behalf of its captain."
+  def update_match_location(%Team{} = team, %Player{} = captain, attrs) do
+    if team.captain_id != captain.id do
+      {:error, :not_captain}
+    else
+      region_id = attrs["match_region_id"] || attrs[:match_region_id]
+      venue_id = attrs["match_venue_id"] || attrs[:match_venue_id]
+
+      if Venues.get_active_in_region(venue_id, region_id) do
+        team
+        |> Team.location_changeset(%{
+          match_region_id: region_id,
+          match_venue_id: venue_id
+        })
+        |> Repo.update()
+      else
+        {:error, :invalid_match_location}
+      end
+    end
+  end
+
   defp normalized_team_name(attrs) do
     name = attrs["name"] || attrs[:name] || ""
     String.trim(name)
@@ -329,6 +351,44 @@ defmodule Cuevolution.Teams do
         {0, _} -> {:error, :not_on_this_team}
       end
     end
+  end
+
+  @doc "Allows a non-captain player to leave their team and notifies the captain."
+  def leave_team(%Team{} = team, %Player{} = player) do
+    cond do
+      team.captain_id == player.id ->
+        {:error, :captain_cannot_leave}
+
+      true ->
+        case remove_player_from_roster(team, player) do
+          {:ok, _updated_player} = result ->
+            roster_count = Repo.aggregate(from(p in Player, where: p.team_id == ^team.id), :count)
+            eligible = roster_count >= @min_roster_size
+            dispatch_player_left(team, player, roster_count, eligible)
+            result
+
+          error ->
+            error
+        end
+    end
+  end
+
+  defp dispatch_player_left(team, player, roster_count, eligible) do
+    captain = Repo.get!(Player, team.captain_id)
+
+    Notifications.dispatch(captain, :team_player_left, %{
+      team_name: team.name,
+      player_name: "#{player.first_name} #{player.last_name}",
+      roster_count: roster_count,
+      eligible: eligible
+    })
+  rescue
+    error ->
+      Logger.error(
+        "team_player_left dispatch failed for team #{team.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   @doc """

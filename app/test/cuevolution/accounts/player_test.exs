@@ -16,6 +16,8 @@ defmodule Cuevolution.Accounts.PlayerTest do
         mobile_number: "0712345678",
         location: "Nairobi",
         username: "janedoe#{System.unique_integer([:positive])}",
+        identification_type: "national_id",
+        identification_number: "ID-#{System.unique_integer([:positive])}",
         notification_preference: "email",
         region_id: region.id,
         other_venue_name: "Test Venue",
@@ -116,10 +118,26 @@ defmodule Cuevolution.Accounts.PlayerTest do
             :notification_preference,
             :region_id,
             :preferred_venue_id,
-            :password
+            :password,
+            :identification_type,
+            :identification_number
           ] do
         assert errors_on(changeset)[field], "expected an error on #{field}"
       end
+    end
+
+    test "rejects a duplicate identification number case-insensitively" do
+      insert(:player, identification_type: "passport", identification_number: "P123")
+
+      changeset =
+        Player.registration_changeset(
+          %Player{},
+          valid_attrs(%{identification_type: "national_id", identification_number: "p123"})
+        )
+
+      assert changeset.valid?
+      assert {:error, changeset} = Repo.insert(changeset)
+      assert "has already been taken" in errors_on(changeset).identification_number
     end
 
     test "rejects registration with neither a preferred venue nor an 'Other' venue name" do

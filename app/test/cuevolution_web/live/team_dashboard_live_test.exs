@@ -62,6 +62,34 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
     assert Repo.get!(Cuevolution.Teams.Team, team.id).name == "The Great Sharks"
   end
 
+  test "the captain can update the team match location after the draw", %{conn: conn} do
+    captain = insert(:player, inserted_at: ~N[2026-09-19 00:00:00])
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    region = build(:region)
+    venue = insert(:venue, region_id: region.id)
+    {1, _} = Teams.lock_roster(team.id)
+    captain = Repo.get!(Player, captain.id)
+
+    conn = log_in_player(conn, captain)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    view
+    |> form("#team-location-form")
+    |> render_change(team_location: %{"match_region_id" => region.id, "match_venue_id" => ""})
+
+    assert has_element?(view, "#team-location-venue option[value='#{venue.id}']")
+
+    view
+    |> form("#team-location-form")
+    |> render_submit(
+      team_location: %{"match_region_id" => region.id, "match_venue_id" => venue.id}
+    )
+
+    saved_team = Repo.get!(Cuevolution.Teams.Team, team.id)
+    assert saved_team.match_region_id == region.id
+    assert saved_team.match_venue_id == venue.id
+  end
+
   test "a non-captain cannot edit the team name", %{conn: conn} do
     captain = insert(:player)
     {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
@@ -91,7 +119,7 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
 
     html =
       view
-      |> form("form", roster: %{"username" => "recruitable"})
+      |> form("#add-player-form", roster: %{"username" => "recruitable"})
       |> render_submit()
 
     assert html =~ "Invitation sent to @recruitable"
@@ -231,15 +259,37 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
     refute Repo.get!(Player, member.id).team_id
   end
 
+  test "a non-captain can leave the team", %{conn: conn} do
+    captain = insert(:player, inserted_at: ~N[2026-09-19 00:00:00])
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    member = insert(:player, inserted_at: ~N[2026-09-19 00:00:00], region_id: team.region_id)
+    {:ok, _member} = Teams.add_player_to_roster(team, member)
+    member = Repo.get!(Player, member.id)
+
+    conn = log_in_player(conn, member)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    assert has_element?(view, "#leave-team-button")
+
+    assert {:error, {:live_redirect, %{to: "/team/new"}}} =
+             view |> element("#leave-team-button") |> render_click()
+
+    assert is_nil(Repo.get!(Player, member.id).team_id)
+  end
+
   test "a non-captain roster member does not see remove/add controls", %{conn: conn} do
     captain = insert(:player)
     {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
-    {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+    teammate = insert(:player, region_id: team.region_id, username: "teammate")
+    {:ok, member} = Teams.add_player_to_roster(team, teammate)
     member = Repo.get!(Player, member.id)
 
     conn = log_in_player(conn, member)
     {:ok, view, html} = live(conn, ~p"/team")
 
+    assert has_element?(view, "#team-members")
+    assert has_element?(view, "#team-member-#{captain.id}", captain.username)
+    assert has_element?(view, "#team-member-#{teammate.id}", teammate.username)
     refute html =~ "Invite a player"
     refute has_element?(view, "button[phx-click=remove_player]")
     refute has_element?(view, "button[phx-click=delete_team]")

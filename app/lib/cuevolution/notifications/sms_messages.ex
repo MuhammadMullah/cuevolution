@@ -36,6 +36,28 @@ defmodule Cuevolution.Notifications.SmsMessages do
       "within 48 hours."
   end
 
+  def team_player_left(_player, payload) do
+    %{
+      team_name: team_name,
+      player_name: player_name,
+      roster_count: roster_count,
+      eligible: eligible
+    } =
+      payload
+
+    status =
+      if eligible,
+        do: "The team is still eligible.",
+        else: "The team is below the minimum and not eligible."
+
+    "SportPesa National Pool Circuit: #{player_name} left #{team_name}. Roster: #{roster_count}. #{status}"
+  end
+
+  def player_location_updated(_player, payload) do
+    %{region_name: region_name, venue_name: venue_name} = payload
+    "SportPesa National Pool Circuit: Your location was updated to #{region_name}, #{venue_name}."
+  end
+
   @doc """
   Sent when a player’s preferred venue is deactivated.
 

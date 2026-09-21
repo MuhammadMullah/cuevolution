@@ -12,6 +12,7 @@ defmodule CuevolutionWeb.PlayerAuth do
   import Phoenix.Controller
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Player
   alias Cuevolution.Teams
 
   @player_session_key :player_token
@@ -86,11 +87,20 @@ defmodule CuevolutionWeb.PlayerAuth do
       socket =
         socket
         |> Phoenix.Component.assign(:current_player, player)
+        |> Phoenix.Component.assign(
+          :identification_form,
+          Phoenix.Component.to_form(Player.identification_changeset(player, %{}), as: :player)
+        )
         |> assign_pending_invitations(player)
         |> Phoenix.LiveView.attach_hook(
           :team_invitation_actions,
           :handle_event,
           &handle_invitation_event/3
+        )
+        |> Phoenix.LiveView.attach_hook(
+          :player_identification,
+          :handle_event,
+          &handle_identification_event/3
         )
 
       {:cont, socket}
@@ -178,4 +188,42 @@ defmodule CuevolutionWeb.PlayerAuth do
   end
 
   defp handle_invitation_event(_event, _params, socket), do: {:cont, socket}
+
+  defp handle_identification_event("validate_identification", %{"player" => params}, socket) do
+    changeset =
+      socket.assigns.current_player
+      |> Player.identification_changeset(params)
+      |> Map.put(:action, :validate)
+
+    {:halt,
+     Phoenix.Component.assign(
+       socket,
+       :identification_form,
+       Phoenix.Component.to_form(changeset, as: :player)
+     )}
+  end
+
+  defp handle_identification_event("save_identification", %{"player" => params}, socket) do
+    case Accounts.update_player_identification(socket.assigns.current_player, params) do
+      {:ok, player} ->
+        {:halt,
+         socket
+         |> Phoenix.Component.assign(:current_player, player)
+         |> Phoenix.Component.assign(
+           :identification_form,
+           Phoenix.Component.to_form(Player.identification_changeset(player, %{}), as: :player)
+         )
+         |> Phoenix.LiveView.put_flash(:info, "Identification details saved.")}
+
+      {:error, changeset} ->
+        {:halt,
+         Phoenix.Component.assign(
+           socket,
+           :identification_form,
+           Phoenix.Component.to_form(changeset, as: :player)
+         )}
+    end
+  end
+
+  defp handle_identification_event(_event, _params, socket), do: {:cont, socket}
 end

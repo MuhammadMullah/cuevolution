@@ -43,6 +43,27 @@ defmodule CuevolutionWeb.ProfileSettingsLiveTest do
     assert html =~ "No team yet"
   end
 
+  test "requires legacy players to provide identification details", %{conn: conn} do
+    player = insert(:player, identification_type: nil, identification_number: nil)
+    token = Accounts.generate_player_session_token(player)
+    conn = conn |> init_test_session(%{}) |> put_session(:player_token, token)
+
+    {:ok, view, html} = live(conn, ~p"/profile")
+
+    assert html =~ "Verify your identity"
+    assert has_element?(view, "#player-identification-modal")
+
+    html =
+      view
+      |> form("#player-identification-form",
+        player: %{identification_type: "passport", identification_number: "P-12345"}
+      )
+      |> render_submit()
+
+    refute html =~ "Verify your identity"
+    assert Accounts.get_player_by_session_token(token).identification_number == "P-12345"
+  end
+
   test "can navigate to the Settings tab", %{conn: conn} do
     player = insert(:player)
     token = Accounts.generate_player_session_token(player)

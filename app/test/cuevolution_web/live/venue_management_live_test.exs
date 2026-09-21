@@ -64,6 +64,30 @@ defmodule CuevolutionWeb.VenueManagementLiveTest do
     refute html =~ "Old Name"
   end
 
+  test "transfers an existing venue to another region", %{conn: conn} do
+    source = default_region()
+    target = Repo.get_by!(Region, slug: "coast")
+    venue = insert(:venue, region_id: source.id, name: "Misfiled Venue")
+    player = insert(:player, region_id: source.id, preferred_venue_id: venue.id)
+    conn = log_in_admin(conn)
+
+    {:ok, view, _html} = live(conn, ~p"/admin/venues")
+
+    view |> element("button[phx-click=edit][phx-value-id='#{venue.id}']") |> render_click()
+
+    view
+    |> form("#venue-edit-form")
+    |> render_submit(venue: %{"name" => venue.name, "region_id" => target.id})
+
+    assert Repo.get!(Cuevolution.Venues.Venue, venue.id).region_id == target.id
+    saved_player = Repo.get!(Cuevolution.Accounts.Player, player.id)
+    assert saved_player.region_id == target.id
+    assert saved_player.preferred_venue_id == venue.id
+
+    assert Repo.get_by!(Cuevolution.Notifications.Notification, player_id: player.id).event_type ==
+             "player_location_updated"
+  end
+
   test "deactivates and reactivates a venue, with no draws made", %{conn: conn} do
     venue = insert(:venue, region_id: default_region().id, active: true)
     conn = log_in_admin(conn)

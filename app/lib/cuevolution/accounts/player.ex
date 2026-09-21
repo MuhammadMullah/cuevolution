@@ -27,6 +27,8 @@ defmodule Cuevolution.Accounts.Player do
     # (spec 004 FR-003 "Custom Venue Entry").
     field :other_venue_name, :string
     field :username, :string
+    field :identification_type, :string
+    field :identification_number, :string
     field :notification_preference, :string
     field :hashed_password, :string
     field :password, :string, virtual: true
@@ -57,6 +59,8 @@ defmodule Cuevolution.Accounts.Player do
       :preferred_venue_id,
       :other_venue_name,
       :username,
+      :identification_type,
+      :identification_number,
       :notification_preference,
       :region_id,
       :password
@@ -71,6 +75,8 @@ defmodule Cuevolution.Accounts.Player do
       :location,
       :country,
       :username,
+      :identification_type,
+      :identification_number,
       :notification_preference,
       :region_id,
       :password
@@ -79,6 +85,8 @@ defmodule Cuevolution.Accounts.Player do
     |> validate_other_venue_not_duplicate()
     |> validate_inclusion(:gender, @genders)
     |> validate_inclusion(:notification_preference, @notification_preferences)
+    |> validate_inclusion(:identification_type, ["passport", "national_id"])
+    |> validate_identification_number()
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_format(:country, ~r/^[A-Z]{2}$/,
       message: "must be a 2-letter ISO country code (e.g. KE)"
@@ -95,8 +103,25 @@ defmodule Cuevolution.Accounts.Player do
       message: "has already been taken"
     )
     |> unique_constraint(:mobile_number, message: "has already been taken")
+    |> unique_constraint(:identification_number,
+      name: :players_lower_identification_number_index,
+      message: "has already been taken"
+    )
     |> foreign_key_constraint(:preferred_venue_id)
     |> hash_password()
+  end
+
+  @doc "Updates the required player identification details."
+  def identification_changeset(player, attrs) do
+    player
+    |> cast(attrs, [:identification_type, :identification_number])
+    |> validate_required([:identification_type, :identification_number])
+    |> validate_inclusion(:identification_type, ["passport", "national_id"])
+    |> validate_identification_number()
+    |> unique_constraint(:identification_number,
+      name: :players_lower_identification_number_index,
+      message: "has already been taken"
+    )
   end
 
   @doc "Sets a new password after a reset-password link is verified (spec 011)."
@@ -248,6 +273,22 @@ defmodule Cuevolution.Accounts.Player do
           changeset
         else
           add_error(changeset, :date_of_birth, "must be at least #{@minimum_age} years old")
+        end
+    end
+  end
+
+  defp validate_identification_number(changeset) do
+    case get_change(changeset, :identification_number) do
+      nil ->
+        changeset
+
+      number ->
+        normalized = String.trim(number)
+
+        if normalized == "" do
+          add_error(changeset, :identification_number, "can't be blank")
+        else
+          put_change(changeset, :identification_number, normalized)
         end
     end
   end
