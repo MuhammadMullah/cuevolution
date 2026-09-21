@@ -47,7 +47,7 @@
   </.form>
 
   <div class="mb-2.5 font-mono text-[13px] text-ink-500">
-    {length(@rows)} result{if length(@rows) == 1, do: "", else: "s"}
+    Showing {length(@rows)} of {@total_count} result{if @total_count == 1, do: "", else: "s"}
   </div>
 
   <div
@@ -71,6 +71,29 @@
       </div>
       <PlayerComponents.stage_badge :if={row.stage} stage={row.stage.name} />
     </.link>
+  </div>
+  <div :if={@total_pages > 1} class="mt-4 flex items-center justify-between gap-3">
+    <button
+      id="directory-previous-page"
+      type="button"
+      phx-click="page"
+      phx-value-page={@page - 1}
+      disabled={@page == 1}
+      class="rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      Previous
+    </button>
+    <span class="font-mono text-[13px] text-ink-500">Page {@page} of {@total_pages}</span>
+    <button
+      id="directory-next-page"
+      type="button"
+      phx-click="page"
+      phx-value-page={@page + 1}
+      disabled={@page == @total_pages}
+      class="rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      Next
+    </button>
   </div>
   <div
     :if={@rows == []}

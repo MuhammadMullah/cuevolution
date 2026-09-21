@@ -114,4 +114,19 @@ defmodule CuevolutionWeb.PlayerDirectoryLiveTest do
 
     assert html =~ team.name
   end
+
+  test "paginates large result sets", %{conn: conn} do
+    insert_list(51, :player)
+
+    conn = log_in_admin(conn)
+    {:ok, view, html} = live(conn, ~p"/admin/players")
+
+    assert html =~ "Showing 50 of 51 results"
+    assert has_element?(view, "#directory-next-page")
+
+    html = view |> element("#directory-next-page") |> render_click()
+
+    assert html =~ "Showing 1 of 51 results"
+    assert has_element?(view, "#directory-previous-page")
+  end
 end

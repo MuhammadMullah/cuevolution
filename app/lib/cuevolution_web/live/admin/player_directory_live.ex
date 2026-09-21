@@ -19,9 +19,11 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     {"Individual Female", "female"},
     {"Teams", "team"}
   ]
+  @page_size 50
 
   def mount(params, _session, socket) do
     filters = build_filters(params)
+    page = page_number(params["page"])
 
     {:ok,
      socket
@@ -30,9 +32,10 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
        regions: Accounts.list_regions(),
        stages: Competitions.list_stages(),
        kinds: @kinds,
-       filter_form: to_form(params, as: :filter)
+       filter_form: to_form(params, as: :filter),
+       page: page
      )
-     |> assign(:rows, build_rows(filters))}
+     |> assign_directory(filters, page)}
   end
 
   def handle_event("filter", %{"filter" => params}, socket) do
@@ -41,7 +44,18 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     {:noreply,
      socket
      |> assign(:filter_form, to_form(params, as: :filter))
-     |> assign(:rows, build_rows(filters))}
+     |> assign(:page, 1)
+     |> assign_directory(filters, 1)}
+  end
+
+  def handle_event("page", %{"page" => page}, socket) do
+    page = page_number(page)
+    filters = build_filters(socket.assigns.filter_form.params)
+
+    {:noreply,
+     socket
+     |> assign(:page, page)
+     |> assign_directory(filters, page)}
   end
 
   defp build_filters(params) do
@@ -59,13 +73,26 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
   defp maybe_put_filter(filters, _key, nil), do: filters
   defp maybe_put_filter(filters, key, value), do: Map.put(filters, key, value)
 
-  defp build_rows(filters) do
+  defp assign_directory(socket, filters, page) do
+    {rows, total_count} = build_rows(filters, page)
+
+    assign(socket,
+      rows: rows,
+      total_count: total_count,
+      total_pages: max(1, ceil(total_count / @page_size))
+    )
+  end
+
+  defp build_rows(filters, page) do
     kind = filters[:kind] || "all"
     stage_id = filters[:stage_id]
+    query_filters = Map.merge(filters, %{limit: @page_size, offset: (page - 1) * @page_size})
 
     players =
       if kind in ["all", "male", "female"] do
         Accounts.list_players_filtered(%{
+          limit: query_filters.limit,
+          offset: query_filters.offset,
           region_id: filters[:region_id],
           category: (kind != "all" && kind) || nil,
           username: filters[:search],
@@ -78,6 +105,8 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     teams =
       if kind in ["all", "team"] do
         Teams.list_teams_filtered(%{
+          limit: query_filters.limit,
+          offset: query_filters.offset,
           region_id: filters[:region_id],
           name: filters[:search],
           stage_id: stage_id
@@ -86,13 +115,32 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
         []
       end
 
+    total_count =
+      if(kind in ["all", "male", "female"],
+        do: Accounts.count_players_filtered(filters),
+        else: 0
+      ) +
+        if kind in ["all", "team"], do: Teams.count_teams_filtered(filters), else: 0
+
     stage_lookup =
       Competitions.stages_by_participant(Enum.map(players, & &1.id), Enum.map(teams, & &1.id))
 
     (Enum.map(players, &player_row(&1, stage_lookup)) ++
        Enum.map(teams, &team_row(&1, stage_lookup)))
     |> Enum.sort_by(&String.downcase(&1.name))
+    |> then(&{&1, total_count})
   end
+
+  defp page_number(page) when is_integer(page) and page > 0, do: page
+
+  defp page_number(page) when is_binary(page) do
+    case Integer.parse(page) do
+      {page, ""} when page > 0 -> page
+      _ -> 1
+    end
+  end
+
+  defp page_number(_page), do: 1
 
   defp player_row(player, stage_lookup) do
     %{

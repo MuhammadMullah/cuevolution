@@ -727,8 +727,24 @@ defmodule Cuevolution.Teams do
     |> filter_by_stage(filters[:stage_id])
     |> order_by(asc: :name)
     |> preload([:region, :roster])
+    |> maybe_limit(filters[:limit])
+    |> maybe_offset(filters[:offset])
     |> Repo.all()
   end
+
+  def count_teams_filtered(filters \\ %{}) do
+    Team
+    |> filter_by_region(filters[:region_id])
+    |> filter_by_name(filters[:name])
+    |> filter_by_stage(filters[:stage_id])
+    |> Repo.aggregate(:count, :id)
+  end
+
+  defp maybe_limit(query, nil), do: query
+  defp maybe_limit(query, value), do: limit(query, ^value)
+
+  defp maybe_offset(query, nil), do: query
+  defp maybe_offset(query, value), do: offset(query, ^value)
 
   defp filter_by_region(query, nil), do: query
   defp filter_by_region(query, region_id), do: where(query, region_id: ^region_id)
