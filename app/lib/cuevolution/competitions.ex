@@ -1432,6 +1432,224 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc "Records the five structured singles frames and moves a scheduled fixture to completed."
+  def record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners)
+      when is_list(frame_winners) do
+    if Admin.can?(admin, :record_results) do
+      do_record_frames(fixture, admin, frame_winners)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_record_frames(%Fixture{status: status}, _admin, _frame_winners)
+       when status not in ["scheduled", nil],
+       do: {:error, :invalid_fixture_state}
+
+  defp do_record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners) do
+    fixture = Repo.preload(fixture, participant_a: :player, participant_b: :player)
+
+    with {:ok, winners} <- normalize_frame_winners(frame_winners),
+         {:ok, winner_id} <- majority_winner(fixture, winners) do
+      frames_a = Enum.count(winners, &(&1 == :a))
+      frames_b = length(winners) - frames_a
+
+      result_attrs = %{
+        fixture_id: fixture.id,
+        winner_participation_id: winner_id,
+        score: %{
+          "participant_a_frames" => frames_a,
+          "participant_b_frames" => frames_b,
+          "points_a" => points_for_frames(frames_a, frames_b),
+          "points_b" => points_for_frames(frames_b, frames_a)
+        },
+        recorded_by_admin_id: admin.id
+      }
+
+      Multi.new()
+      |> Multi.insert(:result, MatchResult.create_changeset(%MatchResult{}, result_attrs))
+      |> Multi.run(:frames, fn repo, %{result: result} ->
+        insert_structured_frames(repo, result, fixture, winners)
+      end)
+      |> Multi.update(:fixture, fn %{result: result} ->
+        fixture
+        |> Ecto.Changeset.change(%{result_id: result.id, status: "completed"})
+      end)
+      |> Multi.run(:roster_lock, fn _repo, _changes -> lock_rosters_if_team(fixture) end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{result: result}} -> {:ok, Repo.preload(result, :match_frames)}
+        {:error, :result, changeset, _changes} -> {:error, changeset}
+        {:error, :frames, reason, _changes} -> {:error, reason}
+      end
+    end
+  end
+
+  @doc "Verifies a completed structured result; only verified Grassroots results enter standings."
+  def verify_result(%Fixture{} = fixture, %Admin{} = admin, frame_corrections \\ nil) do
+    if Admin.can?(admin, :approve_results) do
+      do_verify_result(fixture, admin, frame_corrections)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_verify_result(%Fixture{status: "completed"} = fixture, %Admin{} = admin, corrections) do
+    fixture = Repo.preload(fixture, [:result, participant_a: :player, participant_b: :player])
+
+    with {:ok, winners} <- optional_frame_corrections(corrections, fixture.result),
+         {:ok, correction_attrs} <- correction_result_attrs(fixture, winners) do
+      Multi.new()
+      |> maybe_replace_structured_frames(fixture, winners)
+      |> Multi.update(:result, MatchResult.correction_changeset(fixture.result, correction_attrs))
+      |> Multi.update(:fixture, Ecto.Changeset.change(fixture, status: "verified"))
+      |> Multi.run(:log, fn _repo, %{fixture: verified} ->
+        Accounts.log_admin_action("verify_result", admin, verified)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{fixture: verified}} -> {:ok, Repo.preload(verified, :result)}
+        {:error, _step, changeset, _changes} -> {:error, changeset}
+      end
+    end
+  end
+
+  defp do_verify_result(%Fixture{}, _admin, _corrections), do: {:error, :invalid_fixture_state}
+
+  @doc "Moves a scheduled fixture to postponed, recording the required reason in the audit log."
+  def postpone_fixture(%Fixture{status: "scheduled"} = fixture, %Admin{} = admin, reason) do
+    if Admin.can?(admin, :approve_results) and nonempty_reason?(reason) do
+      with {:ok, fixture} <- Repo.update(Ecto.Changeset.change(fixture, status: "postponed")),
+           {:ok, _log} <-
+             Accounts.log_admin_action("postpone_fixture", admin, fixture,
+               new_value: %{reason: reason}
+             ) do
+        {:ok, fixture}
+      end
+    else
+      if Admin.can?(admin, :approve_results),
+        do: {:error, :reason_required},
+        else: {:error, :unauthorized}
+    end
+  end
+
+  def postpone_fixture(%Fixture{}, _admin, _reason), do: {:error, :invalid_fixture_state}
+
+  @doc "Resumes a postponed fixture back to the scheduled state."
+  def resume_fixture(%Fixture{status: "postponed"} = fixture, %Admin{} = admin) do
+    if Admin.can?(admin, :approve_results) do
+      Repo.update(Ecto.Changeset.change(fixture, status: "scheduled"))
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def resume_fixture(%Fixture{}, _admin), do: {:error, :invalid_fixture_state}
+
+  @doc "Records a single walkover for the participant who was present."
+  def record_walkover(
+        %Fixture{status: "scheduled"} = fixture,
+        %Admin{} = admin,
+        present_participant
+      ) do
+    if Admin.can?(admin, :record_results) do
+      do_record_walkover(fixture, admin, present_participant)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def record_walkover(%Fixture{}, _admin, _present_participant),
+    do: {:error, :invalid_fixture_state}
+
+  defp do_record_walkover(fixture, admin, present_participant) do
+    fixture = Repo.preload(fixture, [:participant_a, :participant_b])
+    present_id = present_participant_id(present_participant)
+
+    case present_id do
+      id when id in [fixture.participant_a_id, fixture.participant_b_id] ->
+        absent_id =
+          if present_id == fixture.participant_a_id,
+            do: fixture.participant_b_id,
+            else: fixture.participant_a_id
+
+        score =
+          if present_id == fixture.participant_a_id,
+            do: %{"participant_a_frames" => 5, "participant_b_frames" => 0},
+            else: %{"participant_a_frames" => 0, "participant_b_frames" => 5}
+
+        Multi.new()
+        |> Multi.insert(
+          :result,
+          MatchResult.create_changeset(%MatchResult{}, %{
+            fixture_id: fixture.id,
+            winner_participation_id: present_id,
+            score: Map.put(score, "walkover", true),
+            recorded_by_admin_id: admin.id
+          })
+        )
+        |> Multi.update(:fixture, fn %{result: result} ->
+          Ecto.Changeset.change(fixture,
+            result_id: result.id,
+            status: "walkover",
+            walkover_kind: "single"
+          )
+        end)
+        |> Multi.run(:log, fn _repo, %{fixture: updated} ->
+          Accounts.log_admin_action("record_walkover", admin, updated,
+            new_value: %{present_participant_id: present_id, absent_participant_id: absent_id}
+          )
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{fixture: updated}} -> {:ok, Repo.preload(updated, :result)}
+          {:error, _step, changeset, _changes} -> {:error, changeset}
+        end
+
+      _ ->
+        {:error, :participant_required}
+    end
+  end
+
+  @doc "Processes a withdrawal, preserving played matches or converting the remaining schedule to walkovers."
+  def process_withdrawal(%StageParticipation{} = participation, %Admin{} = admin) do
+    if Admin.can?(admin, :approve_results) do
+      do_process_withdrawal(participation, admin)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_process_withdrawal(participation, admin) do
+    fixtures = withdrawal_fixtures(participation.id)
+    played = Enum.count(fixtures, &(&1.status in ["completed", "verified", "walkover"]))
+    keep_played = played * 2 >= length(fixtures)
+
+    Multi.new()
+    |> Multi.run(:fixtures, fn repo, _changes ->
+      if keep_played do
+        convert_withdrawal_fixtures(repo, fixtures, participation.id, admin)
+      else
+        reset_withdrawal_fixtures(repo, fixtures)
+      end
+    end)
+    |> Multi.run(:log, fn _repo, %{fixtures: updated} ->
+      Accounts.log_admin_action("process_withdrawal", admin, participation,
+        new_value: %{
+          played: played,
+          total: length(fixtures),
+          preserved_played: keep_played,
+          converted_fixture_ids: Enum.map(updated, & &1.id)
+        }
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{fixtures: fixtures}} -> {:ok, fixtures}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
   defp do_correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
     prior_value = %{
       "winner_participation_id" => result.winner_participation_id,
@@ -1462,6 +1680,183 @@ defmodule Cuevolution.Competitions do
       {:ok, %{result: result}} -> {:ok, result}
       {:error, :result, changeset, _changes} -> {:error, changeset}
     end
+  end
+
+  defp normalize_frame_winners(winners) when length(winners) != 5,
+    do: {:error, :five_frames_required}
+
+  defp normalize_frame_winners(winners) do
+    normalized = Enum.map(winners, &normalize_frame_winner/1)
+
+    if Enum.any?(normalized, &is_nil/1),
+      do: {:error, :invalid_frame_winner},
+      else: {:ok, normalized}
+  end
+
+  defp normalize_frame_winner(value) when value in [:a, "a", "participant_a"], do: :a
+  defp normalize_frame_winner(value) when value in [:b, "b", "participant_b"], do: :b
+  defp normalize_frame_winner(%{"winner" => value}), do: normalize_frame_winner(value)
+  defp normalize_frame_winner(%{winner: value}), do: normalize_frame_winner(value)
+  defp normalize_frame_winner(_value), do: nil
+
+  defp majority_winner(
+         %Fixture{participant_a_id: participant_a_id, participant_b_id: participant_b_id},
+         winners
+       ) do
+    a_wins = Enum.count(winners, &(&1 == :a))
+
+    cond do
+      a_wins >= 3 -> {:ok, participant_a_id}
+      length(winners) - a_wins >= 3 -> {:ok, participant_b_id}
+      true -> {:error, :no_majority}
+    end
+  end
+
+  defp points_for_frames(5, 0), do: 6
+  defp points_for_frames(frames_won, _frames_lost), do: frames_won
+
+  defp insert_structured_frames(repo, result, fixture, winners) do
+    Enum.with_index(winners, 1)
+    |> Enum.reduce_while({:ok, []}, fn {winner, sequence}, {:ok, inserted} ->
+      home_id = fixture.participant_a.player_id
+      away_id = fixture.participant_b.player_id
+      winner_id = if winner == :a, do: home_id, else: away_id
+
+      attrs = %{
+        match_result_id: result.id,
+        home_player_id: home_id,
+        away_player_id: away_id,
+        winner_player_id: winner_id,
+        sequence: sequence
+      }
+
+      case %MatchFrame{} |> MatchFrame.changeset(attrs) |> repo.insert() do
+        {:ok, frame} -> {:cont, {:ok, [frame | inserted]}}
+        {:error, changeset} -> {:halt, {:error, changeset}}
+      end
+    end)
+  end
+
+  defp optional_frame_corrections(nil, _result), do: {:ok, nil}
+  defp optional_frame_corrections([], _result), do: {:ok, nil}
+  defp optional_frame_corrections(corrections, _result), do: normalize_frame_winners(corrections)
+
+  defp correction_result_attrs(_fixture, nil), do: {:ok, %{}}
+
+  defp correction_result_attrs(fixture, winners) do
+    with {:ok, winner_id} <- majority_winner(fixture, winners) do
+      frames_a = Enum.count(winners, &(&1 == :a))
+      frames_b = length(winners) - frames_a
+
+      {:ok,
+       %{
+         winner_participation_id: winner_id,
+         score: %{
+           "participant_a_frames" => frames_a,
+           "participant_b_frames" => frames_b,
+           "points_a" => points_for_frames(frames_a, frames_b),
+           "points_b" => points_for_frames(frames_b, frames_a)
+         }
+       }}
+    end
+  end
+
+  defp maybe_replace_structured_frames(multi, _fixture, nil), do: multi
+
+  defp maybe_replace_structured_frames(multi, fixture, winners) do
+    Multi.delete_all(
+      multi,
+      :old_frames,
+      from(f in MatchFrame, where: f.match_result_id == ^fixture.result.id)
+    )
+    |> Multi.run(:replacement_frames, fn repo, _changes ->
+      insert_structured_frames(repo, fixture.result, fixture, winners)
+    end)
+  end
+
+  defp nonempty_reason?(reason), do: is_binary(reason) and String.trim(reason) != ""
+
+  defp present_participant_id(%StageParticipation{id: id}), do: id
+  defp present_participant_id(id) when is_binary(id), do: id
+  defp present_participant_id(_), do: nil
+
+  defp withdrawal_fixtures(participation_id) do
+    Fixture
+    |> join(:inner, [f], r in Round, on: r.id == f.round_id)
+    |> where(
+      [f, _r],
+      f.participant_a_id == ^participation_id or f.participant_b_id == ^participation_id
+    )
+    |> preload([:result, :participant_a, :participant_b])
+    |> Repo.all()
+  end
+
+  defp convert_withdrawal_fixtures(repo, fixtures, withdrawn_id, admin) do
+    Enum.reduce_while(fixtures, {:ok, []}, fn fixture, {:ok, converted} ->
+      case convert_withdrawal_fixture(repo, fixture, withdrawn_id, admin) do
+        :skip -> {:cont, {:ok, converted}}
+        {:ok, updated} -> {:cont, {:ok, [updated | converted]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp convert_withdrawal_fixture(_repo, %Fixture{status: status}, _withdrawn_id, _admin)
+       when status != "scheduled",
+       do: :skip
+
+  defp convert_withdrawal_fixture(repo, fixture, withdrawn_id, admin) do
+    opponent_id =
+      if fixture.participant_a_id == withdrawn_id,
+        do: fixture.participant_b_id,
+        else: fixture.participant_a_id
+
+    result_attrs = %{
+      fixture_id: fixture.id,
+      winner_participation_id: opponent_id,
+      score: withdrawal_score(fixture, opponent_id),
+      recorded_by_admin_id: admin.id
+    }
+
+    case repo.insert(MatchResult.create_changeset(%MatchResult{}, result_attrs)) do
+      {:ok, result} ->
+        repo.update(
+          Ecto.Changeset.change(fixture,
+            result_id: result.id,
+            status: "walkover",
+            walkover_kind: "single"
+          )
+        )
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp withdrawal_score(%Fixture{participant_a_id: participant_a_id}, participant_a_id),
+    do: %{"participant_a_frames" => 5, "participant_b_frames" => 0, "withdrawal" => true}
+
+  defp withdrawal_score(%Fixture{}, _participant_b_id),
+    do: %{"participant_a_frames" => 0, "participant_b_frames" => 5, "withdrawal" => true}
+
+  defp reset_withdrawal_fixtures(repo, fixtures) do
+    Enum.reduce_while(fixtures, {:ok, []}, fn fixture, {:ok, reset} ->
+      if fixture.result_id do
+        repo.delete_all(from f in MatchFrame, where: f.match_result_id == ^fixture.result_id)
+        repo.delete_all(from mr in MatchResult, where: mr.id == ^fixture.result_id)
+      end
+
+      case repo.update(
+             Ecto.Changeset.change(fixture,
+               result_id: nil,
+               status: "scheduled",
+               walkover_kind: nil
+             )
+           ) do
+        {:ok, updated} -> {:cont, {:ok, [updated | reset]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
   end
 
   @doc """
@@ -1504,6 +1899,7 @@ defmodule Cuevolution.Competitions do
       join: r in Round,
       on: r.id == f.round_id,
       where: r.group_id == ^group_id,
+      where: is_nil(f.match_id) or f.status in ["verified", "walkover"],
       preload: [fixture: [:participant_a, :participant_b]]
     )
     |> Repo.all()

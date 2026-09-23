@@ -54,11 +54,14 @@
         class="flex flex-wrap items-center gap-3 px-5 py-3.5"
       >
         <span class="font-mono text-xs font-semibold text-ink-500">{fixture.match_id}</span>
-        <span class="flex-1 text-sm font-semibold text-ink-950">
+        <.link
+          navigate={~p"/admin/matches/#{fixture.id}"}
+          class="flex-1 text-sm font-semibold text-ink-950 hover:text-red-700"
+        >
           {Competitions.participant_name(fixture.participant_a)} vs {Competitions.participant_name(
             fixture.participant_b
           )}
-        </span>
+        </.link>
         <span class="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold capitalize text-ink-700">
           {fixture.status}
         </span>
