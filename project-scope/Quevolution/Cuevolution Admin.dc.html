@@ -21,6 +21,11 @@ a:hover{color:#A81810;text-decoration:underline;}
 input::placeholder,textarea::placeholder{color:#9E9EA7;}
 ::-webkit-scrollbar{width:10px;height:10px;}
 ::-webkit-scrollbar-thumb{background:#DBDBDE;border-radius:9999px;}
+@page{margin:14mm;}
+@media print{
+  body > *{display:none !important;}
+  #cue-print-report{display:block !important;position:static !important;width:auto !important;}
+}
 </style>
 </helmet>
 <div style="font-family:'Mona Sans','Inter','Helvetica Neue',Arial,sans-serif;color:#3A3546;min-height:100vh;background:#FAF9FB;">
@@ -99,8 +104,16 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
 
         <!-- ===== DASHBOARD ===== -->
         <sc-if value="{{ rIsDash }}" hint-placeholder-val="{{ true }}">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Season 2026</div>
-          <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 22px;">Dashboard</h1>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between;margin-bottom:22px;">
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Season 2026</div>
+              <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0;">Dashboard</h1>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              <button onClick="{{ exportDashCsv }}" style="border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:10px 16px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;">Export to Excel (.csv)</button>
+              <button onClick="{{ exportDashPdf }}" style="border:none;background:#0D0C22;color:#fff;border-radius:9999px;padding:10px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Export PDF</button>
+            </div>
+          </div>
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:28px;">
             <sc-for list="{{ statTiles }}" as="s" hint-placeholder-count="6">
@@ -125,9 +138,9 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
               <div onMouseEnter="{{ r.onEnter }}" onMouseLeave="{{ r.onLeave }}" onClick="{{ r.onClick }}" style="{{ r.rowStyle }}">
                 <div style="{{ r.labelStyle }}">{{ r.region }}</div>
                 <div style="flex:1;min-width:0;">
-                  <div style="display:flex;height:16px;width:{{ r.barWidth }};border-radius:4px;overflow:hidden;min-width:3px;transition:width .2s ease;">
+                  <div style="{{ r.barStyle }}">
                     <sc-for list="{{ r.segs }}" as="s" hint-placeholder-count="3">
-                      <div style="width:{{ s.w }};background:{{ s.color }};"></div>
+                      <div style="{{ s.segStyle }}"></div>
                     </sc-for>
                   </div>
                   <div style="font-size:11.5px;color:#9E9EA7;margin-top:4px;">{{ r.detail }}</div>
@@ -136,6 +149,52 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
               </div>
             </sc-for>
             <div style="font-size:12px;color:#9E9EA7;margin-top:12px;">{{ regionHint }}</div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:16px;">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0;letter-spacing:-0.01em;">Players per venue</h2>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <input type="text" value="{{ vmSearchValue }}" onInput="{{ onVmSearch }}" placeholder="Search venue…" style="border:1px solid #DBDBDE;border-radius:9999px;padding:8px 14px;font-family:inherit;font-size:13px;color:#0D0C22;width:170px;outline:none;" />
+                <select value="{{ vmRegionValue }}" onChange="{{ onVmRegion }}" style="border:1px solid #DBDBDE;border-radius:9999px;padding:8px 12px;font-family:inherit;font-size:13px;color:#3A3546;background:#fff;cursor:pointer;">
+                  <sc-for list="{{ venueRegionOpts }}" as="o" hint-placeholder-count="9">
+                    <option value="{{ o.value }}">{{ o.label }}</option>
+                  </sc-for>
+                </select>
+                <button onClick="{{ toggleVmSort }}" style="border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:8px 14px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;white-space:nowrap;">{{ vmSortLabel }}</button>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:24px;padding-bottom:14px;margin-bottom:10px;border-bottom:1px solid #F3F3F4;">
+              <sc-for list="{{ venueMetricTiles }}" as="t" hint-placeholder-count="3">
+                <div>
+                  <div style="font-size:12px;color:#9E9EA7;margin-bottom:3px;">{{ t.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:#0D0C22;">{{ t.value }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <sc-for list="{{ venueBars }}" as="v" hint-placeholder-count="8">
+              <div onMouseEnter="{{ v.onEnter }}" onMouseLeave="{{ v.onLeave }}" onClick="{{ v.onClick }}" style="{{ v.rowStyle }}">
+                <div style="width:20px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#BFBFC6;text-align:right;">{{ v.rank }}</div>
+                <div style="{{ v.nameStyle }}">{{ v.name }}</div>
+                <div style="flex:1;min-width:0;">
+                <div style="{{ v.barStyle }}"></div>
+                  <div style="font-size:11.5px;color:#9E9EA7;margin-top:4px;">{{ v.detail }}</div>
+                </div>
+                <div style="width:52px;flex:none;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#0D0C22;">{{ v.total }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noVmResults }}" hint-placeholder-val="">
+              <div style="padding:22px 0;text-align:center;color:#9E9EA7;font-size:13.5px;">No venues match that search.</div>
+            </sc-if>
+
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:14px;">
+              <span style="font-size:12px;color:#9E9EA7;">{{ venueFoot }}</span>
+              <sc-if value="{{ hasVmMore }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ showVmMore }}" style="border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:8px 16px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;">{{ vmMoreLabel }}</button>
+              </sc-if>
+            </div>
           </div>
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:16px;">
@@ -233,6 +292,22 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             <sc-for list="{{ stagesPanelTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
           </div>
 
+          <sc-if value="{{ stagesIsGrassroots }}" hint-placeholder-val="">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:14px 18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="font-size:14px;font-weight:600;color:#0D0C22;">Grassroots deadline:</div>
+              <sc-if value="{{ grDeadlineEditing }}" hint-placeholder-val="">
+                <input type="date" value="{{ grDeadlineDraft }}" onInput="{{ onGrDeadlineInput }}" onBlur="{{ saveGrDeadline }}" style="border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#0D0C22;" />
+              </sc-if>
+              <sc-if value="{{ grDeadlineShowVal }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ startGrDeadline }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ grDeadlineVal }}</span>
+              </sc-if>
+              <sc-if value="{{ grDeadlineNotSet }}" hint-placeholder-val="">
+                <span onClick="{{ startGrDeadline }}" style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#92400E;background:#FEF3E2;padding:4px 10px;border-radius:9999px;cursor:pointer;">Not set — set a deadline</span>
+              </sc-if>
+              <div style="font-size:12.5px;color:#6E6D7A;flex-basis:100%;">Applies to every Grassroots venue and category. Fixtures still unplayed when it passes become a double walkover (no result). Publishing a draw never sets this automatically; clear the date to remove it.</div>
+            </div>
+          </sc-if>
+
           <!-- participants panel -->
           <div style="display:{{ stagesParticipantsDisplay }};">
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
@@ -290,12 +365,18 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             </sc-if>
             <div style="display:{{ stagesGroupSettingsDisplay }};">
               <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 14px;">Grassroots and Regional are open, round-robin stages — this configures group size and how many advance, not a capacity limit.</p>
+              <sc-if value="{{ stagesIsGrassroots }}" hint-placeholder-val="">
+                <p style="font-size:13.5px;color:#6E6D7A;margin:-8px 0 14px;">Target/min size and minimum entrants drive the automatic draw formula; overriding the group count on a specific draw doesn't change these defaults.</p>
+              </sc-if>
               <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
                 <table style="width:100%;border-collapse:collapse;">
                   <thead><tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
                     <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Category</th>
                     <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Group size</th>
                     <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Top N advance</th>
+                    <sc-for list="{{ grFormulaHeaders }}" as="h" hint-placeholder-count="0">
+                      <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">{{ h.label }}</th>
+                    </sc-for>
                   </tr></thead>
                   <tbody>
                     <sc-for list="{{ groupSettingsTable }}" as="g" hint-placeholder-count="3">
@@ -303,17 +384,45 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
                         <td style="padding:11px 16px;font-size:14px;font-weight:600;color:#0D0C22;">{{ g.label }}</td>
                         <td style="padding:11px 16px;">
                           <sc-if value="{{ g.editingSize }}" hint-placeholder-val=""><input type="number" value="{{ g.sizeVal }}" onInput="{{ g.onSizeInput }}" onBlur="{{ g.saveSize }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;" /></sc-if>
-                          <sc-if value="{{ g.editingSize }}" hint-placeholder-val="{{ true }}"><span onClick="{{ g.startEditSize }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ g.sizeVal }}</span></sc-if>
+                          <sc-if value="{{ g.showSize }}" hint-placeholder-val="{{ true }}"><span onClick="{{ g.startEditSize }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ g.sizeVal }}</span></sc-if>
                         </td>
                         <td style="padding:11px 16px;">
                           <sc-if value="{{ g.editingTop }}" hint-placeholder-val=""><input type="number" value="{{ g.topVal }}" onInput="{{ g.onTopInput }}" onBlur="{{ g.saveTop }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;" /></sc-if>
-                          <sc-if value="{{ g.editingTop }}" hint-placeholder-val="{{ true }}"><span onClick="{{ g.startEditTop }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ g.topVal }}</span></sc-if>
+                          <sc-if value="{{ g.showTop }}" hint-placeholder-val="{{ true }}"><span onClick="{{ g.startEditTop }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ g.topVal }}</span></sc-if>
                         </td>
+                        <sc-for list="{{ g.fields }}" as="fd" hint-placeholder-count="0">
+                          <td style="padding:11px 16px;">
+                            <sc-if value="{{ fd.na }}" hint-placeholder-val=""><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#9E9EA7;">—</span></sc-if>
+                            <sc-if value="{{ fd.editing }}" hint-placeholder-val=""><input type="number" value="{{ fd.val }}" onInput="{{ fd.onInput }}" onBlur="{{ fd.save }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;" /></sc-if>
+                            <sc-if value="{{ fd.show }}" hint-placeholder-val="{{ true }}"><span onClick="{{ fd.start }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ fd.val }}</span></sc-if>
+                          </td>
+                        </sc-for>
                       </tr>
                     </sc-for>
                   </tbody>
                 </table>
               </div>
+              <sc-if value="{{ stagesIsGrassroots }}" hint-placeholder-val="">
+                <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-top:14px;">
+                  <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                      <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Category</th>
+                      <th style="text-align:left;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Best-of-rest qualifiers</th>
+                    </tr></thead>
+                    <tbody>
+                      <sc-for list="{{ grBorTable }}" as="b" hint-placeholder-count="2">
+                        <tr style="border-bottom:1px solid #F3F3F4;">
+                          <td style="padding:11px 16px;font-size:14px;font-weight:600;color:#0D0C22;">{{ b.label }}</td>
+                          <td style="padding:11px 16px;">
+                            <sc-if value="{{ b.field.editing }}" hint-placeholder-val=""><input type="number" value="{{ b.field.val }}" onInput="{{ b.field.onInput }}" onBlur="{{ b.field.save }}" style="width:70px;border:1px solid #E32219;border-radius:8px;padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:14px;" /></sc-if>
+                            <sc-if value="{{ b.field.show }}" hint-placeholder-val="{{ true }}"><span onClick="{{ b.field.start }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#3A3546;cursor:pointer;border-bottom:1px dashed #DBDBDE;">{{ b.field.val }}</span></sc-if>
+                          </td>
+                        </tr>
+                      </sc-for>
+                    </tbody>
+                  </table>
+                </div>
+              </sc-if>
             </div>
           </div>
         </sc-if>
@@ -338,6 +447,213 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             <sc-for list="{{ groupsCategoryTabs }}" as="t" hint-placeholder-count="3"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
           </div>
 
+          <!-- Grassroots Individual Male/Female: formula-driven draw -->
+          <sc-if value="{{ grOn }}" hint-placeholder-val="{{ true }}">
+            <sc-if value="{{ grShowViewTabs }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;gap:22px;border-bottom:1px solid #E7E7E9;margin-bottom:18px;">
+                <sc-for list="{{ grViewTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ grMsg }}" hint-placeholder-val="">
+              <div onClick="{{ clearGrMsg }}" style="display:flex;align-items:center;gap:10px;background:#DCF3E4;border:1px solid #B9E6C9;color:#0E6A30;border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:14px;font-weight:600;cursor:pointer;">✓ {{ grMsg }}</div>
+            </sc-if>
+
+            <sc-if value="{{ grIsGroupsView }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+                <sc-for list="{{ grSteps }}" as="s" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="{{ s.lineStyle }}"></div>
+                    <div style="{{ s.style }}">{{ s.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <sc-if value="{{ grBelowMin }}" hint-placeholder-val="">
+                <div style="background:#FEF9F0;border:1px solid #F6D9A5;border-radius:16px;padding:16px 18px;margin-bottom:18px;">
+                  <div style="font-size:14px;font-weight:700;color:#92400E;margin-bottom:3px;">Draw not available yet</div>
+                  <div style="font-size:13.5px;color:#92400E;">{{ grWarnText }}</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ grNotBelowMin }}" hint-placeholder-val="{{ true }}">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6E6D7A;margin-bottom:16px;">{{ grSummary }}</div>
+              </sc-if>
+
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:20px;">
+                <sc-if value="{{ grCanStep }}" hint-placeholder-val="">
+                  <div style="display:flex;align-items:center;gap:10px;border:1px solid #DBDBDE;border-radius:9999px;padding:5px 8px;">
+                    <button onClick="{{ grDec }}" style="width:28px;height:28px;border-radius:9999px;border:1px solid #DBDBDE;background:#fff;color:#3A3546;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">−</button>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#0D0C22;min-width:18px;text-align:center;">{{ grCountLabel }}</div>
+                    <button onClick="{{ grInc }}" style="width:28px;height:28px;border-radius:9999px;border:1px solid #DBDBDE;background:#fff;color:#3A3546;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">+</button>
+                    <span style="font-size:12.5px;color:#6E6D7A;padding-right:6px;">groups · {{ grSizeNote }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ grHasAction }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ grAction }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 22px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">{{ grActionLabel }}</button>
+                </sc-if>
+                <sc-if value="{{ grShowRedraw }}" hint-placeholder-val="">
+                  <button onClick="{{ openGrRedraw }}" style="background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:11px 20px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Redraw</button>
+                </sc-if>
+              </div>
+
+              <sc-if value="{{ grRedrawOpen }}" hint-placeholder-val="">
+                <div style="background:#fff;border:1px solid #F6D9A5;border-radius:16px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                  <div style="font-size:14.5px;font-weight:700;color:#0D0C22;margin-bottom:4px;">Redraw published groups</div>
+                  <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 12px;max-width:60ch;">This supersedes the published draw, voids its generated fixtures and is written to the audit log. A reason is required.</p>
+                  <input type="text" value="{{ grRedrawReason }}" onInput="{{ onGrRedrawReason }}" placeholder="Reason for redraw…" style="width:100%;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:14px;color:#0D0C22;margin-bottom:12px;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button onClick="{{ confirmGrRedraw }}" style="background:#DC2626;color:#fff;border:none;border-radius:9999px;padding:10px 20px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Redraw and republish</button>
+                    <button onClick="{{ cancelGrRedraw }}" style="background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:10px 20px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ grHasCards }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:28px;">
+                  <sc-for list="{{ grCards }}" as="g" hint-placeholder-count="2">
+                    <div onClick="{{ g.toggle }}" style="{{ g.cardStyle }}" style-hover="border-color:#9E9EA7;">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+                        <div style="font-size:15px;font-weight:700;color:#0D0C22;letter-spacing:-0.01em;">{{ g.name }}</div>
+                        <span style="{{ g.pillStyle }}">{{ g.pillLabel }}</span>
+                      </div>
+                      <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:12px;">
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">{{ g.size }}</div>
+                        <div style="font-size:12px;font-weight:600;color:#6E6D7A;">{{ g.hint }}</div>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:6px;">
+                        <sc-for list="{{ g.members }}" as="m" hint-placeholder-count="4">
+                          <div onClick="{{ m.pick }}" style="{{ m.style }}">
+                            <span style="flex:1;min-width:0;">{{ m.name }}</span>
+                            <span style="{{ m.metaStyle }}">{{ m.meta }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <sc-if value="{{ g.isOpen }}" hint-placeholder-val="">
+                        <div style="border-top:1px solid #F3F3F4;margin-top:14px;padding-top:12px;">
+                          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+                            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;">{{ g.filterLabel }}</div>
+                            <sc-if value="{{ g.hasFilter }}" hint-placeholder-val=""><span onClick="{{ g.clearFilter }}" style="font-size:12px;font-weight:600;color:#C81E16;cursor:pointer;">Clear</span></sc-if>
+                          </div>
+                          <div style="display:flex;flex-direction:column;gap:4px;">
+                            <sc-for list="{{ g.fixtures }}" as="fx" hint-placeholder-count="3">
+                              <div onClick="{{ fx.open }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;cursor:pointer;" style-hover="background:#FAF9FB;">
+                                <div style="flex:1;min-width:0;">
+                                  <div style="font-size:13px;font-weight:600;color:#0D0C22;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ fx.pair }}</div>
+                                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9E9EA7;">{{ fx.matchId }}</div>
+                                </div>
+                                <span style="{{ fx.statusStyle }}">{{ fx.statusLabel }}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </sc-if>
+
+            <!-- group standings (Grassroots points — frames won + clean-sweep bonus) -->
+            <sc-if value="{{ grIsStandingsView }}" hint-placeholder-val="">
+              <sc-for list="{{ grTables }}" as="t" hint-placeholder-count="2">
+                <div style="margin-bottom:26px;">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                    <h2 style="font-size:15px;font-weight:700;color:#0D0C22;margin:0;letter-spacing:-0.01em;">{{ t.name }}</h2>
+                    <span style="{{ t.stateStyle }}">{{ t.stateLabel }}</span>
+                  </div>
+                  <div style="border:1px solid #E7E7E9;border-radius:16px;background:#fff;overflow-x:auto;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                    <div style="min-width:560px;">
+                      <div style="display:grid;grid-template-columns:48px minmax(110px,1fr) repeat(7,38px) 50px;background:#FAF9FB;border-bottom:1px solid #E7E7E9;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:#6E6D7A;">
+                        <div style="padding:11px 7px;">Pos</div>
+                        <div style="padding:11px 7px;">Player</div>
+                        <div style="padding:11px 7px;text-align:right;">P</div>
+                        <div style="padding:11px 7px;text-align:right;">W</div>
+                        <div style="padding:11px 7px;text-align:right;">L</div>
+                        <div style="padding:11px 7px;text-align:right;">FW</div>
+                        <div style="padding:11px 7px;text-align:right;">FL</div>
+                        <div style="padding:11px 7px;text-align:right;">FD</div>
+                        <div style="padding:11px 7px;text-align:right;">Bon</div>
+                        <div style="padding:11px 12px 11px 7px;text-align:right;">Pts</div>
+                      </div>
+                      <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="8">
+                        <div onClick="{{ r.onResolve }}" style="{{ r.rowStyle }}">
+                          <div style="padding:10px 7px;display:flex;align-items:center;gap:5px;">
+                            <span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ r.posLabel }}</span>
+                            <sc-if value="{{ r.tied }}" hint-placeholder-val=""><span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:0.08em;color:#92400E;background:#FEF3E2;padding:2px 5px;border-radius:5px;">TIED</span></sc-if>
+                          </div>
+                          <div style="padding:10px 7px;font-size:14px;font-weight:600;color:#0D0C22;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.P }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.W }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.L }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.FW }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.FL }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.FD }}</div>
+                          <div style="{{ r.numStyle }}">{{ r.BON }}</div>
+                          <div style="{{ r.ptsStyle }}">{{ r.PTS }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+                    <sc-for list="{{ t.qualifiers }}" as="q" hint-placeholder-count="2">
+                      <div style="border:1px solid #E7E7E9;border-left:3px solid #E32219;border-radius:10px;padding:8px 14px;background:#fff;">
+                        <div style="font-size:13.5px;font-weight:600;color:#0D0C22;">{{ q.name }}</div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">{{ q.note }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+
+              <sc-if value="{{ grHasBestOfRest }}" hint-placeholder-val="{{ true }}">
+                <h3 style="font-size:13.5px;font-weight:700;color:#0D0C22;margin:0 0 8px;">Best of rest (cross-group)</h3>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+                  <sc-for list="{{ grBestOfRest }}" as="b" hint-placeholder-count="2">
+                    <div style="border:1px solid #E7E7E9;border-radius:10px;padding:8px 14px;background:#fff;">
+                      <div style="font-size:13.5px;font-weight:600;color:#0D0C22;">{{ b.name }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">{{ b.note }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ grCanClose }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ openGrClose }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:12px 24px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Close stage &amp; advance qualifiers</button>
+              </sc-if>
+              <sc-if value="{{ grCloseOpen }}" hint-placeholder-val="">
+                <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:18px 20px;margin-top:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                  <div style="font-size:14.5px;font-weight:700;color:#0D0C22;margin-bottom:10px;">These participants advance to Regional</div>
+                  <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                    <sc-for list="{{ grCloseList }}" as="q" hint-placeholder-count="4">
+                      <div style="padding:8px 12px;background:#FAF9FB;border-radius:9px;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ q.name }}</div>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button onClick="{{ confirmGrClose }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:10px 20px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Confirm &amp; advance</button>
+                    <button onClick="{{ cancelGrClose }}" style="background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:10px 20px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ grTieOpen }}" hint-placeholder-val="">
+                <div onClick="{{ closeGrTie }}" style="position:fixed;inset:0;z-index:90;background:rgba(13,12,34,0.5);display:flex;align-items:center;justify-content:center;padding:24px;">
+                  <div onClick="{{ stopClick }}" style="width:100%;max-width:420px;background:#fff;border-radius:20px;padding:24px;box-shadow:0 24px 70px rgba(13,12,34,0.3);">
+                    <div style="font-size:17px;font-weight:700;color:#0D0C22;margin-bottom:4px;">Resolve tie</div>
+                    <p style="font-size:13.5px;color:#6E6D7A;margin:0 0 14px;">Points, head-to-head, match wins and frame difference are all level. Pick who ranks higher.</p>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                      <sc-for list="{{ grTieRows }}" as="p" hint-placeholder-count="2">
+                        <div onClick="{{ p.onPick }}" style="border:1px solid #DBDBDE;border-radius:12px;padding:12px 14px;cursor:pointer;" style-hover="background:#FAF9FB;border-color:#0D0C22;">
+                          <div style="font-size:14px;font-weight:600;color:#0D0C22;">{{ p.name }}</div>
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;">{{ p.note }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ grOff }}" hint-placeholder-val="">
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
             <input type="text" value="{{ newGroupName }}" onInput="{{ onNewGroupName }}" placeholder="New group name…" style="flex:1;min-width:200px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 16px;font-family:inherit;font-size:14px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
             <button onClick="{{ createGroup }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:11px 22px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Create group</button>
@@ -350,7 +666,10 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
                 <div style="font-size:15px;font-weight:700;color:#0D0C22;margin-bottom:12px;letter-spacing:-0.01em;">{{ g.name }}</div>
                 <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
                   <sc-for list="{{ g.members }}" as="m" hint-placeholder-count="4">
-                    <div style="padding:8px 12px;background:#FAF9FB;border-radius:9px;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ m.name }}</div>
+                    <div onClick="{{ m.open }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#FAF9FB;border-radius:9px;font-size:13.5px;font-weight:600;color:#0D0C22;cursor:pointer;" style-hover="background:#F3F3F4;">
+                      <span style="flex:1;min-width:0;">{{ m.name }}</span>
+                      <span onClick="{{ m.remove }}" title="Remove from group" style="width:22px;height:22px;border-radius:9999px;display:flex;align-items:center;justify-content:center;color:#9E9EA7;font-size:12px;cursor:pointer;" style-hover="background:#E7E7E9;color:#0D0C22;">✕</span>
+                    </div>
                   </sc-for>
                 </div>
                 <select value="" onChange="{{ g.onAdd }}" style="width:100%;border:1px solid #DBDBDE;border-radius:9999px;padding:8px 13px;font-family:inherit;font-size:13px;color:#0D0C22;background:#fff;cursor:pointer;">
@@ -377,6 +696,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
           </sc-if>
           <sc-if value="{{ noUnassigned }}" hint-placeholder-val="">
             <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:20px 22px;text-align:center;color:#9E9EA7;font-size:13.5px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">Everyone in this stage/region is already grouped.</div>
+          </sc-if>
           </sc-if>
         </sc-if>
 
@@ -423,6 +743,50 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             <div style="display:flex;align-items:center;gap:10px;background:#DCF3E4;border:1px solid #b9e6c9;color:#0E6A30;border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:14px;font-weight:600;">✓ {{ drawSavedMsg }}</div>
           </sc-if>
 
+          <sc-if value="{{ grIsGenerated }}" hint-placeholder-val="">
+            <div style="display:flex;align-items:flex-start;gap:10px;background:#F3F3F4;border:1px solid #E7E7E9;color:#3A3546;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;">This schedule was generated automatically when the draw was published. Fixtures and pairings are read-only — redraw from the Groups screen to change them.</div>
+            <div style="{{ grDeadlineLineStyle }}">{{ grDeadlineLine }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+              <sc-for list="{{ grSchedFilters }}" as="c" hint-placeholder-count="4">
+                <div onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}<span style="{{ c.countStyle }}">{{ c.count }}</span></div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <input type="text" value="{{ grSchedPlayer }}" onInput="{{ onGrSchedPlayer }}" placeholder="Filter by player…" style="flex:1;min-width:200px;max-width:320px;border:1px solid #DBDBDE;border-radius:9999px;padding:9px 15px;font-family:inherit;font-size:13.5px;color:#0D0C22;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6E6D7A;">{{ grSchedCount }} · click a row to open it in Results</div>
+            </div>
+            <sc-if value="{{ grSchedEmpty }}" hint-placeholder-val="">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:28px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:36px;">No fixtures match these filters.</div>
+            </sc-if>
+            <sc-if value="{{ grSchedHasRows }}" hint-placeholder-val="{{ true }}">
+            <div style="overflow-x:auto;border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:36px;">
+              <table style="width:100%;border-collapse:collapse;min-width:720px;">
+                <thead>
+                  <tr style="background:#FAF9FB;border-bottom:1px solid #E7E7E9;">
+                    <th style="text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Match ID</th>
+                    <th style="text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Participant A</th>
+                    <th style="text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 14px;">Participant B</th>
+                    <th style="text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;font-weight:600;padding:11px 16px;">Status</th>
+                    <th style="padding:11px 16px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{ grSchedRows }}" as="m" hint-placeholder-count="6">
+                    <tr onClick="{{ m.open }}" title="Open in Results &amp; Points" style="border-bottom:1px solid #F3F3F4;cursor:pointer;" style-hover="background:#FAF9FB;">
+                      <td style="padding:11px 16px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#3A3546;white-space:nowrap;">{{ m.matchId }}</td>
+                      <td style="padding:11px 14px;font-size:14px;font-weight:600;color:#0D0C22;">{{ m.a }}</td>
+                      <td style="padding:11px 14px;font-size:14px;font-weight:600;color:#0D0C22;">{{ m.b }}</td>
+                      <td style="padding:11px 16px;"><span style="{{ m.statusStyle }}">{{ m.statusLabel }}</span></td>
+                      <td style="padding:11px 16px;text-align:right;color:#9E9EA7;font-size:14px;">→</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ grIsManual }}" hint-placeholder-val="{{ true }}">
           <div style="overflow-x:auto;border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);margin-bottom:16px;">
             <table style="width:100%;border-collapse:collapse;min-width:820px;">
               <thead>
@@ -461,7 +825,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
           <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
             <sc-for list="{{ enteredFixtures }}" as="f" hint-placeholder-count="3">
               <div style="display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid #F3F3F4;flex-wrap:wrap;">
-                <div style="flex:1;min-width:200px;"><div style="font-size:14.5px;font-weight:600;color:#0D0C22;">{{ f.a }} vs {{ f.b }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ f.venue }} · {{ f.date }} · {{ f.time }}</div></div>
+                <div style="flex:1;min-width:200px;"><div style="font-size:14.5px;font-weight:600;color:#0D0C22;">{{ f.a }} vs {{ f.b }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ f.metaLabel }}</div></div>
                 <span style="{{ f.lockStyle }}">{{ f.lockLabel }}</span>
                 <sc-if value="{{ f.canEdit }}" hint-placeholder-val=""><button onClick="{{ f.edit }}" style="background:none;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;" style-hover="background:#F3F3F4;">Edit</button></sc-if>
               </div>
@@ -470,6 +834,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
           </sc-if>
           <sc-if value="{{ noEnteredFixtures }}" hint-placeholder-val="">
             <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:30px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No fixtures entered for this round yet — add rows above and save.</div>
+          </sc-if>
           </sc-if>
         </sc-if>
 
@@ -482,11 +847,110 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
             <sc-for list="{{ resTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
           </div>
 
+          <sc-if value="{{ grMsg }}" hint-placeholder-val="">
+            <div onClick="{{ clearGrMsg }}" style="display:flex;align-items:center;gap:10px;background:#DCF3E4;border:1px solid #B9E6C9;color:#0E6A30;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:14px;font-weight:600;cursor:pointer;">✓ {{ grMsg }}</div>
+          </sc-if>
+
+          <sc-if value="{{ grHasPanel }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #0D0C22;border-radius:16px;padding:20px 22px;margin-bottom:18px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between;margin-bottom:14px;">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#6E6D7A;margin-bottom:5px;">{{ grPanel.matchId }}</div>
+                  <div style="font-size:17px;font-weight:700;color:#0D0C22;letter-spacing:-0.01em;">{{ grPanel.a }} vs {{ grPanel.b }}</div>
+                  <div style="font-size:12.5px;color:#9E9EA7;margin-top:3px;">{{ grPanel.meta }}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="{{ grPanel.statusStyle }}">{{ grPanel.statusLabel }}</span>
+                  <button onClick="{{ grPanel.close }}" style="width:28px;height:28px;border-radius:9999px;border:1px solid #DBDBDE;background:#fff;color:#6E6D7A;font-family:inherit;font-size:14px;cursor:pointer;">✕</button>
+                </div>
+              </div>
+
+              <sc-if value="{{ grPanel.isCorrect }}" hint-placeholder-val="">
+                <div style="background:#FEF3E2;border:1px solid #F6D9A5;color:#92400E;font-size:13px;font-weight:500;border-radius:10px;padding:10px 13px;margin-bottom:16px;">Correcting this result may affect standings and qualification. The change is logged to the audit trail.</div>
+              </sc-if>
+              <sc-if value="{{ grPanel.verifyBlocked }}" hint-placeholder-val="">
+                <div style="background:#F3F3F4;border:1px solid #E7E7E9;color:#524B63;font-size:13px;border-radius:10px;padding:10px 13px;margin-bottom:16px;">Recorded by the venue representative. A Regional Coordinator or Admin must verify it before it counts towards standings.</div>
+              </sc-if>
+              <sc-if value="{{ grPanel.isPostponed }}" hint-placeholder-val="">
+                <div style="background:#FEF3E2;border:1px solid #F6D9A5;color:#92400E;font-size:13px;border-radius:10px;padding:10px 13px;margin-bottom:16px;">Postponed — {{ grPanel.postponedReason }}. Exempt from the stage deadline.</div>
+                <button onClick="{{ grPanel.reopen }}" style="background:#fff;border:1px solid #DBDBDE;color:#3A3546;border-radius:9999px;padding:10px 18px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;">Return to scheduled</button>
+              </sc-if>
+              <sc-if value="{{ grPanel.isWalkover }}" hint-placeholder-val="">
+                <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;color:#3A3546;">Awarded 5–0 on a no-show — no frames were played.</div>
+              </sc-if>
+              <sc-if value="{{ grPanel.isDoubleWo }}" hint-placeholder-val="">
+                <div style="background:#F3F3F4;border:1px solid #E7E7E9;color:#524B63;font-size:13px;border-radius:10px;padding:10px 13px;">No result — this match was still unplayed when the stage deadline passed. Both players are recorded absent; neither is awarded frames or a win.</div>
+              </sc-if>
+
+              <sc-if value="{{ grPanel.showFrames }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:#0D0C22;">{{ grPanel.scoreLabel }}</div>
+                  <div style="font-size:12.5px;color:#9E9EA7;">frames — best of 5, all five recorded</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+                  <sc-for list="{{ grPanel.rows }}" as="fr" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                      <div style="width:64px;flex:none;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6E6D7A;">{{ fr.label }}</div>
+                      <div onClick="{{ fr.pickA }}" style="{{ fr.aStyle }}">{{ fr.aLabel }}</div>
+                      <div onClick="{{ fr.pickB }}" style="{{ fr.bStyle }}">{{ fr.bLabel }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ grPanel.isEntry }}" hint-placeholder-val="">
+                <button onClick="{{ grPanel.save }}" style="{{ grPanel.saveStyle }}">Save as Completed</button>
+                <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:12px;">
+                  <div onClick="{{ grPanel.openWalkover }}" style="font-size:13.5px;font-weight:600;color:#6E6D7A;cursor:pointer;text-decoration:underline;">Record walkover</div>
+                  <div onClick="{{ grPanel.openPostpone }}" style="font-size:13.5px;font-weight:600;color:#6E6D7A;cursor:pointer;text-decoration:underline;">Postpone</div>
+                </div>
+                <sc-if value="{{ grPanel.walkoverOpen }}" hint-placeholder-val="">
+                  <div style="border:1px solid #E7E7E9;border-radius:12px;padding:14px 16px;margin-top:12px;background:#FAF9FB;">
+                    <div style="font-size:13.5px;font-weight:700;color:#0D0C22;margin-bottom:10px;">Which participant was present?</div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                      <button onClick="{{ grPanel.woA }}" style="flex:1;min-width:120px;border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:600;color:#3A3546;cursor:pointer;">{{ grPanel.a }}</button>
+                      <button onClick="{{ grPanel.woB }}" style="flex:1;min-width:120px;border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:600;color:#3A3546;cursor:pointer;">{{ grPanel.b }}</button>
+                      <button onClick="{{ grPanel.cancelWalkover }}" style="border:none;background:none;color:#6E6D7A;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ grPanel.postponeOpen }}" hint-placeholder-val="">
+                  <div style="border:1px solid #E7E7E9;border-radius:12px;padding:14px 16px;margin-top:12px;background:#FAF9FB;">
+                    <input type="text" value="{{ grPanel.postponeReason }}" onInput="{{ grPanel.onPostponeReason }}" placeholder="Reason for postponement…" style="width:100%;border:1px solid #DBDBDE;border-radius:9999px;padding:10px 15px;font-family:inherit;font-size:13.5px;color:#0D0C22;margin-bottom:10px;background:#fff;" style-focus="border-color:#E32219;box-shadow:0 0 0 3px rgba(227,34,25,0.16);outline:none;" />
+                    <p style="font-size:12.5px;color:#6E6D7A;margin:0 0 10px;">Postponed matches are exempt from the stage deadline and won't become a double walkover.</p>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                      <button onClick="{{ grPanel.confirmPostpone }}" style="background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:9px 18px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;">Postpone match</button>
+                      <button onClick="{{ grPanel.cancelPostpone }}" style="border:none;background:none;color:#6E6D7A;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;">Cancel</button>
+                    </div>
+                  </div>
+                </sc-if>
+              </sc-if>
+
+              <sc-if value="{{ grPanel.isVerify }}" hint-placeholder-val="">
+                <button onClick="{{ grPanel.verify }}" style="width:100%;background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Verify result</button>
+              </sc-if>
+              <sc-if value="{{ grPanel.showCorrectSave }}" hint-placeholder-val="">
+                <button onClick="{{ grPanel.saveCorrection }}" style="width:100%;background:#0D0C22;color:#fff;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;" style-hover="background:#16152B;">Save correction</button>
+              </sc-if>
+            </div>
+          </sc-if>
+
           <sc-if value="{{ hasFixtureList }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex;flex-direction:column;gap:10px;">
             <sc-for list="{{ fixtureList }}" as="f" hint-placeholder-count="4">
               <div onClick="{{ f.onClick }}" style="{{ f.rowStyle }}">
-                <div style="flex:1;min-width:180px;"><div style="font-size:15px;font-weight:600;color:#0D0C22;">{{ f.a }} vs {{ f.b }}</div><div style="font-size:12.5px;color:#9E9EA7;">{{ f.round }} · {{ f.venue }} · {{ f.date }}</div></div>
+                <div style="flex:1;min-width:180px;">
+                  <div style="font-size:15px;font-weight:600;color:#0D0C22;">{{ f.a }} vs {{ f.b }}</div>
+                  <div style="font-size:12.5px;color:#9E9EA7;">{{ f.metaLabel }}</div>
+                  <sc-if value="{{ f.isGr }}" hint-placeholder-val="">
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;margin-top:2px;">{{ f.matchId }}</div>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ f.showStrip }}" hint-placeholder-val="">
+                  <div style="display:flex;gap:4px;flex:none;">
+                    <sc-for list="{{ f.strip }}" as="s" hint-placeholder-count="5"><div style="{{ s.style }}">{{ s.label }}</div></sc-for>
+                  </div>
+                </sc-if>
                 <sc-if value="{{ f.played }}" hint-placeholder-val=""><span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;color:#0D0C22;">{{ f.scoreLabel }}</span></sc-if>
                 <span style="{{ f.badgeStyle }}">{{ f.badgeLabel }}</span>
               </div>
@@ -537,6 +1001,62 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
               <h3 style="font-size:17px;font-weight:700;color:#0D0C22;margin:0 0 6px;">No matches for these filters</h3>
               <p style="font-size:13.5px;color:#6E6D7A;margin:0;">Try a broader search or clear a filter.</p>
             </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ===== VENUE PLAYERS (not in nav — opened from the dashboard venue chart) ===== -->
+        <sc-if value="{{ rIsVenuePage }}" hint-placeholder-val="">
+          <div onClick="{{ venuePage.back }}" style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#6E6D7A;cursor:pointer;margin-bottom:14px;">← Back to dashboard</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Venue</div>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+            <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0;">{{ venuePage.name }}</h1>
+            <button onClick="{{ venuePage.openVenues }}" style="border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;">Manage {{ venuePage.region }} venues</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;">
+            <button onClick="{{ venuePage.exportCsv }}" style="border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;color:#3A3546;cursor:pointer;">Export to Excel (.csv)</button>
+            <button onClick="{{ venuePage.exportPdf }}" style="border:none;background:#0D0C22;color:#fff;border-radius:9999px;padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;">Export PDF</button>
+          </div>
+          <div style="font-size:14px;color:#6E6D7A;margin-bottom:22px;">{{ venuePage.sub }}</div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px;">
+            <sc-for list="{{ venuePage.tiles }}" as="t" hint-placeholder-count="4">
+              <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+                <div style="font-size:12.5px;color:#6E6D7A;margin-bottom:6px;">{{ t.label }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#0D0C22;">{{ t.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;">
+            <input type="text" value="{{ venuePage.searchValue }}" onInput="{{ venuePage.onSearch }}" placeholder="Search players at this venue…" style="flex:1;min-width:220px;border:1px solid #DBDBDE;border-radius:9999px;padding:11px 18px;font-family:inherit;font-size:14px;color:#0D0C22;outline:none;" />
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              <sc-for list="{{ venuePage.kindChips }}" as="c" hint-placeholder-count="4">
+                <div onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="font-size:13px;color:#6E6D7A;margin-bottom:10px;font-family:'IBM Plex Mono',monospace;">{{ venuePage.countLabel }}</div>
+
+          <sc-if value="{{ venuePage.hasRows }}" hint-placeholder-val="{{ true }}">
+            <div style="border:1px solid #E7E7E9;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(13,12,34,0.05);overflow:hidden;">
+              <sc-for list="{{ venuePage.rows }}" as="p" hint-placeholder-count="10">
+                <div onClick="{{ p.onClick }}" style="display:flex;align-items:center;gap:13px;padding:12px 16px;border-bottom:1px solid #F3F3F4;cursor:pointer;" style-hover="background:#FAF9FB;">
+                  {{ p.avatarEl }}
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:14.5px;font-weight:600;color:#0D0C22;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p.name }}</div>
+                    <div style="font-size:12.5px;color:#9E9EA7;">{{ p.username }} · {{ p.kindLabel }}</div>
+                  </div>
+                  <div style="font-size:12.5px;color:#9E9EA7;width:96px;flex:none;text-align:right;">{{ p.joined }}</div>
+                  <span style="{{ p.badgeStyle }}">{{ p.stage }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ venuePage.hasMore }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ venuePage.showMore }}" style="margin-top:14px;border:1px solid #DBDBDE;background:#fff;border-radius:9999px;padding:10px 18px;font-family:inherit;font-size:13.5px;font-weight:600;color:#3A3546;cursor:pointer;">{{ venuePage.moreLabel }}</button>
+            </sc-if>
+          </sc-if>
+          <sc-if value="{{ venuePage.noRows }}" hint-placeholder-val="">
+            <div style="background:#fff;border:1px solid #E7E7E9;border-radius:16px;padding:40px 22px;text-align:center;color:#9E9EA7;font-size:14px;box-shadow:0 1px 2px rgba(13,12,34,0.05);">No players at this venue match those filters.</div>
           </sc-if>
         </sc-if>
 
@@ -597,7 +1117,7 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
         <sc-if value="{{ rIsAudit }}" hint-placeholder-val="">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Accountability</div>
           <h1 style="font-size:clamp(24px,4vw,30px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 6px;">Audit log</h1>
-          <p style="font-size:14.5px;line-height:1.6;color:#6E6D7A;margin:0 0 20px;max-width:64ch;">Sign-in history and every fixture or result change, by admin. Super Admin accounts are excluded from these records.</p>
+          <p style="font-size:14.5px;line-height:1.6;color:#6E6D7A;margin:0 0 20px;max-width:64ch;">Sign-in history and every fixture or result change, by admin. Action counts are tallied from the log entries below. Super Admin accounts are excluded from these records.</p>
 
           <div style="display:flex;gap:26px;overflow-x:auto;border-bottom:1px solid #E7E7E9;margin-bottom:18px;">
             <sc-for list="{{ auditTabs }}" as="t" hint-placeholder-count="2"><div onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</div></sc-for>
@@ -904,6 +1424,8 @@ input::placeholder,textarea::placeholder{color:#9E9EA7;}
 class Component extends DCLogic {
   state = {
     authed:false, li:{email:'',pass:''}, liError:'',
+    grView:'groups', grRedrawOpen:false, grRedrawReason:'', grSel:null, grFrames:{},
+    grWalkover:null, grPostpone:null, grPostponeReason:'', grPostponeDate:'', grTie:null, grClose:false, grMsg:'', grCardSel:null, grMemberSel:null, grSchedFilter:'all', grSchedPlayer:'', grDrawToast:'', grDeadline:'2026-10-14', grDeadlineEditing:false, grDeadlineDraft:'',
     route:'dashboard', drawerOpen:false, menuOpen:false,
     drawRound:'grassroots-r3', drawRows:[], drawSavedMsg:'',
     resTab:'unplayed', resultModal:null,
@@ -914,6 +1436,8 @@ class Component extends DCLogic {
     groupsStage:'Grassroots', groupsRegion:'Nairobi A', groupsVenue:'', groupsCategory:'male', newGroupName:'',
     showNewRound:false, newRoundStage:'Grassroots', newRoundGroup:'', newRoundCategory:'male', newRoundName:'', extraRounds:[],
     chartCats:['m','f','t'], hoverRegion:null, hoverWeek:null, hoverMix:null,
+    vmRegion:'All', vmSearch:'', vmAsc:false, vmShow:8, hoverVenue:null,
+    venueDetailId:null, vpSearch:'', vpKind:'all', vpShow:25,
     auditTab:'activity', auditActor:'all', auditType:'all', auditSearch:'',
     myRole:'super', inviteEmail:'', inviteRole:'coordinator', adminMsg:'', adminMsgOk:false, adminFilter:'all',
     adminUsers:[
@@ -967,12 +1491,24 @@ class Component extends DCLogic {
     'Nyanza & Western':['Kisumu Lakeside Club','Kakamega Cue Centre']
   };
 
+  VENUE_TOWNS={
+    'Nairobi A':['Westlands','Kilimani','Lavington','Parklands','Karen','Ngong Road','Kileleshwa','Hurlingham','Upper Hill','Riverside','Kangemi','Langata'],
+    'Nairobi B':['Eastlands','Buruburu','Donholm','Embakasi','Kasarani','Roysambu','Kahawa','Umoja','Pipeline','Ruai','Githurai','Zimmerman'],
+    'Central':['Nyeri','Thika','Muranga','Karatina','Kerugoya','Nanyuki','Othaya','Kiambu','Limuru','Sagana','Mukurweini','Naro Moru'],
+    'Eastern':['Machakos','Kitui','Embu','Meru','Isiolo','Mwingi','Chuka','Kangundo','Wote','Maua','Nkubu','Tala'],
+    'Coast':['Mombasa','Nyali','Diani','Malindi','Kilifi','Watamu','Likoni','Voi','Lamu','Ukunda','Mtwapa','Taveta'],
+    'Rift A':['Nakuru','Naivasha','Gilgil','Molo','Njoro','Bahati','Subukia','Salgaa','Rongai','Elementaita','Kabarak','Mai Mahiu'],
+    'Rift B':['Eldoret','Kericho','Kitale','Kapsabet','Bomet','Iten','Nandi Hills','Litein','Sotik','Turbo','Burnt Forest','Moi Bridge'],
+    'Nyanza & Western':['Kisumu','Kakamega','Kisii','Bungoma','Homa Bay','Migori','Busia','Siaya','Webuye','Mumias','Oyugis','Keroka']
+  };
+  VENUE_SUFFIX=['Cue Club','Pool Lounge','Rack House','Break Room','Cue Bar','Snooker Den','Pool Deck','Billiards Club','Rack & Roll','Cue Corner','Pool Garden','Cue Spot'];
+
   _seed(n){ const x=Math.sin(n*127.1+311.7)*43758.5453; return x-Math.floor(x); }
   stageStyle(stage){
     const m={
-      Grassroots:['#CFF5E2','#0A3F2A','#189A63'],
-      Regional:['rgba(87,97,180,0.14)','#3d4590','#5761B4'],
-      Circuit:['#FCEFCB','#9C7318','#D9A02B'],
+      Grassroots:['#F3F3F4','#3A3546','#6E6D7A'],
+      Regional:['#DCF3E4','#0E6A30','#16A34A'],
+      Circuit:['#FDECEA','#A81810','#E32219'],
       Finals:['#0D0C22','#FDFCFB','#0D0C22']
     };
     return m[stage]||m.Grassroots;
@@ -1029,7 +1565,23 @@ class Component extends DCLogic {
   buildVenues(){
     if(this._venues) return this._venues;
     const v={};
-    for(const r of this.REGIONS){ v[r]=(this.VENUES_SEED[r]||[]).map((n,idx)=>({id:r+'-'+idx,name:n,active:true})); }
+    const dir=this.buildDirectory();
+    const regionPlayers=r=>dir.filter(d=>d.region===r).reduce((a,d)=>a+(d.kind==='team'?(d.roster?d.roster.length:0)*2:4),0);
+    for(const r of this.REGIONS){
+      const seeded=(this.VENUES_SEED[r]||[]).map((n,idx)=>({id:r+'-'+idx,name:n,active:true}));
+      const towns=this.VENUE_TOWNS[r]||[];
+      const target=Math.max(3,Math.min(12,Math.round(regionPlayers(r)/16))); // venue count tracks player volume
+      const taken={}; seeded.forEach(s=>{taken[s.name]=1;});
+      let k=0;
+      while(seeded.length<target && k<80){
+        const town=towns[k%Math.max(1,towns.length)];
+        const suf=this.VENUE_SUFFIX[Math.floor(this._seed(k+this.REGIONS.indexOf(r)*17+61)*this.VENUE_SUFFIX.length)%this.VENUE_SUFFIX.length];
+        const name=town+' '+suf;
+        if(town && !taken[name]){ taken[name]=1; seeded.push({id:r+'-g'+k,name,active:true}); }
+        k++;
+      }
+      v[r]=seeded;
+    }
     this._venues=v;
     return v;
   }
@@ -1083,7 +1635,7 @@ class Component extends DCLogic {
   }
   buildGroupSettings(){
     if(this._groupSettings) return this._groupSettings;
-    const mk=()=>({male:{size:8,topN:2},female:{size:8,topN:2},team:{size:8,topN:2}});
+    const mk=()=>({male:{size:8,topN:2,target:8,minSize:6,minEntrants:4,bestOfRest:0},female:{size:8,topN:2,target:8,minSize:6,minEntrants:4,bestOfRest:0},team:{size:8,topN:2}});
     this._groupSettings={Grassroots:mk(),Regional:mk()};
     return this._groupSettings;
   }
@@ -1130,6 +1682,9 @@ class Component extends DCLogic {
     const venues=this.buildVenues();
     const customVenues=this.buildCustomVenues();
     const fixtures=this.buildFixtures();
+    this.grEnsureSeed(dir,venues);
+    this.grApplyDeadline(S.grDeadline);
+    const grDeadlineLabel=this.grFmtDate(S.grDeadline);
 
     // ---- responsive shell ----
     const isMobileLayout = typeof window!=='undefined' && window.innerWidth<900;
@@ -1221,14 +1776,79 @@ class Component extends DCLogic {
     };
     const CAN_APPROVE=['super','director','coordinator'];
     const activeAuditable=auditable.filter(u=>u.status!=='invited');
+    const EV_TYPES={
+      fixture_created:{label:'Fixture created',bg:'#E8EEF7',color:'#1F4D7A'},
+      fixture_updated:{label:'Fixture updated',bg:'#F3F3F4',color:'#3A3546'},
+      result_added:{label:'Result added',bg:'#DCF3E4',color:'#0E6A30'},
+      result_corrected:{label:'Result corrected',bg:'#FEF3E2',color:'#92400E'},
+      fixture_approved:{label:'Fixture approved',bg:'#DCF3E4',color:'#0E6A30'},
+      draw_published:{label:'Draw published',bg:'#E8EEF7',color:'#1F4D7A'},
+      draw_redrawn:{label:'Draw redrawn',bg:'#FDECEA',color:'#A81810'},
+      group_count_overridden:{label:'Group count overridden',bg:'#F3F3F4',color:'#3A3546'},
+      walkover_recorded:{label:'Walkover recorded',bg:'#FEF3E2',color:'#92400E'},
+      double_walkover:{label:'No result — deadline',bg:'#EDEDEF',color:'#6E6D7A'},
+      withdrawal_processed:{label:'Withdrawal processed',bg:'#F3F3F4',color:'#3A3546'},
+      result_approved:{label:'Result approved',bg:'#DCF3E4',color:'#0E6A30'}
+    };
+    const evKeys=Object.keys(EV_TYPES);
+    const auditEvents=(()=>{
+      if(!activeAuditable.length) return [];
+      const out=[];
+      const grSeedRec=(()=>{ const all=Object.keys(this._gr||{}).map(k=>this._gr[k]).filter(r=>r.state==='published'); return all[0]||null; })();
+      const grEv=grSeedRec?(()=>{
+        const scope=grSeedRec.venue+' · '+(grSeedRec.cat==='female'?'Individual Female':'Individual Male');
+        const sizes=grSeedRec.groups.map(g=>g.members.length).join(' + ');
+        const nG=grSeedRec.groups.length;
+        const names=grSeedRec.groups.map(g=>g.name).join(', ');
+        const wo=grSeedRec.fixtures.filter(f=>f.status==='walkover')[0]||grSeedRec.fixtures[0];
+        const last=grSeedRec.groups[nG-1];
+        const withdrawn=last&&last.members.length?last.members[last.members.length-1].name:'—';
+        return [
+          ['draw_published',scope,'Grassroots · '+nG+' group'+(nG>1?'s':'')+' ('+sizes+')',grSeedRec.entrants.length+' verified entrants dealt into '+names],
+          ['group_count_overridden',scope,'Grassroots · before approval','Proposed '+this.grProposedCount(grSeedRec.entrants.length,grSeedRec.cat)+' groups → set to '+nG+' groups'],
+          ['draw_redrawn',scope,'Grassroots · superseded an earlier draw','Reason: two entrants registered at the wrong venue'],
+          ['walkover_recorded',wo?wo.matchId:'—','Grassroots · '+(wo?wo.groupName+' · '+wo.round:''),'Opponent no-show — awarded 5–0'],
+          ['withdrawal_processed',withdrawn,'Grassroots · '+(last?last.name:''),'Withdrawn before the final round — remaining fixtures voided']
+        ];
+      })():[];
+      if(grSeedRec){ grSeedRec.fixtures.filter(f=>f.status==='double_walkover').slice(0,3).forEach(f=>{
+        grEv.push(['double_walkover',f.matchId,'Grassroots · '+f.groupName+' · '+f.round,'Unplayed at stage deadline — both players recorded absent, no winner']); }); }
+      grEv.forEach((e,i)=>{
+        const actor=activeAuditable[(i+1)%activeAuditable.length];
+        const when=fmtWhen(i*4+1);
+        out.push({id:'grev'+i, type:e[0], actorName:actor.name||actor.email, actorEmail:actor.email, actorRole:actor.role,
+          initials:this.initialsFor(actor), subject:e[1], context:e[2], detail:e[3], stamp:when.stamp});
+      });
+      fixtures.slice(0,26).forEach((f,i)=>{
+        const actor=activeAuditable[i%activeAuditable.length];
+        const canApprove=CAN_APPROVE.indexOf(actor.role)>=0;
+        let type=f.played?(i%7===0?'result_corrected':(i%3===0?'result_approved':'result_added')):(i%4===0?'fixture_approved':(i%5===0?'fixture_updated':'fixture_created'));
+        if(!canApprove&&(type==='fixture_approved'||type==='result_approved')) type=f.played?'result_added':'fixture_created';
+        const when=fmtWhen(i*5+2);
+        out.push({
+          id:'ev'+i, type,
+          actorName:actor.name||actor.email, actorEmail:actor.email, actorRole:actor.role,
+          initials:this.initialsFor(actor),
+          subject:f.a+' vs '+f.b, context:f.round+' · '+f.venue,
+          detail: type==='result_added'||type==='result_approved' ? 'Score '+(f.score||'5–2')
+                : type==='result_corrected' ? 'Score changed to '+(f.score||'5–2')
+                : String(f.round).indexOf('Grassroots')===0 ? (type==='fixture_updated' ? 'Fixture details updated · '+f.venue : 'Venue: '+f.venue)
+                : type==='fixture_updated' ? 'Rescheduled to '+f.date+' '+f.time
+                : f.date+' · '+f.time,
+          stamp:when.stamp
+        });
+      });
+      return out;
+    })();
     const activityRows=auditable.map((u,i)=>{
       const never=u.status==='invited';
       const logins=never?0:6+Math.floor(this._seed(i+31)*54);
       const last=fmtWhen(i*3+1);
       const staleDays=Math.floor(this._seed(i+67)*11);
-      const fixtures=never?0:Math.floor(this._seed(i+37)*18);
-      const results=never?0:Math.floor(this._seed(i+41)*26);
-      const approvals=(!never&&CAN_APPROVE.indexOf(u.role)>=0)?Math.floor(this._seed(i+43)*14):0;
+      const mine=auditEvents.filter(e=>e.actorEmail===u.email);
+      const fixtures=mine.filter(e=>e.type==='fixture_created'||e.type==='fixture_updated').length;
+      const results=mine.filter(e=>e.type==='result_added'||e.type==='result_corrected').length;
+      const approvals=mine.filter(e=>e.type==='fixture_approved'||e.type==='result_approved').length;
       const dormant=!never&&staleDays>=7;
       return {
         who:u.name||u.email, email:u.email, showEmail:!!u.name,
@@ -1245,38 +1865,6 @@ class Component extends DCLogic {
       };
     }).sort((a,b)=>(parseInt(b.logins,10)||0)-(parseInt(a.logins,10)||0));
 
-    const EV_TYPES={
-      fixture_created:{label:'Fixture created',bg:'#E8EEF7',color:'#1F4D7A'},
-      fixture_updated:{label:'Fixture updated',bg:'#F3F3F4',color:'#3A3546'},
-      result_added:{label:'Result added',bg:'#DCF3E4',color:'#0E6A30'},
-      result_corrected:{label:'Result corrected',bg:'#FEF3E2',color:'#92400E'},
-      fixture_approved:{label:'Fixture approved',bg:'#DCF3E4',color:'#0E6A30'},
-      result_approved:{label:'Result approved',bg:'#DCF3E4',color:'#0E6A30'}
-    };
-    const evKeys=Object.keys(EV_TYPES);
-    const auditEvents=(()=>{
-      if(!activeAuditable.length) return [];
-      const out=[];
-      fixtures.slice(0,26).forEach((f,i)=>{
-        const actor=activeAuditable[i%activeAuditable.length];
-        const canApprove=CAN_APPROVE.indexOf(actor.role)>=0;
-        let type=f.played?(i%7===0?'result_corrected':(i%3===0?'result_approved':'result_added')):(i%4===0?'fixture_approved':(i%5===0?'fixture_updated':'fixture_created'));
-        if(!canApprove&&(type==='fixture_approved'||type==='result_approved')) type=f.played?'result_added':'fixture_created';
-        const when=fmtWhen(i*5+2);
-        out.push({
-          id:'ev'+i, type,
-          actorName:actor.name||actor.email, actorEmail:actor.email, actorRole:actor.role,
-          initials:this.initialsFor(actor),
-          subject:f.a+' vs '+f.b, context:f.round+' · '+f.venue,
-          detail: type==='result_added'||type==='result_approved' ? 'Score '+(f.score||'5–2')
-                : type==='result_corrected' ? 'Score changed to '+(f.score||'5–2')
-                : type==='fixture_updated' ? 'Rescheduled to '+f.date+' '+f.time
-                : f.date+' · '+f.time,
-          stamp:when.stamp
-        });
-      });
-      return out;
-    })();
     const actorOpts=[{value:'all',label:'All admins'}].concat(activeAuditable.map(u=>({value:u.email,label:(u.name||u.email)+' — '+R[u.role].label})));
     const typeOpts=[{value:'all',label:'All activity'}].concat(evKeys.map(k=>({value:k,label:EV_TYPES[k].label})));
     const auditQ=S.auditSearch.trim().toLowerCase();
@@ -1341,8 +1929,8 @@ class Component extends DCLogic {
       const parts=[['m','male'],['f','female'],['t','in teams']].filter(([k])=>active.indexOf(k)>=0);
       return {
         region:r.region, total:String(r.shownTotal),
-        barWidth:(r.shownTotal/regionMax*100).toFixed(1)+'%',
-        segs:parts.map(([k])=>({w:(r[k]/t*100).toFixed(1)+'%',color:CAT_COLORS[k]})),
+        barStyle:'display:flex;height:16px;width:'+(r.shownTotal/regionMax*100).toFixed(1)+'%;border-radius:4px;overflow:hidden;min-width:3px;transition:width .2s ease;',
+        segs:parts.map(([k])=>({segStyle:'width:'+(r[k]/t*100).toFixed(1)+'%;background:'+CAT_COLORS[k]+';'})),
         detail:parts.map(([k,lbl])=>r[k]+' '+lbl).join(' · '),
         rowStyle:'display:flex;align-items:center;gap:14px;margin:0 -10px;padding:5px 10px;border-radius:10px;cursor:pointer;transition:background .12s ease;background:'+(isHover?'#FAF9FB':'transparent')+';',
         labelStyle:'width:126px;flex:none;font-size:13px;font-weight:600;color:'+(isHover?'#0D0C22':'#3A3546')+';',
@@ -1363,6 +1951,97 @@ class Component extends DCLogic {
           return {chartCats:next.length?next:[k]};
         })};
     });
+    // ---- players per venue (built to scale to hundreds of venues) ----
+    const vAll=[];
+    for(const rg of this.REGIONS){
+      const list=(venues[rg]||[]).filter(v=>v.active);
+      const stat=regionStats.filter(r=>r.region===rg)[0]||{total:0};
+      const ri=this.REGIONS.indexOf(rg);
+      const wts=list.map((v,i)=>0.4+this._seed(i*13+ri*29+71)*1.5);
+      const wsum=wts.reduce((a,b)=>a+b,0)||1;
+      let left=stat.total;
+      list.forEach((v,i)=>{
+        const n=i===list.length-1?Math.max(0,left):Math.round(stat.total*wts[i]/wsum);
+        left-=n;
+        vAll.push({id:v.id,name:v.name,region:rg,players:n});
+      });
+    }
+    const vmRegion=S.vmRegion||'All';
+    const vq=(S.vmSearch||'').trim().toLowerCase();
+    const vFiltered=vAll
+      .filter(v=>(vmRegion==='All'||v.region===vmRegion)&&(!vq||v.name.toLowerCase().indexOf(vq)>=0))
+      .sort((a,b)=>S.vmAsc?(a.players-b.players)||a.name.localeCompare(b.name):(b.players-a.players)||a.name.localeCompare(b.name));
+    const vmShow=S.vmShow||8;
+    const vMax=Math.max.apply(null,vFiltered.map(v=>v.players).concat([1]));
+    const venueBars=vFiltered.slice(0,vmShow).map((v,i)=>{
+      const hov=S.hoverVenue===v.id;
+      return {
+        rank:String(i+1), name:v.name, total:String(v.players),
+        barStyle:'height:14px;width:'+(v.players/vMax*100).toFixed(1)+'%;min-width:3px;border-radius:4px;background:#5761B4;transition:width .2s ease;',
+        detail:v.region,
+        rowStyle:'display:flex;align-items:center;gap:14px;margin:0 -10px;padding:5px 10px;border-radius:10px;cursor:pointer;transition:background .12s ease;background:'+(hov?'#FAF9FB':'transparent')+';',
+        nameStyle:'width:190px;flex:none;font-size:13px;font-weight:600;color:'+(hov?'#0D0C22':'#3A3546')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
+        onEnter:()=>this.setState({hoverVenue:v.id}),
+        onLeave:()=>this.setState({hoverVenue:null}),
+        onClick:()=>this.setState({route:'venuePlayers',venueDetailId:v.id,vpSearch:'',vpKind:'all',vpShow:25})
+      };
+    });
+    const vmEmptyCount=vAll.filter(v=>v.players<10).length;
+    const vmAvg=vAll.length?Math.round(vAll.reduce((a,v)=>a+v.players,0)/vAll.length):0;
+    const vmMoreCount=Math.max(0,vFiltered.length-vmShow);
+    const venueMetricTiles=[
+      {label:'Active venues',value:String(vAll.length)},
+      {label:'Avg players / venue',value:String(vmAvg)},
+      {label:'Under 10 players',value:String(vmEmptyCount)}
+    ];
+    const venueRegionOpts=['All'].concat(this.REGIONS).map(r=>({value:r,label:r==='All'?'All regions':r}));
+    const venueFoot='Showing '+Math.min(vmShow,vFiltered.length)+' of '+vFiltered.length+(vmRegion==='All'?' venues':' in '+vmRegion)+(vq?' matching “'+S.vmSearch.trim()+'”':'');
+
+    // ---- venue detail page (reached by clicking a venue above; not in the nav) ----
+    const vSel=vAll.filter(v=>v.id===S.venueDetailId)[0]||null;
+    let venuePage=null;
+    if(vSel){
+      const roster=this.buildVenuePlayers(vSel);
+      const cnt=k=>roster.filter(p=>p.kind===k).length;
+      const pq=(S.vpSearch||'').trim().toLowerCase();
+      const pk=S.vpKind||'all';
+      const pFiltered=roster.filter(p=>(pk==='all'||p.kind===pk)&&(!pq||p.name.toLowerCase().indexOf(pq)>=0||p.username.toLowerCase().indexOf(pq)>=0));
+      const pShow=S.vpShow||25;
+      const kindLabels={male:'Individual male',female:'Individual female',team:'Team'};
+      venuePage={
+        name:vSel.name, region:vSel.region,
+        sub:vSel.region+' · '+roster.length+' registered players',
+        tiles:[
+          {label:'Registered players',value:String(roster.length)},
+          {label:'Individual male',value:String(cnt('male'))},
+          {label:'Individual female',value:String(cnt('female'))},
+          {label:'Teams',value:String(cnt('team'))}
+        ],
+        kindChips:[['all','All'],['male','Male'],['female','Female'],['team','Teams']].map(([k,label])=>({
+          label, style:this.pillStyle(pk===k), onClick:()=>this.setState({vpKind:k,vpShow:25})
+        })),
+        searchValue:S.vpSearch||'',
+        onSearch:e=>this.setState({vpSearch:e.target.value,vpShow:25}),
+        rows:pFiltered.slice(0,pShow).map(p=>{
+          const [bg,col]=this.stageStyle(p.stage);
+          return {
+            name:p.name, username:p.username, kindLabel:kindLabels[p.kind], stage:p.stage, joined:p.joined,
+            badgeStyle:'display:inline-flex;align-items:center;padding:4px 10px;border-radius:9999px;background:'+bg+';color:'+col+';font-size:11.5px;font-weight:700;white-space:nowrap;',
+            avatarEl: p.kind==='team'
+              ? React.createElement('div',{style:{width:36,height:36,borderRadius:9,background:'#0D0C22',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,flex:'none'}},this.initialsOf(p.name))
+              : React.createElement('img',{src:'https://i.pravatar.cc/72?img='+p.avatarIdx,alt:'',style:{width:36,height:36,borderRadius:9999,objectFit:'cover',flex:'none',background:'#F3F3F4'}}),
+            onClick:()=>this.openDirDetail(p)
+          };
+        }),
+        countLabel:'Showing '+Math.min(pShow,pFiltered.length)+' of '+pFiltered.length+' players',
+        hasRows:pFiltered.length>0, noRows:pFiltered.length===0,
+        hasMore:pFiltered.length>pShow,
+        moreLabel:'Show '+Math.min(25,pFiltered.length-pShow)+' more',
+        showMore:()=>this.setState(s=>({vpShow:(s.vpShow||25)+25})),
+        back:()=>this.setState({route:'dashboard',venueDetailId:null}),
+        openVenues:()=>this.setState({route:'venues',venueRegion:vSel.region,venueDetailId:null})
+      };
+    }
     const regionHint=S.hoverRegion?'Click to open '+S.hoverRegion+' in the Directory':'Tap a category to filter · click a region to open it in the Directory';
 
     // registrations over the last 12 weeks
@@ -1420,7 +2099,9 @@ class Component extends DCLogic {
 
     // ---- draws ----
     if(S.drawRows.length===0 && !this._drawInit){ this._drawInit=true; this.state.drawRows=[this.makeDrawRow('r1'),this.makeDrawRow('r2')]; }
-    const roundOpts=[['grassroots-r3','Grassroots — Round 3'],['regional-r1','Regional — Round 1'],['circuit-r2','Circuit — Round 2']].map(([v,l])=>({value:v,label:l})).concat(S.extraRounds.map(r=>({value:r.value,label:r.label})));
+    const roundOpts=[['grassroots-r3','Grassroots — Round 3'],['regional-r1','Regional — Round 1'],['circuit-r2','Circuit — Round 2']].map(([v,l])=>({value:v,label:l}))
+      .concat(this.grPublishedRecords().flatMap(r=>r.groups.map((g,gi)=>({value:'gr::'+r.key+'::'+gi,label:'Grassroots — '+r.venue+' · '+(r.cat==='female'?'Individual Female':'Individual Male')+' · '+g.name}))))
+      .concat(S.extraRounds.map(r=>({value:r.value,label:r.label})));
     const newRoundIsGroupStage = S.newRoundStage==='Grassroots'||S.newRoundStage==='Regional';
     const newRoundGroupOpts=[{value:'',label:'Select group…'}].concat(this.allGroupsFlat().filter(x=>x.stage===S.newRoundStage).map(x=>({value:x.key+'::'+x.group.id,label:x.label})));
     const newRoundCategoryOpts=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
@@ -1428,7 +2109,7 @@ class Component extends DCLogic {
       const name=S.newRoundName.trim(); if(!name) return;
       const value='custom-'+Date.now();
       this.state.extraRounds=[...S.extraRounds,{value,label:S.newRoundStage+' — '+name}];
-      this.setState({drawRound:value, showNewRound:false, newRoundName:'', newRoundGroup:''});
+      this.setState({drawRound:value, showNewRound:false, newRoundName:'', newRoundGroup:'', grSchedFilter:'all', grSchedPlayer:''});
     };
     const drawRoundLabel=(roundOpts.find(r=>r.value===S.drawRound)||{}).label||'';
     const catOpts=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({value:v,label:l}));
@@ -1447,6 +2128,7 @@ class Component extends DCLogic {
     const roundFixtures = cfg.emptyDraws ? [] : fixtures.filter(f=>f.round===drawRoundLabel);
     const enteredFixtures=roundFixtures.map(f=>({
       a:f.a,b:f.b,venue:f.venue,date:f.date,time:f.time,
+      metaLabel: String(f.round).indexOf('Grassroots')===0 ? f.venue : f.venue+' · '+f.date+' · '+f.time,
       canEdit:!f.played,
       lockLabel: f.played?'Played · locked':'Not yet played',
       lockStyle: f.played
@@ -1460,6 +2142,7 @@ class Component extends DCLogic {
     const fxSource = cfg.emptyResults ? [] : fixtures.filter(f=>S.resTab==='unplayed'? !f.played : f.played);
     const fixtureList=fxSource.map(f=>({
       ...f, scoreLabel:f.score,
+      metaLabel: String(f.round).indexOf('Grassroots')===0 ? f.round+' · '+f.venue : f.round+' · '+f.venue+' · '+f.date,
       badgeLabel: f.played?'Played':'Needs result',
       badgeStyle: f.played
         ? 'font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:600;color:#0E6A30;background:#DCF3E4;padding:4px 10px;border-radius:9999px;flex:none;'
@@ -1550,11 +2233,20 @@ class Component extends DCLogic {
         saveEdit:()=>{ const v=parseInt(this._editingCapVal,10); if(v>0) rec.limit=v; this._editingCap=null; this.forceUpdate(); }};
     }) : [];
     const groupSettingsMap=this.buildGroupSettings();
+    const stagesIsGrassroots = S.stagesStage==='Grassroots';
+    const grFormulaKeys=['target','minSize','minEntrants'];
+    const mkField=(rec,k,f,min)=>{
+      const id='Grassroots|'+k+'|'+f, editing=this._editingGS===id;
+      return {na:false, editing, show:!editing, val: editing?(this._editingGSVal ?? rec[f]):rec[f],
+        start:()=>{ this._editingGS=id; this._editingGSVal=rec[f]; this.forceUpdate(); },
+        onInput:(e)=>{ this._editingGSVal=e.target.value; this.forceUpdate(); },
+        save:()=>{ const v=parseInt(this._editingGSVal,10); if(!isNaN(v)&&v>=min) rec[f]=v; this._editingGS=null; this.forceUpdate(); }};
+    };
     const groupSettingsTable = !stagesIsCapped ? ['male','female','team'].map(k=>{
       const rec=groupSettingsMap[S.stagesStage][k];
       const editingSize=this._editingGS===S.stagesStage+'|'+k+'|size';
       const editingTop=this._editingGS===S.stagesStage+'|'+k+'|topN';
-      return {label:catLabelMap[k],
+      return {label:catLabelMap[k], showSize:!editingSize, showTop:!editingTop,
         editingSize, sizeVal: editingSize?(this._editingGSVal ?? rec.size):rec.size,
         startEditSize:()=>{ this._editingGS=S.stagesStage+'|'+k+'|size'; this._editingGSVal=rec.size; this.forceUpdate(); },
         onSizeInput:(e)=>{ this._editingGSVal=e.target.value; this.forceUpdate(); },
@@ -1562,8 +2254,10 @@ class Component extends DCLogic {
         editingTop, topVal: editingTop?(this._editingGSVal ?? rec.topN):rec.topN,
         startEditTop:()=>{ this._editingGS=S.stagesStage+'|'+k+'|topN'; this._editingGSVal=rec.topN; this.forceUpdate(); },
         onTopInput:(e)=>{ this._editingGSVal=e.target.value; this.forceUpdate(); },
-        saveTop:()=>{ const v=parseInt(this._editingGSVal,10); if(v>0) rec.topN=v; this._editingGS=null; this.forceUpdate(); }};
+        saveTop:()=>{ const v=parseInt(this._editingGSVal,10); if(v>0) rec.topN=v; this._editingGS=null; this.forceUpdate(); },
+        fields: stagesIsGrassroots ? (k==='team' ? grFormulaKeys.map(()=>({na:true,editing:false,show:false,val:'—'})) : grFormulaKeys.map(f=>mkField(rec,k,f,1))) : []};
     }) : [];
+    const grBorTable = stagesIsGrassroots ? ['male','female'].map(k=>{ const rec=groupSettingsMap.Grassroots[k]; return {label:catLabelMap[k], field:mkField(rec,k,'bestOfRest',0)}; }) : [];
 
     // ---- groups ----
     const groupsStageTabs=['Grassroots','Regional'].map(s=>{ const [bg,col]=this.stageStyle(s); return {label:s,onClick:()=>this.setState({groupsStage:s,groupsVenue:''}),
@@ -1572,8 +2266,8 @@ class Component extends DCLogic {
     const groupsIsGrassroots=S.groupsStage==='Grassroots';
     const groupsVenueList=groupsIsGrassroots ? (venues[S.groupsRegion]||[]).filter(v=>v.active).map(v=>v.name) : [];
     if(groupsIsGrassroots && !S.groupsVenue && groupsVenueList.length){ this.state.groupsVenue=groupsVenueList[0]; }
-    const groupsVenueTabs=groupsVenueList.map(v=>({label:v,onClick:()=>this.setState({groupsVenue:v}),style:this.tabStyle(S.groupsVenue===v)}));
-    const groupsCategoryTabs=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({label:l,onClick:()=>this.setState({groupsCategory:v}),style:this.tabStyle(S.groupsCategory===v)}));
+    const groupsVenueTabs=groupsVenueList.map(v=>({label:v,onClick:()=>this.setState({groupsVenue:v,grCardSel:null,grMemberSel:null}),style:this.tabStyle(S.groupsVenue===v)}));
+    const groupsCategoryTabs=[['male','Individual Male'],['female','Individual Female'],['team','Teams']].map(([v,l])=>({label:l,onClick:()=>this.setState({groupsCategory:v,grCardSel:null,grMemberSel:null}),style:this.tabStyle(S.groupsCategory===v)}));
     const gVenueScope = groupsIsGrassroots ? S.groupsVenue : '';
     const gKey=this.groupKey(S.groupsStage,S.groupsRegion,gVenueScope,S.groupsCategory);
     const groupsMap=this.buildGroups();
@@ -1583,7 +2277,9 @@ class Component extends DCLogic {
     const groupsUnassigned=groupsScopedPool.filter(d=>!assignedIds.has(d.id));
     const groupCards=currentGroupList.map(grp=>({
       id:grp.id, name:grp.name,
-      members:grp.members.map(m=>({name:m.name})),
+      members:grp.members.map(m=>{ const rec=dir.find(d=>d.id===m.id);
+        return {name:m.name, open:()=>{ if(rec) this.openDirDetail(rec); },
+          remove:(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); grp.members=grp.members.filter(x=>x.id!==m.id); this.forceUpdate(); }}; }),
       addOptions:[{value:'',label:'+ Add member…'}].concat(groupsUnassigned.map(u=>({value:u.id,label:u.name}))),
       onAdd:(e)=>{ const uid=e.target.value; if(!uid) return; const p=groupsScopedPool.find(x=>x.id===uid); if(p) grp.members.push({id:p.id,name:p.name}); this.forceUpdate(); }
     }));
@@ -1596,7 +2292,282 @@ class Component extends DCLogic {
       this.setState({newGroupName:''});
     };
 
+    // ---- grassroots auto-draw / structured scoring (Grassroots + Individual Male/Female only) ----
+    const grOn = groupsIsGrassroots && S.groupsCategory!=='team' && !!gVenueScope;
+    const grRec = grOn ? this.grRecord(gKey,S.groupsRegion,gVenueScope,S.groupsCategory) : null;
+    const grCanVerify = CAN_APPROVE.indexOf(myRoleKey)>=0;
+    const grIsTD = myRoleKey==='super'||myRoleKey==='director';
+    const grN = grRec?grRec.entrants.length:0;
+    const grC = grOn ? this.grCfg(S.groupsCategory) : null;
+    const grProposed = grRec?this.grProposedCount(grN,S.groupsCategory):0;
+    const grCount = grRec?(grRec.count||grProposed):0;
+    const grBelowMin = grOn && grN < grC.minEntrants;
+    const grHasDraw = !!grRec && grRec.state!=='none';
+    const grPub = !!grRec && grRec.state==='published';
+    const grOrder=['draft','previewed','approved','published'];
+    const grCurIdx = grRec?grOrder.indexOf(grRec.state):-1;
+    const grBump=()=>this.forceUpdate();
+    const grDealNow=(count,seedBump)=>{ grRec.count=count; grRec.groups=this.grDeal(grRec.entrants,count,this.grHash(gKey)+(seedBump||0)); };
+    const grSteps=this.GR_STATES.map(([k,label],i)=>{
+      const cur=i===grCurIdx, past=grCurIdx>i;
+      return {label,
+        lineStyle: i===0?'display:none;':'width:18px;height:1px;background:#DBDBDE;flex:none;',
+        style:'padding:5px 13px;border-radius:9999px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap;border:1px solid '+(cur?'#0D0C22':(past?'#DBDBDE':'#E7E7E9'))+';background:'+(cur?'#0D0C22':'#fff')+';color:'+(cur?'#fff':(past?'#3A3546':'#9E9EA7'))+';'};
+    });
+    const grActions={
+      none:['Run draw',()=>{ grDealNow(grProposed,0); grRec.state='draft'; grBump(); }],
+      draft:['Preview draw',()=>{ grRec.state='previewed'; grBump(); }],
+      previewed:['Approve',()=>{ grRec.state='approved'; grBump(); }],
+      approved:['Publish (locks groups)',()=>{ grRec.state='published'; grRec.fixtures=this.grBuildFixtures(grRec); grBump(); }]
+    };
+    const grAct = grRec && grActions[grRec.state] ? grActions[grRec.state] : null;
+    const grCanStep = !!grRec && (grRec.state==='draft'||grRec.state==='previewed');
+    const grStepCount=(d)=>{
+      const max=Math.max(1,Math.floor(grN/3));
+      const c=Math.min(max,Math.max(1,grCount+d));
+      if(c===grCount) return;
+      grDealNow(c,c*17); grBump();
+    };
+    const grStateLabel = grRec?(this.GR_STATES.filter(s=>s[0]===grRec.state)[0]||['','Draft'])[1]:'Draft';
+    const grGoFixture=(f)=>{ const unplayed=['scheduled','postponed','completed'].indexOf(f.status)>=0;
+      this.setState({route:'results',resTab:unplayed?'unplayed':'played',grSel:f.id,grWalkover:null,grPostpone:null}); window.scrollTo(0,0); };
+    this._grGoFixture=grGoFixture;
+    const grCards = grRec?grRec.groups.map((g,gi)=>{
+      const sel=S.grCardSel===gi;
+      const memSel=sel?S.grMemberSel:null;
+      const fx=grPub?grRec.fixtures.filter(f=>f.groupIdx===gi&&(!memSel||f.aId===memSel||f.bId===memSel)):[];
+      const done=grPub?grRec.fixtures.filter(f=>f.groupIdx===gi&&f.status!=='scheduled'&&f.status!=='postponed').length:0;
+      const total=grPub?grRec.fixtures.filter(f=>f.groupIdx===gi).length:0;
+      const memberFor=m=>grPub?grRec.fixtures.filter(f=>f.groupIdx===gi&&(f.aId===m.id||f.bId===m.id)):[];
+      return {
+      name:g.name, size:g.members.length+' players'+(grPub?' · '+done+'/'+total+' played':''),
+      cardStyle:'background:#fff;border:1px solid '+(sel?'#0D0C22':'#E7E7E9')+';border-radius:16px;padding:18px 20px;box-shadow:'+(sel?'0 6px 20px rgba(13,12,34,0.08)':'0 1px 2px rgba(13,12,34,0.05)')+';cursor:'+(grPub?'pointer':'default')+';transition:border-color .15s,box-shadow .15s;',
+      toggle:()=>{ if(!grPub) return; this.setState({grCardSel:sel?null:gi,grMemberSel:null}); },
+      hint:grPub?(sel?'Hide fixtures':'Show fixtures'):'',
+      isOpen:sel&&grPub, fixtures:fx.map(f=>({matchId:f.matchId, pair:f.a+' vs '+f.b, round:f.round,
+        statusLabel:this.GR_STATUS[f.status].label, statusStyle:this.grStatusPill(f.status),
+        open:(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); grGoFixture(f); }})),
+      filterLabel:memSel?'Showing '+(g.members.find(m=>m.id===memSel)||{}).name+'\u2019s fixtures':'All fixtures in '+g.name,
+      hasFilter:!!memSel, clearFilter:(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); this.setState({grMemberSel:null}); },
+      members:g.members.map(m=>{ const on=memSel===m.id; const mf=memberFor(m);
+        const played=mf.filter(f=>f.status!=='scheduled'&&f.status!=='postponed').length;
+        return {name:m.name, meta:grPub?played+'/'+mf.length:'',
+          style:'display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:9px;font-size:13.5px;font-weight:600;cursor:'+(grPub?'pointer':'default')+';background:'+(on?'#0D0C22':'#FAF9FB')+';color:'+(on?'#fff':'#0D0C22')+';',
+          metaStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:500;color:'+(on?'#DBDBDE':'#9E9EA7')+';',
+          pick:(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); if(!grPub) return; this.setState({grCardSel:gi,grMemberSel:on?null:m.id}); }}; }),
+      pillLabel:grStateLabel,
+      pillStyle:'padding:3px 10px;border-radius:9999px;font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;background:'+(grPub?'#0D0C22':'#F3F3F4')+';color:'+(grPub?'#fff':'#3A3546')+';'
+    }; }):[];
+    const grViewTabs=[['groups','Groups'],['standings','Group standings']].map(([k,label])=>({label,onClick:()=>this.setState({grView:k}),style:this.tabStyle(S.grView===k)}));
+    const grTopN=(groupSettingsMap['Grassroots']&&groupSettingsMap['Grassroots'][S.groupsCategory]?groupSettingsMap['Grassroots'][S.groupsCategory].topN:2);
+
+    // group standings
+    const grTables=(grPub?this.grStandings(grRec):[]).map(t=>{
+      return {
+        name:t.name,
+        stateLabel:t.isFinal?'Final':'Provisional',
+        stateStyle:'padding:4px 11px;border-radius:9999px;background:#F3F3F4;color:#3A3546;font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;',
+        rows:t.rows.map(r=>{
+          const q=r.pos<=grTopN;
+          return {
+            posLabel:String(r.pos), tied:!!r.tied, name:r.name,
+            P:String(r.P), W:String(r.W), L:String(r.L), FW:String(r.FW), FL:String(r.FL),
+            FD:(r.FD>0?'+':'')+r.FD, BON:String(r.BON), PTS:String(r.PTS),
+            rowStyle:'display:grid;grid-template-columns:48px minmax(110px,1fr) repeat(7,38px) 50px;align-items:center;border-bottom:1px solid #F3F3F4;border-left:3px solid '+(q?'#E32219':'transparent')+';background:#fff;',
+            numStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:13px;color:#3A3546;text-align:right;padding:10px 7px;',
+            ptsStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:15px;font-weight:700;color:#0D0C22;text-align:right;padding:10px 12px 10px 7px;',
+            onResolve:()=>{ if(r.tied&&grIsTD) this.setState({grTie:{gi:t.gi,pos:r.pos}}); }
+          };
+        }),
+        qualifiers:t.rows.filter(r=>r.pos<=grTopN).map(r=>({name:r.name,note:r.PTS+' pts · '+r.P+' played'}))
+      };
+    });
+    const grAllRows=[]; (grPub?this.grStandings(grRec):[]).forEach(t=>t.rows.forEach(r=>{ if(r.pos>grTopN&&r.P>0) grAllRows.push({...r,group:t.name}); }));
+    const grBestOfRest=grAllRows.sort((a,b)=>b.PPM-a.PPM).slice(0,grC?grC.bestOfRest:0).map(r=>({name:r.name,note:r.group+' · '+r.PPM.toFixed(2)+' pts per match'}));
+    const grQualifierNames=grTables.flatMap(t=>t.qualifiers.map(q=>q.name)).concat(grBestOfRest.map(b=>b.name));
+    const grTieRows = S.grTie && grPub ? (this.grStandings(grRec)[S.grTie.gi]||{rows:[]}).rows.filter(r=>r.pos===S.grTie.pos).map(r=>({
+      name:r.name, note:r.PTS+' pts · FD '+((r.FD>0?'+':'')+r.FD),
+      onPick:()=>{ const others=(this.grStandings(grRec)[S.grTie.gi].rows).filter(o=>o.pos===S.grTie.pos&&o.id!==r.id);
+        grRec.tieOrder=grRec.tieOrder||{};
+        others.forEach(o=>{ grRec.tieOrder[r.id+'|'+o.id]=-1; grRec.tieOrder[o.id+'|'+r.id]=1; });
+        this.setState({grTie:null}); }
+    })):[];
+
+    // generated schedule (Draws screen)
+    const grRoundSel = String(S.drawRound||'').indexOf('gr::')===0 ? String(S.drawRound).split('::') : null;
+    const grRoundRec = grRoundSel ? (this._gr||{})[grRoundSel[1]] : null;
+    const grRoundFx = grRoundRec ? grRoundRec.fixtures.filter(f=>f.groupIdx===parseInt(grRoundSel[2],10)) : [];
+    const grUnplayedN = grRoundFx.filter(f=>f.status==='scheduled').length;
+    const grLeft = this.grDaysLeft(S.grDeadline);
+    const grWarn = grLeft!==null && grLeft<=3;
+    const grDeadlineLine = S.grDeadline
+      ? 'Deadline: '+grDeadlineLabel+(grLeft<0?' (passed)':'')+' · '+grUnplayedN+' of '+grRoundFx.length+' fixtures still unplayed'
+      : 'No stage deadline set · '+grUnplayedN+' of '+grRoundFx.length+' fixtures still unplayed — set one on Stages';
+    const grDeadlineLineStyle = 'font-family:\'IBM Plex Mono\',monospace;font-size:12.5px;border-radius:12px;padding:10px 16px;margin-bottom:16px;border:1px solid '+(grWarn?'#F6D9A5':'#E7E7E9')+';background:'+(grWarn?'#FEF9F0':'#fff')+';color:'+(grWarn?'#92400E':'#3A3546')+';';
+    const grFilterKeys=[['all','All'],['scheduled','Scheduled'],['completed','Awaiting verification'],['verified','Verified'],['walkover','Walkover'],['postponed','Postponed'],['double_walkover','No result']];
+    const grSchedFilters=grRoundRec?grFilterKeys.map(([k,l])=>{ const n=k==='all'?grRoundFx.length:grRoundFx.filter(f=>f.status===k).length; const on=S.grSchedFilter===k;
+      return {label:l, count:String(n), show:k==='all'||n>0, onClick:()=>this.setState({grSchedFilter:k}),
+        style:'display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:9999px;border:1px solid '+(on?'#0D0C22':'#DBDBDE')+';background:'+(on?'#0D0C22':'#fff')+';color:'+(on?'#fff':'#3A3546')+';font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;',
+        countStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:'+(on?'#DBDBDE':'#9E9EA7')+';'}; }).filter(x=>x.show):[];
+    const grPq=(S.grSchedPlayer||'').trim().toLowerCase();
+    const grSchedVisible=grRoundFx.filter(f=>(S.grSchedFilter==='all'||f.status===S.grSchedFilter)&&(!grPq||f.a.toLowerCase().indexOf(grPq)>=0||f.b.toLowerCase().indexOf(grPq)>=0));
+    const grSchedRows = grRoundRec ? grSchedVisible.map(f=>({
+      matchId:f.matchId, a:f.a, b:f.b, round:f.round, open:()=>grGoFixture(f),
+      statusLabel:this.GR_STATUS[f.status].label, statusStyle:this.grStatusPill(f.status)
+    })):[];
+
+    // results & points — grassroots singles fixtures
+    const grStrip=(f)=>{
+      if(f.status==='double_walkover') return [{label:'No result',style:'display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;background:#EDEDEF;color:#6E6D7A;font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;'}];
+      if(f.status==='walkover') return [{label:'W',style:'display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#E8EEF7;color:#1F4D7A;font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;'}];
+      return f.frames.map(w=>({label:w?(w==='a'?'A':'B'):'–',
+        style:'display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:700;background:'+(w?'#0D0C22':'#F3F3F4')+';color:'+(w?'#fff':'#9E9EA7')+';'}));
+    };
+    const grScore=(f)=>{
+      if(f.status==='double_walkover') return 'No result';
+      if(f.status==='walkover') return '5–0 w/o';
+      const a=f.frames.filter(x=>x==='a').length, b=f.frames.filter(x=>x==='b').length;
+      return f.frames.some(x=>x)?a+'–'+b:'';
+    };
+    const grFxAll=[]; this.grPublishedRecords().forEach(r=>r.fixtures.forEach(f=>grFxAll.push(f)));
+    const grUnplayedStates=['scheduled','postponed','completed'];
+    const grListRows=(cfg.emptyResults?[]:grFxAll.filter(f=>S.resTab==='unplayed'?grUnplayedStates.indexOf(f.status)>=0:grUnplayedStates.indexOf(f.status)<0)).map(f=>({
+      a:f.a, b:f.b, round:f.groupName+' · '+f.round, venue:f.venue, date:f.date, metaLabel:f.groupName+' · '+f.round+' · '+f.venue,
+      matchId:f.matchId, isGr:true, played:false, scoreLabel:grScore(f), strip:grStrip(f), showStrip:f.status!=='scheduled'&&f.status!=='postponed',
+      badgeLabel:this.GR_STATUS[f.status].label, badgeStyle:this.grStatusPill(f.status),
+      rowStyle:'display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid '+(S.grSel===f.id?'#0D0C22':'#E7E7E9')+';border-radius:14px;padding:14px 18px;cursor:pointer;box-shadow:0 1px 2px rgba(13,12,34,0.05);',
+      onClick:()=>this.setState({grSel:f.id,grWalkover:null,grPostpone:null})
+    }));
+    const grSelFx = S.grSel ? grFxAll.filter(f=>f.id===S.grSel)[0] : null;
+    let grPanel=null;
+    if(grSelFx){
+      const f=grSelFx;
+      const draft = S.grFrames[f.id] || (f.frames.some(x=>x)?f.frames.slice():[null,null,null,null,null]);
+      const set=(i,side)=>{ const d=draft.slice(); d[i]=side; this.setState(s=>({grFrames:{...s.grFrames,[f.id]:d}})); };
+      const fa=draft.filter(x=>x==='a').length, fb=draft.filter(x=>x==='b').length;
+      const complete=draft.every(x=>!!x);
+      const btn=(on)=>'flex:1;min-width:120px;text-align:center;padding:10px 14px;border-radius:9999px;border:1px solid '+(on?'#0D0C22':'#DBDBDE')+';background:'+(on?'#0D0C22':'#fff')+';color:'+(on?'#fff':'#3A3546')+';font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;';
+      const rows=[0,1,2,3,4].map(i=>({
+        label:'Frame '+(i+1),
+        aLabel:f.a, bLabel:f.b,
+        aStyle:btn(draft[i]==='a'), bStyle:btn(draft[i]==='b'),
+        pickA:()=>set(i,'a'), pickB:()=>set(i,'b')
+      }));
+      const commit=(status,extra)=>{ Object.assign(f,{frames:draft.slice(),status},extra||{});
+        this.setState(s=>{ const nf={...s.grFrames}; delete nf[f.id]; return {grFrames:nf,grSel:null,grWalkover:null,grPostpone:null,grMsg:'Match '+f.matchId+' — '+status+'.'}; }); };
+      grPanel={
+        matchId:f.matchId, a:f.a, b:f.b,
+        meta:f.groupName+' · '+f.round+' · '+f.venue,
+        statusLabel:this.GR_STATUS[f.status].label, statusStyle:this.grStatusPill(f.status),
+        rows, scoreLabel:fa+'–'+fb, strip:grStrip(f),
+        isEntry:f.status==='scheduled', isVerify:f.status==='completed'&&grCanVerify,
+        verifyBlocked:f.status==='completed'&&!grCanVerify,
+        isCorrect:f.status==='verified'||f.status==='walkover',
+        showFrames:f.status==='scheduled'||f.status==='completed'||f.status==='verified',
+        showCorrectSave:f.status==='verified',
+        isPostponed:f.status==='postponed', postponedReason:f.reason,
+        isDoubleWo:f.status==='double_walkover',
+        isWalkover:f.status==='walkover',
+        saveStyle:'width:100%;border:none;border-radius:9999px;padding:13px 24px;font-family:inherit;font-size:15px;font-weight:600;background:'+(complete?'#0D0C22':'#DBDBDE')+';color:'+(complete?'#fff':'#fff')+';cursor:'+(complete?'pointer':'not-allowed')+';',
+        save:()=>{ if(complete) commit('completed'); },
+        verify:()=>commit('verified'),
+        saveCorrection:()=>commit('verified'),
+        reopen:()=>commit('scheduled'),
+        close:()=>this.setState({grSel:null,grWalkover:null,grPostpone:null}),
+        walkoverOpen:S.grWalkover===f.id,
+        openWalkover:()=>this.setState({grWalkover:f.id,grPostpone:null}),
+        cancelWalkover:()=>this.setState({grWalkover:null}),
+        woA:()=>{ Object.assign(f,{status:'walkover',walkoverTo:'a',frames:[null,null,null,null,null]}); this.setState({grSel:null,grWalkover:null,grMsg:'Walkover recorded — '+f.a+' awarded 5–0.'}); },
+        woB:()=>{ Object.assign(f,{status:'walkover',walkoverTo:'b',frames:[null,null,null,null,null]}); this.setState({grSel:null,grWalkover:null,grMsg:'Walkover recorded — '+f.b+' awarded 5–0.'}); },
+        postponeOpen:S.grPostpone===f.id,
+        openPostpone:()=>this.setState({grPostpone:f.id,grWalkover:null}),
+        cancelPostpone:()=>this.setState({grPostpone:null,grPostponeReason:'',grPostponeDate:''}),
+        postponeReason:S.grPostponeReason, onPostponeReason:e=>this.setState({grPostponeReason:e.target.value}),
+        postponeDate:S.grPostponeDate, onPostponeDate:e=>this.setState({grPostponeDate:e.target.value}),
+        confirmPostpone:()=>{ if(!S.grPostponeReason.trim()) return;
+          Object.assign(f,{status:'postponed',reason:S.grPostponeReason.trim()});
+          this.setState({grSel:null,grPostpone:null,grPostponeReason:'',grPostponeDate:'',grMsg:'Match '+f.matchId+' postponed.'}); }
+      };
+    }
+
+    const grVals={
+      grOn, grOff:!grOn, grBelowMin, grNotBelowMin:grOn&&!grBelowMin,
+      grWarnText:'Only '+grN+' verified entrants — draw needs at least '+(grC?grC.minEntrants:4)+'.',
+      grSummary:grN+' verified entrants · formula proposes '+grProposed+' groups ('+(grProposed?this.grSizes(grN,grProposed).join(' + '):'—')+')',
+      grSteps, grHasDraw, grHasCards:grCards.length>0, grCards,
+      grCanStep, grCountLabel:String(grCount),
+      grInc:()=>grStepCount(1), grDec:()=>grStepCount(-1),
+      grSizeNote:grCount?'Sizes: '+this.grSizes(grN,grCount).join(' + '):'',
+      grHasAction:!!grAct&&!grBelowMin, grActionLabel:grAct?grAct[0]:'', grAction:grAct?grAct[1]:()=>{},
+      grShowRedraw:grPub,
+      grRedrawOpen:S.grRedrawOpen, grRedrawReason:S.grRedrawReason,
+      onGrRedrawReason:e=>this.setState({grRedrawReason:e.target.value}),
+      openGrRedraw:()=>this.setState({grRedrawOpen:true}),
+      cancelGrRedraw:()=>this.setState({grRedrawOpen:false,grRedrawReason:''}),
+      confirmGrRedraw:()=>{ if(!S.grRedrawReason.trim()) return;
+        grDealNow(grCount,Date.now()%997); grRec.fixtures=this.grBuildFixtures(grRec); grRec.tieOrder={};
+        this.setState({grRedrawOpen:false,grRedrawReason:'',grMsg:'Draw redrawn and republished — reason logged to the audit trail.'}); },
+      grViewTabs, grShowViewTabs:grPub, grIsGroupsView:!grPub||S.grView==='groups', grIsStandingsView:grPub&&S.grView==='standings',
+      grTables, grHasTables:grTables.length>0,
+      grBestOfRest, grHasBestOfRest:grBestOfRest.length>0,
+      grCloseOpen:S.grClose, grCanClose:grIsTD&&grPub,
+      openGrClose:()=>this.setState({grClose:true}), cancelGrClose:()=>this.setState({grClose:false}),
+      grCloseList:grQualifierNames.map(n=>({name:n})),
+      confirmGrClose:()=>{ grRec.closed=true; this.setState({grClose:false,grMsg:'Stage closed — '+grQualifierNames.length+' qualifiers advanced to Regional.'}); },
+      grTieOpen:!!S.grTie, grTieRows, closeGrTie:()=>this.setState({grTie:null}),
+      grMsg:S.grMsg, clearGrMsg:()=>this.setState({grMsg:''}),
+      grSchedRows, grSchedFilters, grSchedEmpty:!!grRoundRec&&grSchedVisible.length===0, grSchedHasRows:grSchedVisible.length>0,
+      grSchedPlayer:S.grSchedPlayer, onGrSchedPlayer:e=>this.setState({grSchedPlayer:e.target.value}),
+      grSchedCount:grSchedVisible.length+' of '+grRoundFx.length+' fixtures',
+      grDeadlineLine, grDeadlineLineStyle, grIsGenerated:!!grRoundRec, grIsManual:!grRoundRec,
+      grPanel, grHasPanel:!!grPanel,
+      grListRows
+    };
+
+    const dashExportRows=()=>{
+      const rows=[['Cuevolution — Season 2026 dashboard'],['Exported','15 Sep 2026'],[]];
+      rows.push(['Summary']);
+      statTiles.forEach(t=>rows.push([t.label,t.value,t.delta]));
+      rows.push([],['Players per region'],['Region','Individual male','Individual female','Team players','Total']);
+      regionStats.forEach(r=>rows.push([r.region,r.m,r.f,r.t,r.total]));
+      rows.push([],['Players per venue'],['Venue','Region','Players']);
+      vAll.slice().sort((a,b)=>b.players-a.players).forEach(v=>rows.push([v.name,v.region,v.players]));
+      rows.push([],['Registrations, last 12 weeks'],['Week','Registrations']);
+      weekly.forEach((v,i)=>rows.push(['Week '+(i+1),v]));
+      rows.push([],['Category mix'],['Category','Players','Share']);
+      mixDefs.forEach(m=>rows.push([m.label,m.value,Math.round(m.value/mixTotal*100)+'%']));
+      return rows;
+    };
+    const printTable=(head,body)=>'<table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:10pt;"><thead><tr>'+
+      head.map(h=>'<th style="text-align:left;border-bottom:1px solid #0D0C22;padding:5px 6px;font-size:8.5pt;text-transform:uppercase;letter-spacing:0.06em;">'+h+'</th>').join('')+'</tr></thead><tbody>'+
+      body.map(r=>'<tr>'+r.map(c=>'<td style="padding:5px 6px;border-bottom:1px solid #E7E7E9;">'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+    const exportDashCsv=()=>this._downloadCsv('cuevolution-dashboard-metrics.csv',dashExportRows());
+    const exportDashPdf=()=>this._printHtml('<div style="font-family:Georgia,serif;color:#0D0C22;">'+
+      '<div style="font-size:9pt;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;">Cuevolution · Season 2026</div>'+
+      '<h1 style="font-size:20pt;margin:4px 0 2px;">Dashboard metrics</h1>'+
+      '<div style="font-size:9.5pt;color:#6E6D7A;margin-bottom:18px;">Exported 15 Sep 2026</div>'+
+      '<h2 style="font-size:12pt;margin:0 0 8px;">Summary</h2>'+printTable(['Metric','Value','Note'],statTiles.map(t=>[t.label,t.value,t.delta]))+
+      '<h2 style="font-size:12pt;margin:0 0 8px;">Players per region</h2>'+printTable(['Region','Male','Female','Team players','Total'],regionStats.map(r=>[r.region,r.m,r.f,r.t,r.total]))+
+      '<h2 style="font-size:12pt;margin:0 0 8px;">Players per venue</h2>'+printTable(['Venue','Region','Players'],vAll.slice().sort((a,b)=>b.players-a.players).map(v=>[v.name,v.region,v.players]))+
+      '<h2 style="font-size:12pt;margin:0 0 8px;">Registrations, last 12 weeks</h2>'+printTable(['Week','Registrations'],weekly.map((v,i)=>['Week '+(i+1),v]))+
+      '<h2 style="font-size:12pt;margin:0 0 8px;">Category mix</h2>'+printTable(['Category','Players','Share'],mixDefs.map(m=>[m.label,m.value,Math.round(m.value/mixTotal*100)+'%']))+'</div>');
+    if(venuePage){
+      const vRoster=this.buildVenuePlayers(vSel);
+      const catOf=p=>p.kind==='team'?'Team':('Individual '+p.kind);
+      venuePage.exportCsv=()=>this._downloadCsv('cuevolution-'+vSel.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-players.csv',
+        [['Venue',vSel.name],['Region',vSel.region],['Registered players',vRoster.length],['Exported','15 Sep 2026'],[],
+         ['Name','Username','Category','Stage','Joined','Mobile','Email']]
+        .concat(vRoster.map(p=>[p.name,p.username,catOf(p),p.stage,p.joined,p.mobile,p.email])));
+      venuePage.exportPdf=()=>this._printHtml('<div style="font-family:Georgia,serif;color:#0D0C22;">'+
+        '<div style="font-size:9pt;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;">Cuevolution · Venue report</div>'+
+        '<h1 style="font-size:20pt;margin:4px 0 2px;">'+vSel.name+'</h1>'+
+        '<div style="font-size:9.5pt;color:#6E6D7A;margin-bottom:18px;">'+vSel.region+' · '+vRoster.length+' registered players · Exported 15 Sep 2026</div>'+
+        printTable(['Name','Username','Category','Stage','Joined'],vRoster.map(p=>[p.name,p.username,catOf(p),p.stage,p.joined]))+'</div>');
+    }
+
     return {
+      ...grVals,
+      exportDashCsv, exportDashPdf,
       // auth
       showLogin:!S.authed, showApp:S.authed,
       li:S.li, liError:S.liError,
@@ -1615,6 +2586,16 @@ class Component extends DCLogic {
       ...auditVals,
       // dashboard
       statTiles, attentionItems, noAttention:attentionItems.length===0, pipelineBars,
+      venuePage, rIsVenuePage:S.route==='venuePlayers'&&!!venuePage,
+      venueBars, venueMetricTiles, venueRegionOpts, venueFoot,
+      vmRegionValue:vmRegion, vmSearchValue:S.vmSearch||'',
+      onVmRegion:e=>this.setState({vmRegion:e.target.value,vmShow:8}),
+      onVmSearch:e=>this.setState({vmSearch:e.target.value,vmShow:8}),
+      vmSortLabel:S.vmAsc?'Fewest first':'Most first',
+      toggleVmSort:()=>this.setState(s=>({vmAsc:!s.vmAsc,vmShow:8})),
+      hasVmMore:vmMoreCount>0, noVmResults:vFiltered.length===0,
+      vmMoreLabel:'Show '+Math.min(20,vmMoreCount)+' more',
+      showVmMore:()=>this.setState(s=>({vmShow:(s.vmShow||8)+20})),
       regionBars, catLegend, regionHint, chartW, chartH, linePts, areaPath, trendDots, weekLabels,
       trendTotalLabel:trendHeadValue, trendDeltaLabel:trendHeadNote, trendDeltaColor:trendHeadColor,
       trendGuide, trendHasGuide,
@@ -1627,7 +2608,7 @@ class Component extends DCLogic {
       drawSavedMsg:S.drawSavedMsg, drawRoundLabel,
       enteredFixtures, hasEnteredFixtures:enteredFixtures.length>0, noEnteredFixtures:enteredFixtures.length===0,
       // results
-      resTabs, fixtureList, hasFixtureList:fixtureList.length>0, noFixtureList:fixtureList.length===0,
+      resTabs, fixtureList:grListRows.concat(fixtureList), hasFixtureList:(grListRows.length+fixtureList.length)>0, noFixtureList:(grListRows.length+fixtureList.length)===0,
       resultModal: S.resultModal,
       closeResultModal:()=>this.setState({resultModal:null}),
       // directory
@@ -1662,6 +2643,14 @@ class Component extends DCLogic {
       stagesParticipantsDisplay: S.stagesPanel==='participants'?'block':'none',
       stagesSettingsDisplay: S.stagesPanel==='settings'?'block':'none',
       stagesGroupSettingsDisplay: stagesIsCapped?'none':'block',
+      stagesIsGrassroots, grBorTable,
+      grDeadlineEditing:S.grDeadlineEditing, grDeadlineDraft:S.grDeadlineDraft,
+      grDeadlineShowVal:!S.grDeadlineEditing&&!!S.grDeadline, grDeadlineNotSet:!S.grDeadlineEditing&&!S.grDeadline,
+      grDeadlineVal:grDeadlineLabel,
+      startGrDeadline:()=>this.setState({grDeadlineEditing:true,grDeadlineDraft:S.grDeadline}),
+      onGrDeadlineInput:e=>this.setState({grDeadlineDraft:e.target.value}),
+      saveGrDeadline:()=>this.setState(s=>({grDeadlineEditing:false,grDeadline:s.grDeadlineDraft||''})),
+      grFormulaHeaders: stagesIsGrassroots ? [{label:'Target size'},{label:'Min size'},{label:'Min entrants'}] : [],
       // groups
       groupsStageTabs, groupsRegionTabs, groupsVenueTabs, hasGroupsVenues:groupsIsGrassroots, groupsCategoryTabs,
       groupsIsGrassroots, groupsScopeLabel,
@@ -1683,6 +2672,158 @@ class Component extends DCLogic {
   }
 
   updateDrawRow(id,patch){ this.setState(s=>({drawRows:s.drawRows.map(r=>r.id===id?{...r,...patch}:r)})); }
+
+  // ================= Grassroots auto-draw, 5-frame scoring, group points =================
+  GR_MIN=8;
+  GR_TARGET=8;
+  GR_STATES=[['draft','Draft'],['previewed','Previewed'],['approved','Approved'],['published','Published']];
+  GR_STATUS={
+    scheduled:{label:'Scheduled',bg:'#F3F3F4',color:'#3A3546'},
+    postponed:{label:'Postponed',bg:'#FEF3E2',color:'#92400E'},
+    completed:{label:'Completed \u2014 awaiting verification',bg:'#FEF3E2',color:'#92400E'},
+    verified:{label:'Verified',bg:'#DCF3E4',color:'#0E6A30'},
+    walkover:{label:'Walkover',bg:'#E8EEF7',color:'#1F4D7A'},
+    double_walkover:{label:'No result \u2014 deadline',bg:'#EDEDEF',color:'#6E6D7A'}
+  };
+  grFmtDate(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return ''; return d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getFullYear(); }
+  grDaysLeft(iso){ if(!iso) return null; const d=new Date(iso+'T23:59:59'); const t=new Date(); return Math.ceil((d-t)/86400000); }
+  grApplyDeadline(iso){
+    const left=this.grDaysLeft(iso); if(left===null||left>=0) return;
+    this.grPublishedRecords().forEach(r=>r.fixtures.forEach(f=>{ if(f.status==='scheduled'){ f.status='double_walkover'; f.frames=[null,null,null,null,null]; f.walkoverTo=null; } }));
+  }
+  grStatusPill(st){ const s=this.GR_STATUS[st]||this.GR_STATUS.scheduled;
+    return 'font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;letter-spacing:0.04em;color:'+s.color+';background:'+s.bg+';padding:4px 10px;border-radius:9999px;flex:none;white-space:nowrap;'; }
+  grHash(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))%9973; return h+7; }
+  grVenueCode(v){ return (v||'GEN').replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase(); }
+  grCatCode(c){ return c==='female'?'WS':'MS'; }
+  grCfg(cat){ const g=this.buildGroupSettings().Grassroots; return g[cat]||g.male; }
+  grProposedCount(n,cat){
+    const c=this.grCfg(cat||'male');
+    if(n<c.minEntrants) return 0;
+    let g=Math.max(1,Math.round(n/c.target));
+    while(g>1 && Math.floor(n/g)<c.minSize) g--;
+    return g;
+  }
+  grSizes(n,g){ const base=Math.floor(n/g), rem=n%g; return Array.from({length:g},(_,i)=>base+(i<rem?1:0)); }
+  grShuffle(a,seed){ const x=a.slice(); for(let i=x.length-1;i>0;i--){ const j=Math.floor(this._seed(seed+i*13+3)*(i+1)); const t=x[i]; x[i]=x[j]; x[j]=t; } return x; }
+  grDeal(entrants,g,seed){
+    const sizes=this.grSizes(entrants.length,g), sh=this.grShuffle(entrants,seed), out=[]; let k=0;
+    sizes.forEach((sz,i)=>{ out.push({name:'Group '+String.fromCharCode(65+i),members:sh.slice(k,k+sz).map(p=>({id:p.id,name:p.name}))}); k+=sz; });
+    return out;
+  }
+  grRoundRobin(members){
+    let arr=members.slice(); if(arr.length%2) arr.push(null);
+    const n=arr.length, rounds=[];
+    for(let r=0;r<n-1;r++){
+      const pairs=[];
+      for(let i=0;i<n/2;i++){ const a=arr[i], b=arr[n-1-i]; if(a&&b) pairs.push(r%2? [b,a] : [a,b]); }
+      rounds.push(pairs);
+      arr=[arr[0],arr[n-1]].concat(arr.slice(1,n-1));
+    }
+    return rounds;
+  }
+  grBuildFixtures(rec){
+    const code=this.grVenueCode(rec.venue), cc=this.grCatCode(rec.cat), out=[];
+    rec.groups.forEach((g,gi)=>{
+      const letter=String.fromCharCode(65+gi);
+      this.grRoundRobin(g.members).forEach((pairs,ri)=>{
+        pairs.forEach((p,mi)=>{
+          out.push({
+            id:rec.key+'#'+gi+'-'+ri+'-'+mi,
+            matchId:'SP26-'+code+'01-'+cc+'-'+letter+'-R'+(ri+1)+'-M'+(mi+1),
+            groupIdx:gi, groupName:g.name, round:'Round '+(ri+1),
+            aId:p[0].id, bId:p[1].id, a:p[0].name, b:p[1].name,
+            venue:rec.venue, date:(12+ri*3)+' Jul 2026', time:'14:00',
+            status:'scheduled', frames:[null,null,null,null,null],
+            walkoverTo:null, reason:'', recKey:rec.key
+          });
+        });
+      });
+    });
+    return out;
+  }
+  grSeedFrames(n){ const f=[]; for(let i=0;i<5;i++) f.push(this._seed(n*3+i*5+9)>0.46?'a':'b'); return f; }
+  grEntrants(key,cat,force){
+    const h=this.grHash(key), r=this._seed(h);
+    const n=(!force&&r<0.12) ? 4+Math.floor(r*30) : 12+Math.floor(this._seed(h+5)*10);
+    const first=cat==='female'?this.FIRST_F:this.FIRST_M;
+    const out=[], seen={};
+    for(let i=0;i<n;i++){
+      let name='', k=0;
+      do {
+        name=first[Math.floor(this._seed(h+i*3+k*29+1)*16)%16]+' '+this.SUR[Math.floor(this._seed(h+i*5+k*37+2)*16)%16];
+        k++;
+      } while(seen[name]&&k<24);
+      seen[name]=1;
+      out.push({id:key+'-e'+i,name});
+    }
+    return out;
+  }
+  grRecord(key,region,venue,cat,force){
+    this._gr=this._gr||{};
+    if(this._gr[key]) return this._gr[key];
+    const h=this.grHash(key);
+    const entrants=this.grEntrants(key,cat,force);
+    const rec={key,region,venue,cat,entrants,state:'none',count:null,groups:[],fixtures:[],tieOrder:{},closed:false};
+    const proposed=this.grProposedCount(entrants.length,cat);
+    if(!this._grSeeded && proposed>0){
+      this._grSeeded=true;
+      rec.state='published'; rec.count=proposed;
+      rec.groups=this.grDeal(entrants,proposed,h);
+      rec.fixtures=this.grBuildFixtures(rec);
+      rec.fixtures.forEach((f,i)=>{
+        const r=this._seed(i*11+h+21);
+        if(r<0.58){ f.status='verified'; f.frames=this.grSeedFrames(i+h); }
+        else if(r<0.74){ f.status='completed'; f.frames=this.grSeedFrames(i+h+4); }
+        else if(r<0.80){ f.status='walkover'; f.walkoverTo=i%2?'b':'a'; }
+        else if(r<0.86){ f.status='postponed'; f.reason='Venue table unavailable'; }
+      });
+    }
+    this._gr[key]=rec;
+    return rec;
+  }
+  grEnsureSeed(dir,venues){
+    if(this._grSeeded) return;
+    const region=this.REGIONS[0];
+    const vlist=(venues[region]||[]).filter(v=>v.active);
+    if(!vlist.length) return;
+    const venue=vlist[0].name;
+    this.grRecord(this.groupKey('Grassroots',region,venue,'male'),region,venue,'male',true);
+  }
+  grPublishedRecords(){ return Object.keys(this._gr||{}).map(k=>this._gr[k]).filter(r=>r.state==='published'); }
+  grStandings(rec){
+    const tie=rec.tieOrder||{};
+    return rec.groups.map((g,gi)=>{
+      const fx=rec.fixtures.filter(f=>f.groupIdx===gi);
+      const rows=g.members.map(m=>({id:m.id,name:m.name,P:0,W:0,L:0,FW:0,FL:0,BON:0}));
+      const byId={}; rows.forEach(r=>{ byId[r.id]=r; });
+      const h2h={};
+      fx.filter(f=>f.status==='double_walkover').forEach(f=>{ const A=byId[f.aId], B=byId[f.bId]; if(!A||!B) return; A.P++; B.P++; A.L++; B.L++; });
+      fx.filter(f=>f.status==='verified'||f.status==='walkover').forEach(f=>{
+        const A=byId[f.aId], B=byId[f.bId]; if(!A||!B) return;
+        let fa,fb;
+        if(f.status==='walkover'){ fa=f.walkoverTo==='a'?5:0; fb=f.walkoverTo==='a'?0:5; }
+        else { fa=f.frames.filter(x=>x==='a').length; fb=f.frames.filter(x=>x==='b').length; }
+        A.P++; B.P++; A.FW+=fa; A.FL+=fb; B.FW+=fb; B.FL+=fa;
+        const played=f.status!=='walkover';
+        if(fa>fb){ A.W++; B.L++; if(fb===0&&played) A.BON++; } else { B.W++; A.L++; if(fa===0&&played) B.BON++; }
+        h2h[A.id+'>'+B.id]=fa>fb?1:-1; h2h[B.id+'>'+A.id]=fb>fa?1:-1;
+      });
+      rows.forEach(r=>{ r.FD=r.FW-r.FL; r.PTS=r.FW+r.BON; r.PPM=r.P?(r.PTS/r.P):0; });
+      const cmp=(a,b)=>{
+        const mk=tie[a.id+'|'+b.id]; if(mk) return mk;
+        if(b.PTS!==a.PTS) return b.PTS-a.PTS;
+        const h=h2h[a.id+'>'+b.id]; if(h) return -h;
+        if(b.W!==a.W) return b.W-a.W;
+        if(b.FD!==a.FD) return b.FD-a.FD;
+        return 0;
+      };
+      rows.sort((a,b)=>cmp(a,b)||a.name.localeCompare(b.name));
+      rows.forEach((r,i)=>{ if(i>0&&cmp(rows[i-1],r)===0){ r.pos=rows[i-1].pos; r.tied=true; rows[i-1].tied=true; } else { r.pos=i+1; } });
+      const done=fx.length>0&&fx.every(f=>f.status==='verified'||f.status==='walkover'||f.status==='double_walkover');
+      return {gi, name:g.name, rows, fixtures:fx, isFinal:done};
+    });
+  }
 
   openResultModal(f){
     const isCorrection=!!f.played;
@@ -1718,6 +2859,64 @@ class Component extends DCLogic {
     m.aBtnStyle=`flex:1;padding:11px;border-radius:10px;border:1px solid ${m.winner==='a'?'#E32219':'#DBDBDE'};background:${m.winner==='a'?'#FDECEA':'#fff'};color:${m.winner==='a'?'#A81810':'#3A3546'};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;`;
     m.bBtnStyle=`flex:1;padding:11px;border-radius:10px;border:1px solid ${m.winner==='b'?'#E32219':'#DBDBDE'};background:${m.winner==='b'?'#FDECEA':'#fff'};color:${m.winner==='b'?'#A81810':'#3A3546'};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;`;
     this.forceUpdate();
+  }
+
+  _downloadCsv(filename,rows){
+    const esc=c=>{ const s=c===null||c===undefined?'':String(c); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+    const csv='\ufeff'+rows.map(r=>(r||[]).map(esc).join(',')).join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=filename; a.style.display='none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }
+  _printHtml(html){
+    let el=document.getElementById('cue-print-report');
+    if(!el){ el=document.createElement('div'); el.id='cue-print-report'; el.style.display='none'; document.body.appendChild(el); }
+    el.innerHTML=html;
+    const done=()=>{ el.innerHTML=''; window.removeEventListener('afterprint',done); };
+    window.addEventListener('afterprint',done);
+    window.print();
+  }
+
+  buildVenuePlayers(v){
+    this._vp=this._vp||{};
+    if(this._vp[v.id]) return this._vp[v.id];
+    const base=v.name.length*17+v.region.length*31+v.id.length*7;
+    const out=[];
+    for(let i=0;i<v.players;i++){
+      const r=this._seed(base+i*3+5);
+      const kind=r<0.5?'male':(r<0.85?'female':'team');
+      const stage=this.STAGES[Math.floor(this._seed(base+i*5+11)*4)%4];
+      let name, roster=null;
+      if(kind==='team'){
+        const pre=this.TEAM_PRE[Math.floor(this._seed(base+i+19)*this.TEAM_PRE.length)%this.TEAM_PRE.length];
+        const suf=this.TEAM_SUF[Math.floor(this._seed(base+i+23)*this.TEAM_SUF.length)%this.TEAM_SUF.length];
+        name=pre+' '+suf;
+        const rn=5+Math.floor(this._seed(base+i+29)*4);
+        roster=Array.from({length:rn},(_,k)=>({
+          name:this.FIRST_M[Math.floor(this._seed(base+i*7+k+31)*16)%16]+' '+this.SUR[Math.floor(this._seed(base+i*7+k+37)*16)%16],
+          role:k===0?'Captain':'Player'
+        }));
+      } else {
+        const pool=kind==='male'?this.FIRST_M:this.FIRST_F;
+        name=pool[Math.floor(this._seed(base+i*2+13)*16)%16]+' '+this.SUR[Math.floor(this._seed(base+i*2+17)*16)%16];
+      }
+      const day=1+Math.floor(this._seed(base+i+43)*28);
+      const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul'][Math.floor(this._seed(base+i+47)*7)%7];
+      out.push({
+        id:v.id+'-p'+i, kind, name, region:v.region, stage, venueName:v.name,
+        username:'@'+name.toLowerCase().replace(/[^a-z]+/g,'_'),
+        email:name.toLowerCase().replace(/[^a-z]+/g,'.')+'@example.com',
+        mobile:'+2547'+(10000000+Math.floor(this._seed(base+i+53)*89999999)),
+        town:v.region.split(' ')[0], joined:day+' '+mon+' 2026',
+        avatarIdx:kind==='team'?0:((Math.floor(this._seed(base+i+59)*70)%70)+1),
+        roster, isAnon:false
+      });
+    }
+    this._vp[v.id]=out;
+    return out;
   }
 
   openDirDetail(d){
