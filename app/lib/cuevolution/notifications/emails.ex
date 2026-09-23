@@ -106,6 +106,40 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "Sent when a Grassroots draw is published for the player."
+  def draw_published(player, payload) do
+    fixtures = Map.get(payload, :fixtures, [])
+    first_name = esc(player.first_name)
+
+    rows =
+      Enum.map_join(
+        fixtures,
+        "",
+        &"<li style=\"margin-bottom:8px;\">#{esc(&1.match_id)} vs #{esc(&1.opponent_name)}</li>"
+      )
+
+    text_rows = Enum.map_join(fixtures, "\n", &"- #{&1.match_id} vs #{&1.opponent_name}")
+
+    base(player)
+    |> subject("Your Grassroots draw is published")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">Your Grassroots draw is now published:</p>
+      <ul style="margin:0 0 16px;padding-left:20px;">#{rows}</ul>
+      #{button("View My Fixtures", url("/fixtures"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    Your Grassroots draw is now published:
+    #{text_rows}
+
+    View your fixtures: #{url("/fixtures")}
+    """)
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload

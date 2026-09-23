@@ -105,6 +105,7 @@ defmodule CuevolutionWeb.Router do
       ] do
       live "/stages", StageManagementLive, :index
       live "/groups", GroupManagementLive, :index
+      live "/draws/new", Admin.DrawWizardLive, :new
     end
 
     live_session :admin_directory,

@@ -34,6 +34,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
        new_round_stage: new_round_stage,
        new_round_form: to_form(%{}, as: :round),
        has_entered_fixtures: false,
+       generated_draw?: false,
        show_new_round: false
      )
      |> assign(:next_id, 1)
@@ -47,17 +48,21 @@ defmodule CuevolutionWeb.AdminDrawsLive do
      socket
      |> assign(:round, nil)
      |> assign(:has_entered_fixtures, false)
+     |> assign(:generated_draw?, false)
      |> stream(:entered_fixtures, [], reset: true)}
   end
 
   def handle_event("select_round", %{"id" => id}, socket) do
-    round = Enum.find(socket.assigns.rounds, &(&1.id == id))
+    round =
+      socket.assigns.rounds |> Enum.find(&(&1.id == id)) |> Cuevolution.Repo.preload(group: :draw)
+
     fixtures = Competitions.list_fixtures_for_round(round.id)
 
     {:noreply,
      socket
      |> assign(:round, round)
      |> assign(:has_entered_fixtures, fixtures != [])
+     |> assign(:generated_draw?, generated_draw?(round))
      |> stream(:entered_fixtures, fixtures, reset: true)}
   end
 
@@ -488,4 +493,13 @@ defmodule CuevolutionWeb.AdminDrawsLive do
   end
 
   defp round_label(round), do: "#{round.stage.name} — #{round.name}"
+
+  defp generated_draw?(%{
+         stage: %{name: "Grassroots"},
+         group: %{category: category, draw: %{state: "published"}}
+       })
+       when category in ~w(male female),
+       do: true
+
+  defp generated_draw?(_round), do: false
 end

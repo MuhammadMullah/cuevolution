@@ -91,6 +91,14 @@
     </button>
   </form>
 
+  <.link
+    :if={@stage.name == "Grassroots" && @category in ~w(male female) && @venue}
+    navigate={~p"/admin/draws/new"}
+    class="mb-6 inline-flex items-center rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800"
+  >
+    Run auto-draw for {@venue.name}
+  </.link>
+
   <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
     <div
       :for={group <- @groups}

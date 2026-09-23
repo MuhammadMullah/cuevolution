@@ -21,6 +21,13 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "SportPesa National Pool Circuit: You've been drawn vs #{opponent} at #{venue} on #{date} #{time}. Good luck!"
   end
 
+  def draw_published(_player, payload) do
+    fixtures = Map.get(payload, :fixtures, [])
+    summary = Enum.map_join(fixtures, "; ", &"#{&1.match_id} vs #{&1.opponent_name}")
+
+    "SportPesa National Pool Circuit: Your Grassroots draw is published. #{summary}. Check the app for details."
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(_player, payload) do
     %{team_name: team_name} = payload
