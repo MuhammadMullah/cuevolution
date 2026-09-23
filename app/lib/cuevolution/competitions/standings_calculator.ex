@@ -7,11 +7,12 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   the query-wrapping layer that feeds this real data); this module never
   touches `Repo` or any Ecto schema.
 
-  Cascade, in order: (1) match wins, (2) head-to-head result among
+  The default cascade is (1) match wins, (2) head-to-head result among
   still-tied participants, (3) frame/rack differential, (4) total frames
-  won, (5) admin manual resolution — participants tied after all four
-  levels are returned with `tied: true` rather than silently ordered by
-  an arbitrary rule.
+  won. The `:points_first` cascade used by Grassroots is (1) total points,
+  (2) head-to-head result, (3) match wins, (4) frame differential. Participants
+  tied after the configured levels are returned with `tied: true` rather than
+  silently ordered by an arbitrary rule.
   """
 
   @type match :: %{
@@ -25,6 +26,8 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   @type standing :: %{
           participant_id: term(),
           rank: pos_integer(),
+          points: non_neg_integer(),
+          bonus: non_neg_integer(),
           wins: non_neg_integer(),
           losses: non_neg_integer(),
           frame_diff: integer(),
@@ -43,35 +46,61 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   than the system silently guessing an order.
   """
   @spec rank([term()], [match()]) :: [standing()]
-  def rank(participant_ids, matches) do
+  def rank(participant_ids, matches), do: rank(participant_ids, matches, cascade: :wins_first)
+
+  @spec rank([term()], [match()], keyword()) :: [standing()]
+  def rank(participant_ids, matches, opts) do
+    cascade = Keyword.get(opts, :cascade, :wins_first)
     stats = Map.new(participant_ids, &{&1, build_stat(&1, matches)})
 
-    participant_ids
-    |> Enum.uniq()
-    |> Enum.group_by(&stats[&1].wins)
-    |> Enum.sort_by(fn {wins, _ids} -> -wins end)
-    |> Enum.flat_map(fn {_wins, tier} -> resolve_tier(tier, stats, matches) end)
-    |> assign_ranks()
+    case cascade do
+      :wins_first ->
+        participant_ids
+        |> Enum.uniq()
+        |> Enum.group_by(&stats[&1].wins)
+        |> Enum.sort_by(fn {wins, _ids} -> -wins end)
+        |> Enum.flat_map(fn {_wins, tier} -> resolve_tier(tier, stats, matches, :wins_first) end)
+        |> assign_ranks()
+
+      :points_first ->
+        participant_ids
+        |> Enum.uniq()
+        |> Enum.group_by(&stats[&1].points)
+        |> Enum.sort_by(fn {points, _ids} -> -points end)
+        |> Enum.flat_map(fn {_points, tier} ->
+          resolve_tier(tier, stats, matches, :points_first)
+        end)
+        |> assign_ranks()
+
+      invalid ->
+        raise ArgumentError, "unsupported standings cascade: #{inspect(invalid)}"
+    end
   end
 
   defp build_stat(participant_id, matches) do
     totals =
-      Enum.reduce(matches, %{wins: 0, losses: 0, frames_won: 0, frames_lost: 0}, fn match, acc ->
-        cond do
-          match.participant_a_id == participant_id ->
-            acc
-            |> add_frames(match.frames_won_a, match.frames_won_b)
-            |> add_result(match.winner_id == participant_id)
+      Enum.reduce(
+        matches,
+        %{wins: 0, losses: 0, frames_won: 0, frames_lost: 0, points: 0, bonus: 0},
+        fn match, acc ->
+          cond do
+            match.participant_a_id == participant_id ->
+              acc
+              |> add_frames(match.frames_won_a, match.frames_won_b)
+              |> add_result(match.winner_id == participant_id)
+              |> add_points(points_for(match, :a), bonus_for(match, :a))
 
-          match.participant_b_id == participant_id ->
-            acc
-            |> add_frames(match.frames_won_b, match.frames_won_a)
-            |> add_result(match.winner_id == participant_id)
+            match.participant_b_id == participant_id ->
+              acc
+              |> add_frames(match.frames_won_b, match.frames_won_a)
+              |> add_result(match.winner_id == participant_id)
+              |> add_points(points_for(match, :b), bonus_for(match, :b))
 
-          true ->
-            acc
+            true ->
+              acc
+          end
         end
-      end)
+      )
 
     Map.put(totals, :frame_diff, totals.frames_won - totals.frames_lost)
   end
@@ -82,15 +111,91 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   defp add_result(acc, true), do: %{acc | wins: acc.wins + 1}
   defp add_result(acc, false), do: %{acc | losses: acc.losses + 1}
 
+  defp add_points(acc, points, bonus),
+    do: %{acc | points: acc.points + points, bonus: acc.bonus + bonus}
+
+  defp points_for(match, :a) do
+    case Map.get(match, :points_a) do
+      nil ->
+        frames_won = match.frames_won_a
+        frames_lost = match.frames_won_b
+        frames_won + inferred_bonus(match, frames_won, frames_lost)
+
+      points ->
+        points
+    end
+  end
+
+  defp points_for(match, :b) do
+    case Map.get(match, :points_b) do
+      nil ->
+        frames_won = match.frames_won_b
+        frames_lost = match.frames_won_a
+        frames_won + inferred_bonus(match, frames_won, frames_lost)
+
+      points ->
+        points
+    end
+  end
+
+  defp bonus_for(match, :a) do
+    case Map.get(match, :bonus_a) do
+      nil -> inferred_bonus(match, match.frames_won_a, match.frames_won_b)
+      bonus -> bonus
+    end
+  end
+
+  defp bonus_for(match, :b) do
+    case Map.get(match, :bonus_b) do
+      nil -> inferred_bonus(match, match.frames_won_b, match.frames_won_a)
+      bonus -> bonus
+    end
+  end
+
+  defp inferred_bonus(match, 5, 0) do
+    if Map.get(match, :status) in [:walkover, "walkover"], do: 0, else: 1
+  end
+
+  defp inferred_bonus(_match, _frames_won, _frames_lost), do: 0
+
   # Level 1 (wins) tiers land here. A singleton tier needs no further
   # tiebreaking; a multi-participant tier proceeds to head-to-head.
-  defp resolve_tier([single], stats, _matches), do: [finalize(single, stats, false)]
+  defp resolve_tier([single], stats, _matches, _cascade), do: [finalize(single, stats, false)]
 
-  defp resolve_tier(tier, stats, matches) do
+  defp resolve_tier(tier, stats, matches, cascade) do
     tier
     |> Enum.group_by(&head_to_head_wins(&1, tier, matches))
     |> Enum.sort_by(fn {h2h, _ids} -> -h2h end)
-    |> Enum.flat_map(fn {_h2h, sub_tier} -> resolve_by_frame_diff(sub_tier, stats) end)
+    |> Enum.flat_map(fn {_h2h, sub_tier} ->
+      case cascade do
+        :wins_first -> resolve_by_frame_diff(sub_tier, stats)
+        :points_first -> resolve_by_wins_then_frame_diff(sub_tier, stats)
+      end
+    end)
+  end
+
+  defp resolve_by_wins_then_frame_diff([single], stats), do: [finalize(single, stats, false)]
+
+  defp resolve_by_wins_then_frame_diff(tier, stats) do
+    tier
+    |> Enum.group_by(&stats[&1].wins)
+    |> Enum.sort_by(fn {wins, _ids} -> -wins end)
+    |> Enum.flat_map(fn {_wins, sub_tier} ->
+      resolve_by_frame_diff_without_frames_won(sub_tier, stats)
+    end)
+  end
+
+  defp resolve_by_frame_diff_without_frames_won([single], stats),
+    do: [finalize(single, stats, false)]
+
+  defp resolve_by_frame_diff_without_frames_won(tier, stats) do
+    tier
+    |> Enum.group_by(&stats[&1].frame_diff)
+    |> Enum.sort_by(fn {diff, _ids} -> -diff end)
+    |> Enum.flat_map(fn {_diff, ids} ->
+      tied? = length(ids) > 1
+      Enum.map(ids, &finalize(&1, stats, tied?))
+    end)
   end
 
   # Wins credited only for results against OTHER MEMBERS of this exact

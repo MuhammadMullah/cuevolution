@@ -9,6 +9,10 @@ defmodule Cuevolution.Competitions.StageGroupConfig do
     field :category, :string
     field :group_size, :integer, default: 8
     field :advancer_count, :integer, default: 2
+    field :target_group_size, :integer, default: 8
+    field :minimum_group_size, :integer, default: 6
+    field :minimum_entrants, :integer, default: 4
+    field :extra_qualifier_count, :integer, default: 0
 
     belongs_to :stage, Cuevolution.Competitions.Stage
 
@@ -19,11 +23,33 @@ defmodule Cuevolution.Competitions.StageGroupConfig do
 
   def changeset(config, attrs) do
     config
-    |> cast(attrs, [:stage_id, :category, :group_size, :advancer_count])
-    |> validate_required([:stage_id, :category, :group_size, :advancer_count])
+    |> cast(attrs, [
+      :stage_id,
+      :category,
+      :group_size,
+      :advancer_count,
+      :target_group_size,
+      :minimum_group_size,
+      :minimum_entrants,
+      :extra_qualifier_count
+    ])
+    |> validate_required([
+      :stage_id,
+      :category,
+      :group_size,
+      :advancer_count,
+      :target_group_size,
+      :minimum_group_size,
+      :minimum_entrants,
+      :extra_qualifier_count
+    ])
     |> validate_inclusion(:category, @categories)
     |> validate_number(:group_size, greater_than: 0)
     |> validate_number(:advancer_count, greater_than: 0)
+    |> validate_number(:target_group_size, greater_than: 0)
+    |> validate_number(:minimum_group_size, greater_than: 0)
+    |> validate_number(:minimum_entrants, greater_than: 0)
+    |> validate_number(:extra_qualifier_count, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:stage_id)
     |> unique_constraint([:stage_id, :category])
   end

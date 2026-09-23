@@ -8,6 +8,7 @@ defmodule Cuevolution.Competitions.Stage do
   schema "stages" do
     field :name, :string
     field :order, :integer
+    field :completion_deadline, :date
 
     timestamps()
   end
@@ -15,7 +16,7 @@ defmodule Cuevolution.Competitions.Stage do
   @doc "Stages are seeded and effectively read-only in application code; this changeset exists mainly for admin tooling, not general writes."
   def changeset(stage, attrs) do
     stage
-    |> cast(attrs, [:name, :order])
+    |> cast(attrs, [:name, :order, :completion_deadline])
     |> validate_required([:name, :order])
     |> unique_constraint(:name)
     |> unique_constraint(:order)
