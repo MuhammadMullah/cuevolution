@@ -82,6 +82,39 @@ defmodule CuevolutionWeb.TeamDetailLiveTest do
     assert Repo.get!(Player, teammate.id).team_id == Repo.get!(Player, captain.id).team_id
   end
 
+  test "an admin can delete a team and release its roster", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Admin Sharks"})
+    teammate = insert(:player, region_id: team.region_id)
+    {:ok, _teammate} = Teams.add_player_to_roster(team, teammate)
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/teams/#{team.id}")
+
+    assert has_element?(view, "#admin-delete-team-button")
+
+    {:error, {:live_redirect, %{to: "/admin/players"}}} =
+      view |> element("#admin-delete-team-button") |> render_click()
+
+    assert is_nil(Repo.get(Cuevolution.Teams.Team, team.id))
+    assert is_nil(Repo.get!(Player, captain.id).team_id)
+    assert is_nil(Repo.get!(Player, teammate.id).team_id)
+  end
+
+  test "an admin cannot delete a team once it has been drawn", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Admin Sharks"})
+    {1, _} = Teams.lock_roster(team.id)
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/teams/#{team.id}")
+
+    html = view |> element("#admin-delete-team-button") |> render_click()
+
+    assert html =~ "can no longer be deleted"
+    assert Repo.get(Cuevolution.Teams.Team, team.id)
+  end
+
   test "admins without team-management permission cannot open team management", %{conn: conn} do
     conn = log_in_admin(conn, "venue_representative")
     team = insert(:team)

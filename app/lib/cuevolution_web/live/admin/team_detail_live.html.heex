@@ -123,4 +123,21 @@
   >
     No players on this roster yet.
   </div>
+
+  <AdminComponents.card class="mt-5">
+    <div class="mb-1 text-sm font-semibold text-red-700">Danger zone</div>
+    <p class="mb-3 text-[13px] text-ink-400">
+      Deleting the team releases every player from its roster and cancels pending invitations.
+      This isn't possible once the team has been drawn into a stage.
+    </p>
+    <button
+      id="admin-delete-team-button"
+      type="button"
+      phx-click="delete_team"
+      data-confirm="Delete this team? This releases every player and cannot be undone."
+      class="cursor-pointer rounded-full border border-red-200 bg-white px-4 py-2 text-[13px] font-semibold text-red-700 hover:bg-red-50"
+    >
+      Delete team
+    </button>
+  </AdminComponents.card>
 </AdminComponents.app_shell>

@@ -82,6 +82,30 @@ defmodule CuevolutionWeb.TeamDetailLive do
     end
   end
 
+  def handle_event("delete_team", _params, socket) do
+    case Teams.admin_delete_team(socket.assigns.current_admin, socket.assigns.team) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Team deleted.")
+         |> push_navigate(to: ~p"/admin/players")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to manage teams.")}
+
+      {:error, :roster_frozen} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "This team has already been drawn into a stage and can no longer be deleted."
+         )}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Couldn't delete this team.")}
+    end
+  end
+
   defp assign_team(socket, team) do
     assign(socket, team: team, eligible: Teams.eligible?(team))
   end
