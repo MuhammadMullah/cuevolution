@@ -24,7 +24,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
-  alias Cuevolution.Competitions.{Draw, Group, StageParticipation}
+  alias Cuevolution.Competitions.{Draw, StageParticipation}
   alias Cuevolution.Repo
   alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
@@ -53,12 +53,14 @@ defmodule CuevolutionWeb.GroupManagementLive do
        venue: nil,
        form: to_form(%{}, as: :group),
        open_group_ids: MapSet.new(),
-       open_fixtures: %{},
+       gr_open_group_id: nil,
+       gr_selected_member_id: nil,
        gr_view: :groups,
        proposal: nil,
        group_count: nil,
        sizes: nil,
        draw: nil,
+       group_fixtures: %{},
        redraw_open: false,
        redraw_reason: "",
        confirm_close: false,
@@ -137,21 +139,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
         MapSet.put(socket.assigns.open_group_ids, id)
       end
 
-    socket = assign(socket, :open_group_ids, open_group_ids)
-
-    socket =
-      if grassroots_singles?(socket.assigns) and MapSet.member?(open_group_ids, id) and
-           not Map.has_key?(socket.assigns.open_fixtures, id) do
-        Phoenix.Component.update(
-          socket,
-          :open_fixtures,
-          &Map.put(&1, id, Competitions.list_fixtures_for_group(id))
-        )
-      else
-        socket
-      end
-
-    {:noreply, socket}
+    {:noreply, assign(socket, :open_group_ids, open_group_ids)}
   end
 
   def handle_event(
@@ -244,6 +232,19 @@ defmodule CuevolutionWeb.GroupManagementLive do
     end
   end
 
+  def handle_event("reshuffle_draw", _params, socket) do
+    case Competitions.reshuffle_draw(socket.assigns.draw, socket.assigns.current_admin) do
+      {:ok, _draw} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Groups reshuffled. Review the new preview before approving.")
+         |> load_gr()}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Couldn't reshuffle: #{format_error(reason)}")}
+    end
+  end
+
   def handle_event("open_redraw", _params, socket),
     do: {:noreply, assign(socket, redraw_open: true)}
 
@@ -269,8 +270,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
            sizes: nil,
            redraw_open: false,
            redraw_reason: "",
-           open_group_ids: MapSet.new(),
-           open_fixtures: %{}
+           gr_open_group_id: nil,
+           gr_selected_member_id: nil
          )
          |> put_flash(:info, "A new draft draw was created — propose and deal it below.")
          |> load_gr()}
@@ -279,6 +280,50 @@ defmodule CuevolutionWeb.GroupManagementLive do
         {:noreply, put_flash(socket, :error, "Couldn't redraw: #{format_error(reason)}")}
     end
   end
+
+  # The fixtures sub-section (below the always-visible member roster) is
+  # inert until the draw is published — no fixtures exist before then
+  # (FR-008 generates them on the publish transition), matching the
+  # design's `toggle:()=>{ if(!grPub) return; ... }`. Only one card's
+  # fixtures panel is open at a time (design's `grCardSel` is a single
+  # index, not a set). `@group_fixtures` is already loaded for every group
+  # (see `load_gr/1`), so this just toggles which one is expanded.
+  def handle_event("toggle_gr_card", %{"id" => id}, socket) do
+    socket =
+      cond do
+        is_nil(socket.assigns.draw) or socket.assigns.draw.state != "published" ->
+          socket
+
+        socket.assigns.gr_open_group_id == id ->
+          assign(socket, gr_open_group_id: nil, gr_selected_member_id: nil)
+
+        true ->
+          assign(socket, gr_open_group_id: id, gr_selected_member_id: nil)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("select_gr_member", %{"id" => id}, socket) do
+    selected = if socket.assigns.gr_selected_member_id == id, do: nil, else: id
+
+    group =
+      Enum.find(socket.assigns.groups, fn group ->
+        Enum.any?(group.group_memberships, &(&1.stage_participation_id == id))
+      end)
+
+    socket =
+      if socket.assigns.draw && socket.assigns.draw.state == "published" && group do
+        assign(socket, gr_open_group_id: group.id, gr_selected_member_id: selected)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_gr_member_filter", _params, socket),
+    do: {:noreply, assign(socket, :gr_selected_member_id, nil)}
 
   ## grOn: standings sub-view
 
@@ -367,7 +412,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
         redraw_open: false,
         redraw_reason: "",
         open_group_ids: MapSet.new(),
-        open_fixtures: %{},
+        gr_open_group_id: nil,
+        gr_selected_member_id: nil,
         confirm_close: false,
         tie_resolution: nil
       )
@@ -381,12 +427,22 @@ defmodule CuevolutionWeb.GroupManagementLive do
     %{stage: stage, venue: venue, category: category} = socket.assigns
     draw = Competitions.latest_draw(stage.id, venue.id, category)
     dealt? = draw && draw.state != "draft"
+    groups = if(dealt?, do: Competitions.list_groups_for_draw(draw.id), else: [])
 
-    socket =
-      assign(socket,
-        draw: draw,
-        groups: if(dealt?, do: Competitions.list_groups_for_draw(draw.id), else: [])
-      )
+    # Every group's fixtures, loaded once here rather than per-card in the
+    # template — needed for the always-visible per-member progress and
+    # per-card "N/M played" line (design: `done+'/'+total+' played'`), not
+    # just whichever card's fixtures panel happens to be expanded. Only
+    # meaningful once published (FR-008 generates fixtures on that
+    # transition; before it there's nothing to fetch).
+    group_fixtures =
+      if draw && draw.state == "published" do
+        Map.new(groups, &{&1.id, Competitions.list_fixtures_for_group(&1.id)})
+      else
+        %{}
+      end
+
+    socket = assign(socket, draw: draw, groups: groups, group_fixtures: group_fixtures)
 
     if socket.assigns.gr_view == :standings, do: load_gr_standings(socket), else: socket
   end
@@ -404,13 +460,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
     tables =
       Enum.map(groups, fn group ->
         rows = group |> Competitions.grassroots_group_standings() |> name_rows()
-
-        fixtures =
-          Map.get(socket.assigns.open_fixtures, group.id) ||
-            Competitions.list_fixtures_for_group(group.id)
-
+        fixtures = Competitions.list_fixtures_for_group(group.id)
         final? = fixtures != [] and Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
-        top = Enum.take(rows, config.advancer_count)
+        top = if final?, do: Enum.take(rows, config.advancer_count), else: []
         %{group: group, rows: rows, final?: final?, top: top}
       end)
 
@@ -418,9 +470,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
       stage.id |> Competitions.best_of_rest_qualifiers(category) |> name_rows()
 
     all_top =
-      Group
-      |> where([g], g.stage_id == ^stage.id and g.category == ^category)
-      |> Repo.all()
+      stage.id
+      |> Competitions.final_groups(category)
       |> Enum.flat_map(fn g ->
         g |> Competitions.grassroots_group_standings() |> Enum.take(config.advancer_count)
       end)
@@ -515,6 +566,30 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   defp draw_step_label(index), do: Enum.at(@draw_states, index) |> String.capitalize()
 
+  defp draw_state_label(state), do: String.capitalize(state)
+
+  defp draw_state_pill_class("published"), do: "bg-ink-950 text-white"
+  defp draw_state_pill_class(_state), do: "bg-ink-100 text-ink-700"
+
+  defp gr_fixtures_for(group_fixtures, group), do: Map.get(group_fixtures, group.id, [])
+
+  # Fixtures optionally narrowed to one member's matches (design's
+  # `grMemberSel` filter, cleared via a "Clear" link once set).
+  defp filtered_gr_fixtures(fixtures, nil), do: fixtures
+
+  defp filtered_gr_fixtures(fixtures, member_id) do
+    Enum.filter(fixtures, &(&1.participant_a_id == member_id or &1.participant_b_id == member_id))
+  end
+
+  defp gr_fixtures_filter_label(nil, _members), do: "All fixtures"
+
+  defp gr_fixtures_filter_label(member_id, members) do
+    case Enum.find(members, &(&1.stage_participation_id == member_id)) do
+      nil -> "All fixtures"
+      membership -> "Showing #{participant_name(membership.stage_participation)}’s fixtures"
+    end
+  end
+
   defp ngettext_group(1), do: "group"
   defp ngettext_group(_count), do: "groups"
 
@@ -550,6 +625,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp format_error(:already_dealt), do: "this draw has already been dealt"
   defp format_error(:unauthorized), do: "you do not have permission"
   defp format_error(:results_exist), do: "results already exist — redraw is blocked"
+  defp format_error(:redraw_limit_reached), do: "the three pre-approval redraws have been used"
+  defp format_error(:invalid_transition), do: "reshuffling is only available before approval"
   defp format_error(:reason_required), do: "a reason is required"
   defp format_error(reason), do: inspect(reason)
 

@@ -48,7 +48,7 @@
         ]}
       >
         <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
-        <div class="text-[12.5px] text-ink-500">{fixture.venue.name}</div>
+        <div class="text-[12.5px] text-ink-500">{fixture_venue_label(fixture)}</div>
       </div>
     </div>
     <div :if={@unplayed_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
@@ -120,7 +120,7 @@
       >
         <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
         <div class="text-[12.5px] text-ink-500">
-          Winner: {Competitions.participant_name(fixture.result.winner_participation)}
+          {played_fixture_summary(fixture)}
         </div>
       </div>
     </div>

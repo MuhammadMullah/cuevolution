@@ -196,4 +196,17 @@ defmodule CuevolutionWeb.AdminResultsLive do
   defp fixture_label(fixture) do
     "#{Competitions.participant_name(fixture.participant_a)} vs #{Competitions.participant_name(fixture.participant_b)}"
   end
+
+  defp fixture_venue_label(%{venue: %{name: name}}), do: name
+
+  defp fixture_venue_label(%{match_id: match_id}) when is_binary(match_id),
+    do: "Grassroots · self-organised"
+
+  defp fixture_venue_label(_fixture), do: "Venue not assigned"
+
+  defp played_fixture_summary(%{walkover_kind: "double"}), do: "NO RESULT — DEADLINE"
+
+  defp played_fixture_summary(fixture) do
+    "Winner: #{Competitions.participant_name(fixture.result.winner_participation)}"
+  end
 end

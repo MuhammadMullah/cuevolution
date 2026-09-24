@@ -649,6 +649,66 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc "Reshuffles a previewed draw in place, up to three times before approval."
+  def reshuffle_draw(%Draw{state: "previewed"} = draw, %Admin{} = admin) do
+    cond do
+      not Admin.can?(admin, :manage_groups) ->
+        {:error, :unauthorized}
+
+      draw.redraw_count >= 3 ->
+        {:error, :redraw_limit_reached}
+
+      true ->
+        draw = Repo.preload(draw, venue: :region)
+
+        entrants = draw_entrants_for_draw(draw.id)
+        config = get_or_create_group_config(draw.stage_id, draw.category)
+
+        with {:ok, proposal} <- propose_group_sizes(config, length(entrants)) do
+          group_count = draw.group_count_override || proposal.group_count
+          sizes = balanced_sizes(length(entrants), group_count)
+          random_seed = Ecto.UUID.generate()
+          buckets = deal_entrants(seeded_shuffle(entrants, random_seed), sizes)
+
+          result =
+            Multi.new()
+            |> Multi.delete_all(:groups, from(g in Group, where: g.draw_id == ^draw.id))
+            |> Multi.run(:new_groups, fn repo, _changes ->
+              insert_draw_groups(repo, %{draw | random_seed: random_seed}, buckets)
+            end)
+            |> Multi.update(:draw, fn _changes ->
+              Draw.changeset(draw, %{
+                random_seed: random_seed,
+                redraw_count: draw.redraw_count + 1,
+                state: "previewed"
+              })
+            end)
+            |> Repo.transaction()
+
+          case result do
+            {:ok, %{draw: reshuffled}} ->
+              reshuffled = Repo.preload(reshuffled, venue: :region)
+
+              with {:ok, _log} <-
+                     Accounts.log_admin_action("redraw_preview", admin, reshuffled,
+                       prior_value: %{"redraw_count" => draw.redraw_count},
+                       new_value: %{"redraw_count" => reshuffled.redraw_count}
+                     ) do
+                {:ok, reshuffled}
+              end
+
+            error ->
+              error
+          end
+        end
+    end
+  end
+
+  def reshuffle_draw(%Draw{}, %Admin{} = admin), do: authorize_draw_admin(admin) |> error_result()
+
+  defp error_result(:ok), do: {:error, :invalid_transition}
+  defp error_result(error), do: error
+
   defp maybe_log_group_count_override(_draw, nil, nil), do: :ok
   defp maybe_log_group_count_override(_draw, nil, _override), do: {:error, :admin_required}
 
@@ -911,6 +971,18 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
+  defp draw_entrants_for_draw(draw_id) do
+    from(sp in StageParticipation,
+      join: gm in GroupMembership,
+      on: gm.stage_participation_id == sp.id,
+      join: g in Group,
+      on: g.id == gm.group_id,
+      where: g.draw_id == ^draw_id,
+      preload: [player: :team]
+    )
+    |> Repo.all()
+  end
+
   defp grouped_draw_participation_ids(stage_id, venue_id, category) do
     from gm in GroupMembership,
       join: g in Group,
@@ -1003,7 +1075,7 @@ defmodule Cuevolution.Competitions do
     region_id = draw.venue.region_id
 
     Enum.reduce_while(Enum.with_index(buckets), {:ok, []}, fn {members, index}, {:ok, groups} ->
-      group_name = available_draw_group_name(repo, draw, index)
+      group_name = "Group #{group_label(index)}"
 
       group_changeset =
         Group.changeset(%Group{draw_id: draw.id}, %{
@@ -1021,25 +1093,6 @@ defmodule Cuevolution.Competitions do
         error -> {:halt, error}
       end
     end)
-  end
-
-  defp available_draw_group_name(repo, draw, index) do
-    base_name = "Group #{group_label(index)}"
-    available_group_name(repo, draw, base_name, 1)
-  end
-
-  defp available_group_name(repo, draw, base_name, suffix) do
-    name = if suffix == 1, do: base_name, else: "#{base_name} (#{suffix})"
-
-    exists? =
-      repo.exists?(
-        from g in Group,
-          where:
-            g.stage_id == ^draw.stage_id and g.venue_id == ^draw.venue_id and
-              g.category == ^draw.category and g.name == ^name
-      )
-
-    if exists?, do: available_group_name(repo, draw, base_name, suffix + 1), else: name
   end
 
   defp insert_group_memberships(repo, group, members) do
@@ -2115,14 +2168,38 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc """
+  Groups within `stage_id`/`category` whose fixtures are all complete
+  (verified/walkover) — the only groups whose standings are settled enough
+  to contribute automatic top-N qualifiers. Deliberately cross-venue (a
+  Grassroots category closes across every venue at once), but excludes:
+  a venue's superseded groups left behind by a redraw (they never got
+  fixtures at all, so `final?` is false), and any group still mid-play.
+  Without this, a freshly redrawn, unplayed group's all-tied-at-zero
+  standings would "qualify" arbitrary participants who haven't played a
+  single fixture.
+  """
+  def final_groups(stage_id, category) do
+    Group
+    |> where([g], g.stage_id == ^stage_id and g.category == ^category)
+    |> Repo.all()
+    |> Enum.filter(&group_final?/1)
+  end
+
+  defp group_final?(group) do
+    case list_fixtures_for_group(group.id) do
+      [] -> false
+      fixtures -> Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
+    end
+  end
+
   @doc "Advances the reviewed top-N and best-of-rest qualifiers into the next stage."
   def close_grassroots_stage(stage_id, category, %Admin{} = admin, confirmed_ids)
       when is_list(confirmed_ids) do
     with true <- Admin.can?(admin, :manage_groups),
          %Stage{name: "Grassroots"} = stage <- Repo.get(Stage, stage_id),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
-         groups <-
-           Repo.all(from g in Group, where: g.stage_id == ^stage_id and g.category == ^category),
+         groups <- final_groups(stage_id, category),
          config <- get_or_create_group_config(stage_id, category),
          top_ids <-
            Enum.flat_map(groups, fn group ->

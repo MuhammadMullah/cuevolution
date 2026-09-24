@@ -47,6 +47,17 @@
         This Grassroots draw is locked. Fixture entry is read-only.
       </p>
     </div>
+    <div class={[
+      "border-b px-5 py-3 font-mono text-[11.5px] font-medium",
+      @generated_deadline_state == :warning && "border-amber-200 bg-amber-50 text-amber-900",
+      @generated_deadline_state != :warning && "border-green-100 bg-green-50 text-green-900"
+    ]}>
+      {generated_deadline_message(
+        @generated_deadline,
+        @generated_unplayed_count,
+        @generated_fixture_count
+      )}
+    </div>
     <div id="generated-fixtures" phx-update="stream" class="divide-y divide-green-100 bg-white">
       <div
         :for={{dom_id, fixture} <- @streams.entered_fixtures}

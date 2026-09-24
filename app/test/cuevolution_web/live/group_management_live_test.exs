@@ -139,6 +139,11 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       assert html =~ "Draw dealt."
       assert html =~ "Group A"
       assert html =~ "Group B"
+
+      assert html =~ "Redraw groups (3 left)"
+      html = view |> element("button", "Redraw groups (3 left)") |> render_click()
+      assert html =~ "Groups reshuffled"
+      assert html =~ "Redraw groups (2 left)"
     end
 
     test "full lifecycle: deal -> approve -> publish generates fixtures, then redraw is blocked once verified",
@@ -152,10 +157,10 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       view |> element("button", "Deal draw") |> render_click()
 
       html = view |> element("button", "Approve draw") |> render_click()
-      assert html =~ "approved"
+      assert html =~ "Approved"
 
       html = view |> element("button", "Publish & generate fixtures") |> render_click()
-      assert html =~ "published"
+      assert html =~ "Published"
 
       draw = Repo.one!(Draw)
       assert draw.state == "published"
@@ -197,11 +202,187 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
 
       _html =
         view
-        |> element("input[name='reason']")
+        |> element("#redraw-reason-form")
         |> render_change(%{"reason" => "testing"})
 
       html = view |> element("button", "Redraw and republish") |> render_click()
       assert html =~ "results already exist"
+    end
+
+    test "redrawing a published draw with no results yet succeeds once a reason is entered",
+         %{conn: conn} do
+      create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      draw_before = Repo.one!(Draw)
+
+      view |> element("button", "Redraw") |> render_click()
+
+      view
+      |> element("#redraw-reason-form")
+      |> render_change(%{"reason" => "wrong entrants dealt"})
+
+      html = view |> element("button", "Redraw and republish") |> render_click()
+
+      assert html =~ "A new draft draw was created"
+      refute html =~ "reason is required"
+
+      draws = Repo.all(Draw)
+      assert length(draws) == 2
+      assert Enum.any?(draws, &(&1.id == draw_before.id))
+      assert Enum.any?(draws, &(&1.state == "draft" and &1.id != draw_before.id))
+
+      # The new draw is "draft" (not nil), so the top-level branch must key
+      # off its actual state rather than nil-ness, or the admin is stuck on
+      # a blank screen with no Propose/Deal AND no Approve/Publish/Redraw
+      # buttons (none of those three match a "draft" draw).
+      assert has_element?(view, "button", "Propose draw")
+      refute has_element?(view, "button", "Redraw")
+    end
+
+    test "redealing after a redraw names groups fresh — no '(2)' collision suffix", %{
+      conn: conn
+    } do
+      create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      view |> element("button", "Redraw") |> render_click()
+
+      view
+      |> element("#redraw-reason-form")
+      |> render_change(%{"reason" => "wrong entrants dealt"})
+
+      view |> element("button", "Redraw and republish") |> render_click()
+
+      # The superseded draw's "Group A" still exists (kept for audit
+      # history) — the new draw's first group must still be plain
+      # "Group A", not "Group A (2)", since uniqueness is per-draw now.
+      view |> element("button", "Propose draw") |> render_click()
+      html = view |> element("button", "Deal draw") |> render_click()
+      assert html =~ "Group A"
+      refute html =~ "Group A (2)"
+
+      new_draw = Repo.one!(from d in Draw, where: d.state == "previewed")
+      new_group = Repo.get_by!(Group, draw_id: new_draw.id, name: "Group A")
+      assert new_group
+    end
+
+    test "pre-publish group cards are inert — no click, no misleading 0/0 progress", %{
+      conn: conn
+    } do
+      create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      html = view |> element("button", "Deal draw") |> render_click()
+
+      draw = Repo.one!(Draw)
+      group = Repo.get_by!(Group, draw_id: draw.id)
+
+      membership =
+        Repo.one!(
+          from gm in Cuevolution.Competitions.GroupMembership,
+            where: gm.group_id == ^group.id,
+            limit: 1
+        )
+
+      participation =
+        Repo.get!(Cuevolution.Competitions.StageParticipation, membership.stage_participation_id)
+        |> Repo.preload(:player)
+
+      player_name = "#{participation.player.first_name} #{participation.player.last_name}"
+
+      # Reviewing the roster is the whole point of Previewed/Approved — the
+      # member names must show even though the card itself isn't clickable.
+      assert html =~ player_name
+
+      # No fixtures exist until publish (FR-008) — the card must not claim
+      # otherwise with a "0/0" that reads as "nothing to play" rather than
+      # "not generated yet", and must not be clickable at all.
+      refute html =~ "played"
+      refute html =~ "0/0"
+      refute has_element?(view, "button[phx-value-id='#{group.id}']")
+
+      html = view |> element("button", "Approve draw") |> render_click()
+      assert html =~ player_name
+      refute html =~ "played"
+      refute html =~ "0/0"
+      refute has_element?(view, "button[phx-value-id='#{group.id}']")
+    end
+
+    test "published group card: expanding shows fixtures, clicking a member filters to just theirs",
+         %{conn: conn} do
+      create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      draw = Repo.one!(Draw)
+      group = Repo.get_by!(Group, draw_id: draw.id)
+
+      membership =
+        Repo.one!(
+          from gm in Cuevolution.Competitions.GroupMembership,
+            where: gm.group_id == ^group.id,
+            limit: 1
+        )
+
+      participation =
+        Repo.get!(Cuevolution.Competitions.StageParticipation, membership.stage_participation_id)
+
+      total_fixtures = group.id |> Competitions.list_fixtures_for_group() |> length()
+
+      html =
+        view
+        |> element("button[phx-value-id='#{participation.id}']")
+        |> render_click()
+
+      assert html =~ "0/#{total_fixtures} played"
+      assert html =~ "SP26-"
+      assert html =~ "fixtures"
+      assert html =~ "Showing"
+      assert html =~ "Clear"
+
+      html = view |> element("button", "Clear") |> render_click()
+      assert html =~ "All fixtures"
+    end
+
+    test "a freshly published, unplayed draw shows no premature qualifiers", %{conn: conn} do
+      create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      html = view |> element("button", "Group standings") |> render_click()
+
+      refute html =~ "Close stage &amp; advance qualifiers"
+      refute html =~ "qualifies from this group"
     end
   end
 

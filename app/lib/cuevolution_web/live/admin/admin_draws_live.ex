@@ -40,6 +40,10 @@ defmodule CuevolutionWeb.AdminDrawsLive do
        new_round_form: to_form(%{}, as: :round),
        has_entered_fixtures: false,
        generated_draw?: false,
+       generated_deadline: nil,
+       generated_unplayed_count: 0,
+       generated_fixture_count: 0,
+       generated_deadline_state: :normal,
        show_new_round: false
      )
      |> assign(:next_id, 1)
@@ -54,20 +58,25 @@ defmodule CuevolutionWeb.AdminDrawsLive do
      |> assign(:round, nil)
      |> assign(:has_entered_fixtures, false)
      |> assign(:generated_draw?, false)
+     |> clear_generated_summary()
      |> stream(:entered_fixtures, [], reset: true)}
   end
 
   def handle_event("select_round", %{"id" => id}, socket) do
     round =
-      socket.assigns.rounds |> Enum.find(&(&1.id == id)) |> Cuevolution.Repo.preload(group: :draw)
+      socket.assigns.rounds
+      |> Enum.find(&(&1.id == id))
+      |> Cuevolution.Repo.preload(group: [:draw, :stage])
 
     fixtures = Competitions.list_fixtures_for_round(round.id)
+    generated? = generated_draw?(round)
 
     {:noreply,
      socket
      |> assign(:round, round)
      |> assign(:has_entered_fixtures, fixtures != [])
-     |> assign(:generated_draw?, generated_draw?(round))
+     |> assign(:generated_draw?, generated?)
+     |> assign_generated_summary(round, fixtures)
      |> stream(:entered_fixtures, fixtures, reset: true)}
   end
 
@@ -518,4 +527,48 @@ defmodule CuevolutionWeb.AdminDrawsLive do
        do: true
 
   defp generated_draw?(_round), do: false
+
+  defp assign_generated_summary(socket, %{group: %{stage: stage}}, fixtures) do
+    if socket.assigns.generated_draw? do
+      deadline = stage.completion_deadline
+      unplayed_count = Enum.count(fixtures, &(&1.status == "scheduled"))
+
+      assign(socket,
+        generated_deadline: deadline,
+        generated_unplayed_count: unplayed_count,
+        generated_fixture_count: length(fixtures),
+        generated_deadline_state: deadline_state(deadline)
+      )
+    else
+      clear_generated_summary(socket)
+    end
+  end
+
+  defp assign_generated_summary(socket, _round, _fixtures),
+    do: clear_generated_summary(socket)
+
+  defp clear_generated_summary(socket) do
+    assign(socket,
+      generated_deadline: nil,
+      generated_unplayed_count: 0,
+      generated_fixture_count: 0,
+      generated_deadline_state: :normal
+    )
+  end
+
+  defp deadline_state(nil), do: :normal
+
+  defp deadline_state(deadline) do
+    case Date.diff(deadline, Date.utc_today()) do
+      days when days <= 3 -> :warning
+      _days -> :normal
+    end
+  end
+
+  def generated_deadline_label(nil), do: "Not set"
+  def generated_deadline_label(deadline), do: Calendar.strftime(deadline, "%-d %b %Y")
+
+  def generated_deadline_message(deadline, unplayed, total) do
+    "Deadline: #{generated_deadline_label(deadline)} · #{unplayed} of #{total} fixtures still unplayed"
+  end
 end

@@ -172,8 +172,8 @@ defmodule Cuevolution.Seeds.Accounts do
       hashed_password: hashed_password,
       region_id: region.id,
       preferred_venue_id: venue.id,
-      inserted_at: now,
-      updated_at: now
+      inserted_at: NaiveDateTime.shift(now, day: -14),
+      updated_at: NaiveDateTime.shift(now, day: -14)
     }
 
     participation = %{

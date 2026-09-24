@@ -76,6 +76,42 @@ defmodule Cuevolution.Competitions.DrawsTest do
     assert Repo.get!(Draw, draw.id).state == "previewed"
   end
 
+  test "previewed draws can be reshuffled three times before approval" do
+    admin = insert(:admin, role: "regional_coordinator")
+    {draw, _players} = create_draw_with_players(admin, 8)
+    {:ok, _groups} = Competitions.deal_draw(draw, admin, nil)
+
+    previewed = Repo.get!(Draw, draw.id)
+
+    original_ids =
+      previewed.id
+      |> Competitions.list_groups_for_draw()
+      |> Enum.flat_map(& &1.group_memberships)
+      |> Enum.map(& &1.stage_participation_id)
+      |> MapSet.new()
+
+    assert {:ok, reshuffled} = Competitions.reshuffle_draw(previewed, admin)
+    assert reshuffled.state == "previewed"
+    assert reshuffled.redraw_count == 1
+
+    current_ids =
+      reshuffled.id
+      |> Competitions.list_groups_for_draw()
+      |> Enum.flat_map(& &1.group_memberships)
+      |> Enum.map(& &1.stage_participation_id)
+      |> MapSet.new()
+
+    assert current_ids == original_ids
+
+    assert {:ok, reshuffled} = Competitions.reshuffle_draw(Repo.get!(Draw, draw.id), admin)
+    assert reshuffled.redraw_count == 2
+    assert {:ok, reshuffled} = Competitions.reshuffle_draw(Repo.get!(Draw, draw.id), admin)
+    assert reshuffled.redraw_count == 3
+
+    assert {:error, :redraw_limit_reached} =
+             Competitions.reshuffle_draw(Repo.get!(Draw, draw.id), admin)
+  end
+
   test "publishing a dealt draw generates 28 fixtures for eight players" do
     admin = insert(:admin, role: "super_admin")
     stage = Repo.get_by!(Stage, name: "Grassroots")

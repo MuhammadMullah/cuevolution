@@ -43,5 +43,6 @@ defmodule Cuevolution.Competitions.Group do
     |> unique_constraint([:stage_id, :venue_id, :category, :name],
       name: :groups_venue_scoped_unique_index
     )
+    |> unique_constraint([:draw_id, :name], name: :groups_draw_scoped_unique_index)
   end
 end
