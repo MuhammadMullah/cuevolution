@@ -101,6 +101,22 @@ defmodule Cuevolution.Teams do
     end
   end
 
+  @doc "Deletes a team on behalf of an authorized admin and releases its roster."
+  def admin_delete_team(%Admin{} = admin, %Team{} = team) do
+    if Admin.can?(admin, :manage_teams) do
+      case delete_team_if_unlocked(team) do
+        :ok = result ->
+          Accounts.log_admin_action("admin_delete_team", admin, team)
+          result
+
+        result ->
+          result
+      end
+    else
+      {:error, :unauthorized}
+    end
+  end
+
   defp do_admin_create_team(admin, captain, players, attrs) do
     player_ids = Enum.map(players, & &1.id)
     name = attrs["name"] || attrs[:name]
@@ -433,6 +449,9 @@ defmodule Cuevolution.Teams do
       {:error, :team, changeset, _changes} -> {:error, changeset}
     end
   end
+
+  defp delete_team_if_unlocked(%Team{roster_locked_at: nil} = team), do: do_delete_team(team)
+  defp delete_team_if_unlocked(%Team{}), do: {:error, :roster_frozen}
 
   @doc """
   Admin override of the roster freeze (spec 005 FR-009, T061) — performs
