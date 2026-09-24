@@ -74,121 +74,483 @@
     </button>
   </div>
 
-  <form phx-submit="create_group" class="mb-5 flex flex-wrap items-center gap-2.5">
-    <input
-      type="text"
-      name={@form[:name].name}
-      value={@form[:name].value}
-      placeholder={"New group name in #{if @stage.name == "Grassroots" && @venue, do: @venue.name, else: @region.name}…"}
-      class="min-w-[220px] flex-1 rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-    />
-    <button
-      type="submit"
-      disabled={@stage.name == "Grassroots" && is_nil(@venue)}
-      class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      Create group
-    </button>
-  </form>
-
-  <.link
-    :if={@stage.name == "Grassroots" && @category in ~w(male female) && @venue}
-    navigate={~p"/admin/draws/new"}
-    class="mb-6 inline-flex items-center rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800"
-  >
-    Run auto-draw for {@venue.name}
-  </.link>
-
-  <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
-    <div
-      :for={group <- @groups}
-      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
-    >
+  <%= if grassroots_singles?(assigns) do %>
+    <div class="mb-4.5 flex gap-5.5 border-b border-ink-200">
       <button
         type="button"
-        phx-click="toggle_group"
-        phx-value-id={group.id}
-        class="flex w-full items-center justify-between gap-2 px-5 py-[18px] text-left sm:px-[22px]"
+        phx-click="select_gr_view"
+        phx-value-view="groups"
+        class={[
+          "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+          @gr_view == :groups && "border-red-500 text-ink-950",
+          @gr_view != :groups && "border-transparent text-ink-500 hover:text-ink-950"
+        ]}
       >
-        <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
-        <div class="flex shrink-0 items-center gap-2">
-          <span class="rounded-full bg-ink-100 px-2 py-0.5 text-[11.5px] font-semibold text-ink-700">
-            {length(group.group_memberships)}
-          </span>
-          <svg
-            class={[
-              "size-4 shrink-0 text-ink-400 transition-transform",
-              MapSet.member?(@open_group_ids, group.id) && "rotate-180"
-            ]}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        Groups
+      </button>
+      <button
+        type="button"
+        phx-click="select_gr_view"
+        phx-value-view="standings"
+        class={[
+          "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+          @gr_view == :standings && "border-red-500 text-ink-950",
+          @gr_view != :standings && "border-transparent text-ink-500 hover:text-ink-950"
+        ]}
+      >
+        Group standings
+      </button>
+    </div>
+
+    <%= if @gr_view == :groups do %>
+      <div class="mb-4 flex flex-wrap items-center gap-2">
+        <%= for index <- 0..3 do %>
+          <div class="flex items-center gap-2">
+            <span class={[
+              "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em]",
+              index < draw_step_index(@draw) && "bg-ink-950 text-white",
+              index == draw_step_index(@draw) && "bg-red-600 text-white",
+              index > draw_step_index(@draw) && "border border-ink-300 text-ink-400"
+            ]}>
+              {index + 1} · {draw_step_label(index)}
+            </span>
+            <span :if={index < 3} class="h-px w-6 bg-ink-200"></span>
+          </div>
+        <% end %>
+      </div>
+
+      <%= if is_nil(@draw) do %>
+        <div :if={is_nil(@proposal)} class="mb-6">
+          <button
+            type="button"
+            phx-click="propose"
+            class="rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
           >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+            Propose draw
+          </button>
         </div>
+
+        <div :if={@proposal} class="mb-6 rounded-xl border border-ink-200 p-5">
+          <p class="text-sm font-bold text-ink-950">Formula preview</p>
+          <p class="mt-1 text-sm text-ink-600">
+            {@proposal.entrant_count} entrants → {@group_count} {ngettext_group(@group_count)}
+          </p>
+
+          <div class="mt-4 flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2 rounded-full border border-ink-300 px-1.5 py-1.5">
+              <button
+                type="button"
+                phx-click="dec_group_count"
+                class="flex size-7 items-center justify-center rounded-full border border-ink-300 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+                aria-label="Fewer groups"
+              >
+                −
+              </button>
+              <span class="min-w-[2ch] text-center font-mono text-sm font-semibold text-ink-950">
+                {@group_count}
+              </span>
+              <button
+                type="button"
+                phx-click="inc_group_count"
+                class="flex size-7 items-center justify-center rounded-full border border-ink-300 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+                aria-label="More groups"
+              >
+                +
+              </button>
+              <span class="pr-2 text-xs text-ink-500">groups</span>
+            </div>
+            <p class="text-xs font-medium text-ink-500">
+              Group sizes: {Enum.join(Enum.map(@sizes, &to_string/1), " + ")}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            phx-click="create_draw"
+            class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+          >
+            Deal draw
+          </button>
+        </div>
+      <% else %>
+        <div class="mb-5 flex flex-wrap gap-2.5">
+          <button
+            :if={@draw.state == "previewed"}
+            type="button"
+            phx-click="advance_draw"
+            phx-value-state="approved"
+            class="rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-800"
+          >
+            Approve draw
+          </button>
+          <button
+            :if={@draw.state == "approved"}
+            type="button"
+            phx-click="advance_draw"
+            phx-value-state="published"
+            class="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            Publish & generate fixtures
+          </button>
+          <button
+            :if={@draw.state == "published"}
+            type="button"
+            phx-click="open_redraw"
+            class="rounded-full border border-ink-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Redraw
+          </button>
+        </div>
+
+        <div
+          :if={@redraw_open}
+          class="mb-5 rounded-2xl border border-amber-300 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+        >
+          <div class="mb-1 text-[14.5px] font-bold text-ink-950">Redraw published groups</div>
+          <p class="mb-3 max-w-[60ch] text-[13.5px] text-ink-500">
+            This supersedes the published draw, voids its generated fixtures and is written to the audit log. A reason is required.
+          </p>
+          <input
+            type="text"
+            value={@redraw_reason}
+            phx-change="update_redraw_reason"
+            name="reason"
+            placeholder="Reason for redraw…"
+            class="mb-3 w-full rounded-full border border-ink-300 px-4 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+          />
+          <div class="flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              phx-click="confirm_redraw"
+              class="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              Redraw and republish
+            </button>
+            <button
+              type="button"
+              phx-click="cancel_redraw"
+              class="rounded-full border border-ink-300 px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+          <div
+            :for={group <- @groups}
+            class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+          >
+            <button
+              type="button"
+              phx-click="toggle_group"
+              phx-value-id={group.id}
+              class="flex w-full items-center justify-between gap-2 px-5 py-[18px] text-left sm:px-[22px]"
+            >
+              <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
+              <span class="rounded-full bg-ink-950 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide text-white">
+                {@draw.state}
+              </span>
+            </button>
+            <div class="flex items-center justify-between px-5 pb-3 sm:px-[22px]">
+              <span class="font-mono text-[11.5px] text-ink-400">
+                {length(group.group_memberships)} players
+              </span>
+              <span
+                :if={Map.has_key?(@open_fixtures, group.id)}
+                class="text-[12px] font-semibold text-ink-500"
+              >
+                <% {played, total} = fixture_progress(@open_fixtures[group.id]) %>
+                {played}/{total} played
+              </span>
+            </div>
+
+            <div
+              :if={MapSet.member?(@open_group_ids, group.id)}
+              class="border-t border-ink-100 px-5 pb-5 pt-3.5 sm:px-[22px] sm:pb-[22px]"
+            >
+              <div class="mb-3.5 flex flex-col gap-1.5">
+                <div
+                  :for={membership <- group.group_memberships}
+                  class="flex items-center justify-between gap-2 rounded-[9px] bg-ink-50 px-3 py-2 text-[13.5px] font-semibold text-ink-950"
+                >
+                  <span>{participant_name(membership.stage_participation)}</span>
+                  <span
+                    :if={Map.has_key?(@open_fixtures, group.id)}
+                    class="font-mono text-[11.5px] font-medium text-ink-400"
+                  >
+                    {member_progress(@open_fixtures[group.id], membership.stage_participation_id)}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                :if={Map.has_key?(@open_fixtures, group.id)}
+                class="border-t border-ink-100 pt-3"
+              >
+                <div class="mb-2 font-mono text-[10.5px] uppercase tracking-[0.1em] text-ink-500">
+                  Fixtures
+                </div>
+                <div class="flex flex-col gap-1">
+                  <.link
+                    :for={fixture <- @open_fixtures[group.id]}
+                    navigate={~p"/admin/matches/#{fixture.id}"}
+                    class="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-ink-50"
+                  >
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-[13px] font-semibold text-ink-950">
+                        {fixture_pair(fixture)}
+                      </div>
+                      <div class="font-mono text-[10.5px] text-ink-400">{fixture.match_id}</div>
+                    </div>
+                    <span class="rounded-full bg-ink-100 px-2 py-0.5 text-[10.5px] font-semibold capitalize text-ink-700">
+                      {fixture.status}
+                    </span>
+                  </.link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    <% else %>
+      <div :for={table <- @standings_tables} class="mb-6">
+        <div class="mb-2.5 flex flex-wrap items-center gap-2.5">
+          <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{table.group.name}</h2>
+          <span class={[
+            "rounded-full px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide",
+            table.final? && "bg-ink-950 text-white",
+            !table.final? && "bg-ink-100 text-ink-600"
+          ]}>
+            {if table.final?, do: "Final", else: "Provisional"}
+          </span>
+        </div>
+        <AdminComponents.grassroots_standings_table rows={table.rows} />
+
+        <div :if={Enum.any?(table.rows, & &1.tied)} class="mt-3 flex flex-wrap gap-2">
+          <button
+            :for={row <- Enum.filter(table.rows, & &1.tied)}
+            type="button"
+            phx-click="open_tie"
+            phx-value-participant-a={row.participant_id}
+            phx-value-participant-b={tie_opponent(table.rows, row.participant_id)}
+            class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900"
+          >
+            {row.name} ranks higher
+          </button>
+        </div>
+
+        <div :if={table.top != []} class="mt-3 flex flex-wrap gap-2">
+          <div
+            :for={row <- table.top}
+            class="rounded-lg border border-ink-200 border-l-4 border-l-red-500 bg-white px-3.5 py-2"
+          >
+            <div class="text-[13.5px] font-semibold text-ink-950">{row.name}</div>
+            <div class="font-mono text-[11px] text-ink-400">qualifies from this group</div>
+          </div>
+        </div>
+      </div>
+
+      <div :if={@best_rest_qualifiers != []} class="mb-6">
+        <h3 class="mb-2 text-[13.5px] font-bold text-ink-950">Best of rest (cross-group)</h3>
+        <div class="flex flex-wrap gap-2">
+          <div
+            :for={row <- @best_rest_qualifiers}
+            class="rounded-lg border border-ink-200 bg-white px-3.5 py-2"
+          >
+            <span class="text-[13.5px] font-semibold text-ink-950">{row.name}</span>
+            <span class="ml-2 font-mono text-[11px] text-ink-400">
+              {:erlang.float_to_binary(row.points_per_match, decimals: 2)} pts/match
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        :if={@tie_resolution}
+        class="fixed inset-0 z-30 flex items-center justify-center bg-ink-950/40 p-4"
+      >
+        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <h2 class="text-lg font-bold text-ink-950">Resolve tie</h2>
+          <p class="mt-2 text-sm text-ink-600">
+            Points, head-to-head, match wins and frame difference are all level. Pick who ranks higher.
+          </p>
+          <div class="mt-5 flex flex-col gap-2">
+            <button
+              :for={
+                {id, name} <- [
+                  {@tie_resolution.winner, @tie_resolution.winner_name},
+                  {@tie_resolution.loser, @tie_resolution.loser_name}
+                ]
+              }
+              type="button"
+              phx-click="confirm_resolve_tie"
+              phx-value-group-id={hd(@groups).id}
+              phx-value-winner={id}
+              phx-value-loser={
+                if id == @tie_resolution.winner,
+                  do: @tie_resolution.loser,
+                  else: @tie_resolution.winner
+              }
+              class="rounded-lg border border-ink-300 px-3 py-2 text-left text-sm font-semibold text-ink-900 hover:bg-ink-50"
+            >
+              {name} ranks higher
+            </button>
+            <button type="button" phx-click="cancel_tie" class="px-3 py-2 text-sm text-ink-500">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button
+        :if={@qualifiers != []}
+        type="button"
+        phx-click="confirm_close"
+        class="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+      >
+        Close stage & advance qualifiers
       </button>
 
       <div
-        :if={MapSet.member?(@open_group_ids, group.id)}
-        class="border-t border-ink-100 px-5 pb-5 pt-3.5 sm:px-[22px] sm:pb-[22px]"
+        :if={@confirm_close}
+        class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-5"
       >
-        <div class="mb-3.5 flex flex-col gap-1.5">
-          <div
-            :for={membership <- group.group_memberships}
-            class="rounded-[9px] bg-ink-50 px-3 py-2 text-[13.5px] font-semibold text-ink-950"
+        <p class="font-semibold text-ink-950">
+          Confirm advancement of every listed qualifier? This closes every group in {category_label(
+            @category
+          )} across every venue, not just this one.
+        </p>
+        <ul class="my-3 list-disc pl-5 text-sm text-ink-800">
+          <li :for={row <- @qualifiers}>{row.name}</li>
+        </ul>
+        <div class="flex flex-wrap gap-2.5">
+          <button
+            type="button"
+            phx-click="close_stage"
+            class="rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
           >
-            {participant_name(membership.stage_participation)}
-          </div>
-          <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
-            No members yet.
-          </div>
+            Confirm & advance
+          </button>
+          <button
+            type="button"
+            phx-click="cancel_close"
+            class="rounded-full border border-ink-300 px-5 py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Cancel
+          </button>
         </div>
+      </div>
+    <% end %>
+  <% else %>
+    <form phx-submit="create_group" class="mb-5 flex flex-wrap items-center gap-2.5">
+      <input
+        type="text"
+        name={@form[:name].name}
+        value={@form[:name].value}
+        placeholder={"New group name in #{if @stage.name == "Grassroots" && @venue, do: @venue.name, else: @region.name}…"}
+        class="min-w-[220px] flex-1 rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+      />
+      <button
+        type="submit"
+        disabled={@stage.name == "Grassroots" && is_nil(@venue)}
+        class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Create group
+      </button>
+    </form>
 
-        <form
-          :if={@unassigned != []}
-          phx-change="assign_to_group"
-          phx-value-group_id={group.id}
+    <div class="mb-7 grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+      <div
+        :for={group <- @groups}
+        class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+      >
+        <button
+          type="button"
+          phx-click="toggle_group"
+          phx-value-id={group.id}
+          class="flex w-full items-center justify-between gap-2 px-5 py-[18px] text-left sm:px-[22px]"
         >
-          <select
-            name="participation_id"
-            class="w-full rounded-full border border-ink-300 bg-white px-3.5 py-2 text-[13px] text-ink-950"
+          <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="rounded-full bg-ink-100 px-2 py-0.5 text-[11.5px] font-semibold text-ink-700">
+              {length(group.group_memberships)}
+            </span>
+            <svg
+              class={[
+                "size-4 shrink-0 text-ink-400 transition-transform",
+                MapSet.member?(@open_group_ids, group.id) && "rotate-180"
+              ]}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
+        </button>
+
+        <div
+          :if={MapSet.member?(@open_group_ids, group.id)}
+          class="border-t border-ink-100 px-5 pb-5 pt-3.5 sm:px-[22px] sm:pb-[22px]"
+        >
+          <div class="mb-3.5 flex flex-col gap-1.5">
+            <div
+              :for={membership <- group.group_memberships}
+              class="rounded-[9px] bg-ink-50 px-3 py-2 text-[13.5px] font-semibold text-ink-950"
+            >
+              {participant_name(membership.stage_participation)}
+            </div>
+            <div :if={group.group_memberships == []} class="py-2 text-[13px] text-ink-400">
+              No members yet.
+            </div>
+          </div>
+
+          <form
+            :if={@unassigned != []}
+            phx-change="assign_to_group"
+            phx-value-group_id={group.id}
           >
-            <option value="">+ Add member…</option>
-            <option :for={p <- @unassigned} value={p.id}>{participant_name(p)}</option>
-          </select>
-        </form>
+            <select
+              name="participation_id"
+              class="w-full rounded-full border border-ink-300 bg-white px-3.5 py-2 text-[13px] text-ink-950"
+            >
+              <option value="">+ Add member…</option>
+              <option :for={p <- @unassigned} value={p.id}>{participant_name(p)}</option>
+            </select>
+          </form>
+        </div>
       </div>
     </div>
-  </div>
-  <div
-    :if={@groups == []}
-    class="mb-7 rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
-  >
-    No groups yet for {scope_label(assigns)}.
-  </div>
-
-  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">
-    Unassigned participants — {scope_label(assigns)}
-  </h2>
-  <div
-    :if={@unassigned != []}
-    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
-  >
     <div
-      :for={p <- @unassigned}
-      class="border-b border-ink-100 px-4.5 py-3 text-[14px] text-ink-950 last:border-0"
+      :if={@groups == []}
+      class="mb-7 rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
     >
-      {participant_name(p)}
+      No groups yet for {scope_label(assigns)}.
     </div>
-  </div>
-  <div
-    :if={@unassigned == []}
-    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-5 text-center text-[13.5px] text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
-  >
-    Everyone in this stage/region is already grouped.
-  </div>
+
+    <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">
+      Unassigned participants — {scope_label(assigns)}
+    </h2>
+    <div
+      :if={@unassigned != []}
+      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div
+        :for={p <- @unassigned}
+        class="border-b border-ink-100 px-4.5 py-3 text-[14px] text-ink-950 last:border-0"
+      >
+        {participant_name(p)}
+      </div>
+    </div>
+    <div
+      :if={@unassigned == []}
+      class="rounded-2xl border border-ink-200 bg-white px-[22px] py-5 text-center text-[13.5px] text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      Everyone in this stage/region is already grouped.
+    </div>
+  <% end %>
 </AdminComponents.app_shell>

@@ -18,6 +18,11 @@ defmodule CuevolutionWeb.AdminDrawsLive do
 
   @categories [{"Individual Male", "male"}, {"Individual Female", "female"}, {"Teams", "team"}]
 
+  def fixture_status_label(%{status: "walkover", walkover_kind: "double"}),
+    do: "NO RESULT — DEADLINE"
+
+  def fixture_status_label(%{status: status}), do: status
+
   def mount(_params, _session, socket) do
     stages = Competitions.list_stages()
     new_round_stage = List.first(stages)
@@ -491,6 +496,17 @@ defmodule CuevolutionWeb.AdminDrawsLive do
     eat = Competitions.fixture_time_in_eat(fixture)
     Calendar.strftime(eat, "%b %-d, %Y · %H:%M")
   end
+
+  # Multiple groups in the same stage each number their own rounds "Round
+  # 1", "Round 2", ... independently — without the group (and its
+  # venue/region), two different groups' "Round 1" are indistinguishable in
+  # the picker. Circuit/Finals rounds have no group (knockout-bracket
+  # rounds instead), so they fall back to the plain stage/round label.
+  defp round_label(%{group: %{venue: %{name: venue}}} = round) when not is_nil(venue),
+    do: "#{round.stage.name} — #{round.group.name} · #{venue} — #{round.name}"
+
+  defp round_label(%{group: %{region: %{name: region}}} = round) when not is_nil(region),
+    do: "#{round.stage.name} — #{round.group.name} · #{region} — #{round.name}"
 
   defp round_label(round), do: "#{round.stage.name} — #{round.name}"
 

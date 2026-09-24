@@ -58,7 +58,16 @@ defmodule Cuevolution.Notifications.Workers.Support do
   end
 
   @doc "String-keyed payload (as stored/JSON-round-tripped) back to the atom keys the template builders expect."
-  def atomize_payload(payload) do
-    Map.new(payload, fn {k, v} -> {String.to_existing_atom(k), v} end)
+  def atomize_payload(payload), do: atomize_value(payload)
+
+  defp atomize_value(value) when is_list(value), do: Enum.map(value, &atomize_value/1)
+
+  defp atomize_value(value) when is_map(value) do
+    Map.new(value, fn {key, nested} ->
+      atom_key = if is_atom(key), do: key, else: String.to_existing_atom(key)
+      {atom_key, atomize_value(nested)}
+    end)
   end
+
+  defp atomize_value(value), do: value
 end

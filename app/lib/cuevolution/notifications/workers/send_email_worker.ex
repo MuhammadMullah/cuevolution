@@ -4,7 +4,10 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorker do
   records the outcome. See `Cuevolution.Notifications.Workers.Support` for
   the crash-safe claim step (spec 002 FR-009).
   """
-  use Oban.Worker, queue: :notifications, max_attempts: 5
+  use Oban.Worker,
+    queue: :notifications,
+    max_attempts: 5,
+    unique: [period: :infinity, keys: [:notification_id]]
 
   alias Cuevolution.Mailer
   alias Cuevolution.Notifications.Emails

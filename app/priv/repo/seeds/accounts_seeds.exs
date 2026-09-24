@@ -102,8 +102,18 @@ defmodule Cuevolution.Seeds.Accounts do
   # registration-confirmation notification `Accounts.register_player/1`
   # would otherwise dispatch — not wanted for bulk-seeded fixture data).
   defp seed_batch(ns, venues, regions_by_id, grassroots_stage_id, hashed_password) do
-    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
-    joined_at = DateTime.utc_now() |> DateTime.truncate(:second)
+    # Backdated to before the tournament registration cutoff (rather than
+    # stamped with the real "now") so seeded players stay draw-eligible
+    # (`Accounts.tournament_registration_cutoff/0`) no matter when this
+    # script is actually run — it's a fixed calendar date, and running the
+    # seed on/after it would otherwise silently produce a dataset where
+    # every single player fails `propose_draw/3`'s entrant-eligibility check.
+    now =
+      Cuevolution.Accounts.tournament_registration_cutoff()
+      |> NaiveDateTime.add(-3, :day)
+      |> NaiveDateTime.truncate(:second)
+
+    joined_at = DateTime.from_naive!(now, "Etc/UTC")
 
     {players, participations} =
       ns

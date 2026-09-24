@@ -19,7 +19,12 @@ defmodule Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications do
     |> fixtures_for_draw()
     |> notifications_by_player()
     |> Enum.each(fn {player, fixtures} ->
-      Notifications.dispatch(player, :draw_published, %{fixtures: fixtures})
+      Notifications.dispatch(
+        player,
+        :draw_published,
+        %{fixtures: fixtures},
+        idempotency_key: "draw_published:#{draw_id}:#{player.id}"
+      )
     end)
 
     :ok

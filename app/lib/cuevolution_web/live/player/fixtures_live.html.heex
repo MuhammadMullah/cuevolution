@@ -48,7 +48,7 @@
       <div class="mb-3.5 text-[19px] font-bold tracking-tight text-ink-950">
         {fixture.opponent}
       </div>
-      <div class="flex flex-col gap-1.5 text-sm text-ink-700">
+      <div :if={fixture.scheduled?} class="flex flex-col gap-1.5 text-sm text-ink-700">
         <div class="flex gap-2">
           <span class="w-[52px] shrink-0 text-ink-400">When</span>
           <span class="font-semibold text-ink-950">{fixture.date} · {fixture.time}</span>
@@ -56,6 +56,16 @@
         <div class="flex gap-2">
           <span class="w-[52px] shrink-0 text-ink-400">Where</span>
           <span>{fixture.venue}</span>
+        </div>
+      </div>
+      <div :if={!fixture.scheduled?} class="flex flex-col gap-1.5 text-sm text-ink-700">
+        <div class="flex gap-2">
+          <span class="w-[52px] shrink-0 text-ink-400">Play by</span>
+          <span class="font-semibold text-ink-950">{fixture.deadline}</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="w-[52px] shrink-0 text-ink-400">Match</span>
+          <span class="font-mono text-xs text-ink-500">{fixture.match_id}</span>
         </div>
       </div>
     </PlayerComponents.card>
@@ -95,7 +105,15 @@
         result.won && "text-green-600",
         !result.won && "text-red-700"
       ]}>
-        {if result.won, do: "Won", else: "Lost"} {result.score}
+        <span
+          :if={result.score == "No result"}
+          class="rounded-full bg-ink-100 px-2 py-1 text-xs text-ink-600"
+        >
+          NO RESULT — DEADLINE
+        </span>
+        <span :if={result.score != "No result"}>
+          {if result.won, do: "Won", else: "Lost"} {result.score}
+        </span>
       </div>
     </div>
   </div>

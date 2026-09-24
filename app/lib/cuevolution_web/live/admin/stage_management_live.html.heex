@@ -47,6 +47,40 @@
     </button>
   </div>
 
+  <div
+    :if={@stage.name == "Grassroots"}
+    class="mb-4.5 flex flex-wrap items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-[18px] py-3.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+  >
+    <span class="text-sm font-semibold text-ink-950">Grassroots deadline:</span>
+    <.form
+      for={@deadline_form}
+      id="grassroots-deadline-form"
+      phx-submit="save_deadline"
+      class="flex flex-wrap items-center gap-2.5"
+    >
+      <.input
+        field={@deadline_form[:completion_deadline]}
+        type="date"
+        class="rounded-lg border border-red-500 px-2.5 py-1.5 font-mono text-sm text-ink-950"
+      />
+      <button
+        type="submit"
+        class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
+      >
+        Save
+      </button>
+    </.form>
+    <span
+      :if={is_nil(@stage.completion_deadline)}
+      class="rounded-full bg-amber-100 px-2.5 py-1 text-[13px] font-semibold text-amber-900"
+    >
+      Not set — set a deadline
+    </span>
+    <span class="basis-full text-[12.5px] text-ink-500">
+      Applies to every Grassroots venue and category. Fixtures still unplayed when it passes become a double walkover (no result). Publishing a draw never sets this automatically; clear the date to remove it.
+    </span>
+  </div>
+
   <div :if={@panel == :participants}>
     <.form for={@filter_form} phx-change="filter_participants" class="mb-4 flex flex-wrap gap-2.5">
       <.input
@@ -103,57 +137,63 @@
       :if={@configs != []}
       class="mb-5 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
     >
-      <div
-        :for={config <- @configs}
-        class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
-      >
-        <.form
-          :if={@editing_config && @editing_config.id == config.id}
-          for={@config_form}
-          phx-submit="save_config"
-          class="flex flex-1 flex-wrap items-center gap-2.5"
-        >
-          <span class="min-w-[140px] text-[14.5px] font-semibold text-ink-950">
-            {config.category}
-          </span>
-          <input
-            type="number"
-            name={@config_form[:capacity_limit].name}
-            id={@config_form[:capacity_limit].id}
-            value={@config_form[:capacity_limit].value}
-            class="w-24 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
-          />
-          <button
-            type="submit"
-            class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            phx-click="cancel_edit_config"
-            class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-          >
-            Cancel
-          </button>
-        </.form>
-        <%= if is_nil(@editing_config) or @editing_config.id != config.id do %>
-          <div class="min-w-[140px] flex-1 text-[14.5px] font-semibold text-ink-950">
-            {config.category}
-          </div>
-          <span class="font-mono text-[13.5px] text-ink-500">
-            {config.current_count} / {config.capacity_limit}
-          </span>
-          <button
-            type="button"
-            phx-click="edit_config"
-            phx-value-id={config.id}
-            class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-          >
-            Edit limit
-          </button>
-        <% end %>
-      </div>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="border-b border-ink-200 bg-ink-25">
+            <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Category
+            </th>
+            <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Current / Limit
+            </th>
+            <th class="px-4 py-2.5"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={config <- @configs} class="border-b border-ink-100 last:border-0">
+            <td class="px-4 py-2.5 text-[14px] font-semibold text-ink-950">
+              {config.category}
+            </td>
+            <td class="px-4 py-2.5 font-mono text-sm text-ink-700">
+              <.form
+                :if={@editing_config && @editing_config.id == config.id}
+                for={@config_form}
+                phx-submit="save_config"
+                class="flex items-center gap-2"
+              >
+                {config.current_count} /
+                <input
+                  type="number"
+                  name={@config_form[:capacity_limit].name}
+                  id={@config_form[:capacity_limit].id}
+                  value={@config_form[:capacity_limit].value}
+                  class="w-[70px] rounded-lg border border-red-500 px-2 py-1 font-mono text-sm text-ink-950 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  class="rounded-full bg-ink-950 px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-ink-900"
+                >
+                  Save
+                </button>
+              </.form>
+              <span :if={is_nil(@editing_config) or @editing_config.id != config.id}>
+                {config.current_count} / {config.capacity_limit}
+              </span>
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <button
+                :if={is_nil(@editing_config) or @editing_config.id != config.id}
+                type="button"
+                phx-click="edit_config"
+                phx-value-id={config.id}
+                class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+              >
+                Edit limit
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <div
       :if={@configs == [] and @group_configs == []}
@@ -166,71 +206,121 @@
       <p class="mb-3.5 text-[13.5px] text-ink-500">
         Grassroots and Regional are open, round-robin stages — this configures group size and how many advance, not a capacity limit.
       </p>
-      <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
-        <div
-          :for={config <- @group_configs}
-          class="flex flex-wrap items-center gap-3.5 border-b border-ink-100 px-4.5 py-3.5 last:border-0"
-        >
-          <.form
-            :if={@editing_group_config && @editing_group_config.id == config.id}
-            for={@group_config_form}
-            phx-submit="save_group_config"
-            class="flex flex-1 flex-wrap items-center gap-2.5"
-          >
-            <span class="min-w-[140px] text-[14.5px] font-semibold text-ink-950">
-              {config.category}
-            </span>
-            <label class="flex items-center gap-1.5 text-[13px] text-ink-500">
-              Group size
-              <input
-                type="number"
-                name={@group_config_form[:group_size].name}
-                id={@group_config_form[:group_size].id}
-                value={@group_config_form[:group_size].value}
-                class="w-20 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
-              />
-            </label>
-            <label class="flex items-center gap-1.5 text-[13px] text-ink-500">
-              Advance top
-              <input
-                type="number"
-                name={@group_config_form[:advancer_count].name}
-                id={@group_config_form[:advancer_count].id}
-                value={@group_config_form[:advancer_count].value}
-                class="w-20 rounded-lg border border-red-500 px-2.5 py-2 font-sans text-sm text-ink-950 focus:outline-none"
-              />
-            </label>
-            <button
-              type="submit"
-              class="rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-900"
+      <p :if={@stage.name == "Grassroots"} class="-mt-2 mb-3.5 text-[13.5px] text-ink-500">
+        Target/min size and minimum entrants drive the automatic draw formula; overriding the group count on a specific draw doesn't change these defaults.
+      </p>
+      <div class="mb-3.5 overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
+        <table class="w-full min-w-[560px] border-collapse">
+          <thead>
+            <tr class="border-b border-ink-200 bg-ink-25">
+              <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                Category
+              </th>
+              <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                Group size
+              </th>
+              <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                Top N advance
+              </th>
+              <%= if @stage.name == "Grassroots" do %>
+                <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                  Target size
+                </th>
+                <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                  Min size
+                </th>
+                <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                  Min entrants
+                </th>
+              <% end %>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={config <- @group_configs} class="border-b border-ink-100 last:border-0">
+              <td class="px-4 py-2.5 text-[14px] font-semibold text-ink-950">
+                {group_category_label(config.category)}
+              </td>
+              <td class="px-4 py-2.5">
+                <.editable_field
+                  config={config}
+                  field="group_size"
+                  editing_field={@editing_field}
+                />
+              </td>
+              <td class="px-4 py-2.5">
+                <.editable_field
+                  config={config}
+                  field="advancer_count"
+                  editing_field={@editing_field}
+                />
+              </td>
+              <%= if @stage.name == "Grassroots" do %>
+                <%= if config.category == "team" do %>
+                  <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
+                  <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
+                  <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
+                <% else %>
+                  <td class="px-4 py-2.5">
+                    <.editable_field
+                      config={config}
+                      field="target_group_size"
+                      editing_field={@editing_field}
+                    />
+                  </td>
+                  <td class="px-4 py-2.5">
+                    <.editable_field
+                      config={config}
+                      field="minimum_group_size"
+                      editing_field={@editing_field}
+                    />
+                  </td>
+                  <td class="px-4 py-2.5">
+                    <.editable_field
+                      config={config}
+                      field="minimum_entrants"
+                      editing_field={@editing_field}
+                    />
+                  </td>
+                <% end %>
+              <% end %>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div
+        :if={@stage.name == "Grassroots"}
+        class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+      >
+        <table class="w-full border-collapse">
+          <thead>
+            <tr class="border-b border-ink-200 bg-ink-25">
+              <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                Category
+              </th>
+              <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                Best-of-rest qualifiers
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={config <- Enum.reject(@group_configs, &(&1.category == "team"))}
+              class="border-b border-ink-100 last:border-0"
             >
-              Save
-            </button>
-            <button
-              type="button"
-              phx-click="cancel_edit_group_config"
-              class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-            >
-              Cancel
-            </button>
-          </.form>
-          <%= if is_nil(@editing_group_config) or @editing_group_config.id != config.id do %>
-            <div class="min-w-[140px] flex-1 text-[14.5px] font-semibold text-ink-950">
-              {config.category}
-            </div>
-            <span class="font-mono text-[13.5px] text-ink-500">
-              groups of {config.group_size}, top {config.advancer_count} advance
-            </span>
-            <button
-              type="button"
-              phx-click="edit_group_config"
-              phx-value-id={config.id}
-              class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-            >
-              Edit
-            </button>
-          <% end %>
-        </div>
+              <td class="px-4 py-2.5 text-[14px] font-semibold text-ink-950">
+                {group_category_label(config.category)}
+              </td>
+              <td class="px-4 py-2.5">
+                <.editable_field
+                  config={config}
+                  field="extra_qualifier_count"
+                  editing_field={@editing_field}
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

@@ -18,10 +18,12 @@ config :cuevolution, Oban,
   repo: Cuevolution.Repo,
   plugins: [
     Oban.Plugins.Pruner,
+    {Oban.Plugins.Cron,
+     crontab: [{"@hourly", Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker}]},
     # Rescues jobs left "executing" when an instance restarts mid-job.
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}
   ],
-  queues: [notifications: 5]
+  queues: [notifications: 5, deadline_enforcement: 1]
 
 # Configure the endpoint
 config :cuevolution, CuevolutionWeb.Endpoint,

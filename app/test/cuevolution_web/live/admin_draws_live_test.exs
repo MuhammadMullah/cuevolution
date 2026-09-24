@@ -31,6 +31,40 @@ defmodule CuevolutionWeb.AdminDrawsLiveTest do
     assert Regex.scan(~r/Search name…/, html) |> length() == 4
   end
 
+  test "two different groups' identically-named rounds show distinct, disambiguated labels",
+       %{conn: conn} do
+    stage = Repo.get_by!(Stage, name: "Grassroots")
+    venue_a = insert(:venue, name: "Venue Alpha")
+    venue_b = insert(:venue, name: "Venue Beta")
+
+    group_a =
+      insert(:group,
+        stage_id: stage.id,
+        venue_id: venue_a.id,
+        region_id: venue_a.region_id,
+        category: "male",
+        name: "Group A"
+      )
+
+    group_b =
+      insert(:group,
+        stage_id: stage.id,
+        venue_id: venue_b.id,
+        region_id: venue_b.region_id,
+        category: "male",
+        name: "Group A"
+      )
+
+    insert(:round, stage_id: stage.id, group_id: group_a.id, name: "Round 1")
+    insert(:round, stage_id: stage.id, group_id: group_b.id, name: "Round 1")
+
+    conn = log_in_admin(conn)
+    {:ok, _view, html} = live(conn, ~p"/admin/draws")
+
+    assert html =~ "Grassroots — Group A · Venue Alpha — Round 1"
+    assert html =~ "Grassroots — Group A · Venue Beta — Round 1"
+  end
+
   test "saving without a round selected shows an error", %{conn: conn} do
     conn = log_in_admin(conn)
     {:ok, view, _html} = live(conn, ~p"/admin/draws")

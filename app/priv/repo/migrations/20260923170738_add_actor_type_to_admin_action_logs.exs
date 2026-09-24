@@ -3,7 +3,7 @@ defmodule Cuevolution.Repo.Migrations.AddActorTypeToAdminActionLogs do
 
   def change do
     alter table(:admin_action_logs) do
-      modify :admin_id, :binary_id, null: true
+      modify :admin_id, :binary_id, null: true, from: {:binary_id, null: false}
       add :actor_type, :string, null: false, default: "admin"
     end
 

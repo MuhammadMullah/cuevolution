@@ -10,6 +10,7 @@ defmodule Cuevolution.Competitions.Group do
   schema "groups" do
     field :name, :string
     field :category, :string
+    field :tie_breakers, {:array, :string}, default: []
 
     belongs_to :stage, Cuevolution.Competitions.Stage
     belongs_to :draw, Cuevolution.Competitions.Draw

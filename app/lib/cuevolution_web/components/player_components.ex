@@ -542,7 +542,11 @@ defmodule CuevolutionWeb.PlayerComponents do
   design-system.md §6.6's "Player app nav" spec.
   """
   attr :current_player, :map, required: true
-  attr :active, :atom, required: true, doc: "one of :fixtures, :standings, :team, :profile"
+
+  attr :active, :atom,
+    required: true,
+    doc: "one of :fixtures, :my_group, :standings, :team, :profile"
+
   attr :flash, :map, required: true
   attr :identification_form, :map, required: true
 
@@ -565,6 +569,7 @@ defmodule CuevolutionWeb.PlayerComponents do
 
           <nav class="ml-0 flex min-w-0 flex-1 items-stretch gap-4 overflow-x-auto sm:ml-2 sm:gap-7">
             <.nav_link navigate={~p"/fixtures"} active={@active == :fixtures}>Fixtures</.nav_link>
+            <.nav_link navigate={~p"/my-group"} active={@active == :my_group}>My Group</.nav_link>
             <.nav_link navigate={~p"/standings"} active={@active == :standings}>Standings</.nav_link>
             <.nav_link navigate={~p"/team"} active={@active == :team}>My Team</.nav_link>
           </nav>

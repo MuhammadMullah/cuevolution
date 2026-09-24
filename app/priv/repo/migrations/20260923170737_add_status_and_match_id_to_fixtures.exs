@@ -6,8 +6,8 @@ defmodule Cuevolution.Repo.Migrations.AddStatusAndMatchIdToFixtures do
       add :status, :string, null: false, default: "scheduled"
       add :match_id, :string
       add :walkover_kind, :string
-      modify :scheduled_at, :utc_datetime, null: true
-      modify :venue_id, :binary_id, null: true
+      modify :scheduled_at, :utc_datetime, null: true, from: {:utc_datetime, null: false}
+      modify :venue_id, :binary_id, null: true, from: {:binary_id, null: false}
     end
 
     create index(:fixtures, [:status])

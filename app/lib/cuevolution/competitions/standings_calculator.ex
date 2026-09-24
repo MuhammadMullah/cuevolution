@@ -53,28 +53,35 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
     cascade = Keyword.get(opts, :cascade, :wins_first)
     stats = Map.new(participant_ids, &{&1, build_stat(&1, matches)})
 
-    case cascade do
-      :wins_first ->
-        participant_ids
-        |> Enum.uniq()
-        |> Enum.group_by(&stats[&1].wins)
-        |> Enum.sort_by(fn {wins, _ids} -> -wins end)
-        |> Enum.flat_map(fn {_wins, tier} -> resolve_tier(tier, stats, matches, :wins_first) end)
-        |> assign_ranks()
+    ranked =
+      case cascade do
+        :wins_first ->
+          participant_ids
+          |> Enum.uniq()
+          |> Enum.group_by(&stats[&1].wins)
+          |> Enum.sort_by(fn {wins, _ids} -> -wins end)
+          |> Enum.flat_map(fn {_wins, tier} ->
+            resolve_tier(tier, stats, matches, :wins_first)
+          end)
+          |> assign_ranks()
 
-      :points_first ->
-        participant_ids
-        |> Enum.uniq()
-        |> Enum.group_by(&stats[&1].points)
-        |> Enum.sort_by(fn {points, _ids} -> -points end)
-        |> Enum.flat_map(fn {_points, tier} ->
-          resolve_tier(tier, stats, matches, :points_first)
-        end)
-        |> assign_ranks()
+        :points_first ->
+          participant_ids
+          |> Enum.uniq()
+          |> Enum.group_by(&stats[&1].points)
+          |> Enum.sort_by(fn {points, _ids} -> -points end)
+          |> Enum.flat_map(fn {_points, tier} ->
+            resolve_tier(tier, stats, matches, :points_first)
+          end)
+          |> assign_ranks()
 
-      invalid ->
-        raise ArgumentError, "unsupported standings cascade: #{inspect(invalid)}"
-    end
+        invalid ->
+          raise ArgumentError, "unsupported standings cascade: #{inspect(invalid)}"
+      end
+
+    ranked
+    |> apply_tie_breakers(Keyword.get(opts, :tie_breakers, []))
+    |> assign_ranks()
   end
 
   defp build_stat(participant_id, matches) do
@@ -236,6 +243,31 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
 
   defp finalize(participant_id, stats, tied?) do
     Map.merge(%{participant_id: participant_id, tied: tied?}, stats[participant_id])
+  end
+
+  defp apply_tie_breakers(rows, []), do: rows
+
+  defp apply_tie_breakers(rows, tie_breakers) do
+    overrides = Map.new(tie_breakers, fn [winner, loser] -> {winner, loser} end)
+
+    resolved_ids =
+      tie_breakers
+      |> Enum.flat_map(fn [winner, loser] -> [winner, loser] end)
+      |> MapSet.new()
+
+    Enum.map(rows, fn row ->
+      if row.tied and MapSet.member?(resolved_ids, to_string(row.participant_id)) do
+        %{row | tied: false}
+      else
+        row
+      end
+    end)
+    |> Enum.sort_by(fn row ->
+      case Map.get(overrides, to_string(row.participant_id)) do
+        nil -> {row.rank, 1}
+        _loser -> {row.rank, 0}
+      end
+    end)
   end
 
   defp assign_ranks(entries) do

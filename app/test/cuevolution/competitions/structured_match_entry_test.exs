@@ -53,6 +53,22 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
       assert {:ok, _result} = Competitions.record_frames(fixture, recorder, [:a, :a, :a, :b, :b])
       assert {:error, :unauthorized} = Competitions.verify_result(fixture, recorder)
       assert {:error, :unauthorized} = Competitions.postpone_fixture(fixture, recorder, "Rain")
+
+      assert {:error, :unauthorized} =
+               Competitions.process_withdrawal(
+                 Repo.get!(Cuevolution.Competitions.StageParticipation, fixture.participant_a_id),
+                 recorder
+               )
+
+      approval_admin = insert(:admin, role: "tournament_director")
+      walkover_fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M13")
+
+      assert {:error, :unauthorized} =
+               Competitions.record_walkover(
+                 walkover_fixture,
+                 approval_admin,
+                 walkover_fixture.participant_a_id
+               )
     end
   end
 

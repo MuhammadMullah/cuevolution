@@ -1,45 +1,43 @@
 defmodule CuevolutionWeb.Admin.MatchEntryLive do
   use CuevolutionWeb, :live_view
 
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Repo
   alias CuevolutionWeb.AdminComponents
 
+  def status_label(%Fixture{status: "walkover", walkover_kind: "double"}),
+    do: "NO RESULT — DEADLINE"
+
+  def status_label(%Fixture{status: status}), do: status
+
   def mount(%{"id" => id}, _session, socket) do
-    fixture =
-      Fixture
-      |> Repo.get(id)
-      |> case do
-        nil ->
-          nil
-
-        fixture ->
-          Repo.preload(fixture, [
-            :result,
-            participant_a: :player,
-            participant_b: :player,
-            round: [group: :stage]
-          ])
-      end
-
     {:ok,
      socket
      |> assign(
        page_title: "Match entry",
-       fixture: fixture,
        frame_winners: %{},
        correction_winners: %{},
        selected_present: nil
-     )}
+     )
+     |> load_fixture(id)}
   end
 
   def handle_event("set_frame", %{"sequence" => sequence, "winner" => winner}, socket) do
     {:noreply, update(socket, :frame_winners, &Map.put(&1, sequence, winner))}
   end
 
+  def handle_event(
+        "set_correction_frame",
+        %{"sequence" => sequence, "winner" => winner},
+        socket
+      ) do
+    {:noreply, update(socket, :correction_winners, &Map.put(&1, sequence, winner))}
+  end
+
   def handle_event("record_frames", _params, socket) do
-    winners = Enum.map(1..5, &Map.get(socket.assigns.frame_winners, to_string(&1)))
+    winners = frame_list(socket.assigns.frame_winners)
 
     case Competitions.record_frames(socket.assigns.fixture, socket.assigns.current_admin, winners) do
       {:ok, _result} ->
@@ -54,7 +52,13 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
   end
 
   def handle_event("verify", _params, socket) do
-    case Competitions.verify_result(socket.assigns.fixture, socket.assigns.current_admin) do
+    corrections = correction_diff(socket.assigns)
+
+    case Competitions.verify_result(
+           socket.assigns.fixture,
+           socket.assigns.current_admin,
+           corrections
+         ) do
       {:ok, _fixture} ->
         {:noreply, reload_fixture(socket, "Result verified and added to standings.")}
 
@@ -115,18 +119,68 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
     end
   end
 
-  defp reload_fixture(socket, message) do
+  defp load_fixture(socket, id) do
     fixture =
-      socket.assigns.fixture.id
-      |> then(&Repo.get!(Fixture, &1))
-      |> Repo.preload([
-        :result,
-        participant_a: :player,
-        participant_b: :player,
-        round: [group: :stage]
-      ])
+      Fixture
+      |> Repo.get(id)
+      |> case do
+        nil ->
+          nil
 
-    socket |> assign(:fixture, fixture) |> put_flash(:info, message)
+        fixture ->
+          Repo.preload(fixture,
+            result: :match_frames,
+            participant_a: :player,
+            participant_b: :player,
+            round: [group: :stage]
+          )
+      end
+
+    assign(socket,
+      fixture: fixture,
+      correction_winners: recorded_frame_winners(fixture)
+    )
+  end
+
+  defp reload_fixture(socket, message) do
+    socket
+    |> load_fixture(socket.assigns.fixture.id)
+    |> assign(:frame_winners, %{})
+    |> put_flash(:info, message)
+  end
+
+  # Rebuilds "sequence" => "a"/"b" from the persisted MatchFrame rows so the
+  # verify panel's frame strip starts pre-filled with what the rep actually
+  # recorded — the TD is correcting a real, visible record, not typing blind.
+  defp recorded_frame_winners(%Fixture{result: %{match_frames: frames}})
+       when is_list(frames) and frames != [] do
+    Map.new(frames, fn frame ->
+      side = if frame.winner_player_id == frame.home_player_id, do: "a", else: "b"
+      {to_string(frame.sequence), side}
+    end)
+  end
+
+  defp recorded_frame_winners(_fixture), do: %{}
+
+  defp frame_list(winners_map) do
+    Enum.map(1..5, &Map.get(winners_map, to_string(&1)))
+  end
+
+  # Only sends a correction to `verify_result/3` when the TD actually
+  # changed something from what was recorded — an unmodified verify stays a
+  # plain verify, not a no-op "correction" that would still churn through
+  # `maybe_replace_structured_frames/3`.
+  defp correction_diff(%{fixture: fixture, correction_winners: winners}) do
+    original = recorded_frame_winners(fixture)
+    if winners == original, do: nil, else: frame_list(winners)
+  end
+
+  @doc "Tallies a's/b's frame-winner map into a live \"3–1\" style score string."
+  def score_tally(winners_map) do
+    values = Map.values(winners_map)
+    a = Enum.count(values, &(&1 == "a"))
+    b = Enum.count(values, &(&1 == "b"))
+    "#{a}–#{b}"
   end
 
   defp format_error(:five_frames_required), do: "exactly five frame winners are required"

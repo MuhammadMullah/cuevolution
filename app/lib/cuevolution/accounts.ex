@@ -243,6 +243,20 @@ defmodule Cuevolution.Accounts do
     |> Repo.insert()
   end
 
+  @doc "Lists recent audit entries, optionally filtered by action type."
+  def list_admin_action_logs(action_type \\ nil) do
+    AdminActionLog
+    |> maybe_filter_action_type(action_type)
+    |> order_by(desc: :inserted_at)
+    |> limit(300)
+    |> preload(:admin)
+    |> Repo.all()
+  end
+
+  defp maybe_filter_action_type(query, nil), do: query
+  defp maybe_filter_action_type(query, ""), do: query
+  defp maybe_filter_action_type(query, action_type), do: where(query, action_type: ^action_type)
+
   @doc """
   Whether `username` is already registered (case-insensitive) — used for
   live "is this available" feedback during registration. Not a substitute
