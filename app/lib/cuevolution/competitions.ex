@@ -1171,7 +1171,8 @@ defmodule Cuevolution.Competitions do
   defp validate_draw_override(nil, _entrant_count), do: :ok
 
   defp validate_draw_override(group_count, entrant_count)
-       when group_count > 0 and group_count <= entrant_count, do: :ok
+       when group_count > 0 and group_count <= entrant_count,
+       do: :ok
 
   defp validate_draw_override(_group_count, _entrant_count), do: {:error, :invalid_group_count}
 
