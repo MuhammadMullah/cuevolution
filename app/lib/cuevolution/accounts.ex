@@ -229,6 +229,34 @@ defmodule Cuevolution.Accounts do
     |> Repo.insert()
   end
 
+  @doc "Records an audit action performed by the system without an admin actor."
+  def log_system_action(action_type, entity, opts) do
+    %AdminActionLog{}
+    |> AdminActionLog.changeset(%{
+      actor_type: "system",
+      action_type: action_type,
+      entity_type: entity.__struct__ |> to_string() |> String.trim_leading("Elixir."),
+      entity_id: entity.id,
+      prior_value: Keyword.get(opts, :prior_value),
+      new_value: Keyword.get(opts, :new_value)
+    })
+    |> Repo.insert()
+  end
+
+  @doc "Lists recent audit entries, optionally filtered by action type."
+  def list_admin_action_logs(action_type \\ nil) do
+    AdminActionLog
+    |> maybe_filter_action_type(action_type)
+    |> order_by(desc: :inserted_at)
+    |> limit(300)
+    |> preload(:admin)
+    |> Repo.all()
+  end
+
+  defp maybe_filter_action_type(query, nil), do: query
+  defp maybe_filter_action_type(query, ""), do: query
+  defp maybe_filter_action_type(query, action_type), do: where(query, action_type: ^action_type)
+
   @doc """
   Whether `username` is already registered (case-insensitive) — used for
   live "is this available" feedback during registration. Not a substitute

@@ -48,6 +48,22 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorkerTest do
     assert :ok = perform_job(SendSmsWorker, %{"notification_id" => notification.id})
   end
 
+  test "sends a brief draw-published sms — no fixture details, just log-in + ID reminder" do
+    player = insert(:player, notification_preference: "sms")
+
+    [notification] = Notifications.dispatch(player, :draw_published, %{})
+
+    expect(SmsAdapterMock, :send, fn _mobile_number, body ->
+      assert body =~ "You've been drawn"
+      assert body =~ "Log in to see your fixtures"
+      assert body =~ "Carry a copy of your ID"
+      refute body =~ "SP26-"
+      {:ok, %{}}
+    end)
+
+    assert :ok = perform_job(SendSmsWorker, %{"notification_id" => notification.id})
+  end
+
   test "sends the team-invitation sms with the team and captain details" do
     player = insert(:player, notification_preference: "sms")
     payload = %{team_name: "The Sharks", captain_name: "Alex Otieno"}

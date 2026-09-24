@@ -147,4 +147,37 @@ defmodule Cuevolution.Competitions.StandingsCalculatorTest do
       assert bye.frames_won == 0
     end
   end
+
+  describe "rank/3 — points-first cascade" do
+    test "ranks by points before wins and frame differential" do
+      matches = [
+        match(:a, :a, :b, 3, 2),
+        match(:c, :c, :a, 3, 2),
+        match(:b, :b, :c, 3, 2)
+      ]
+
+      standings = StandingsCalculator.rank([:a, :b, :c], matches, cascade: :points_first)
+
+      assert Enum.map(standings, & &1.participant_id) == [:a, :b, :c]
+      assert Enum.map(standings, & &1.points) == [5, 5, 5]
+      assert Enum.all?(standings, &(&1.tied == true))
+    end
+
+    test "does not award the clean-sweep bonus to a walkover" do
+      standings =
+        StandingsCalculator.rank(
+          [:present, :absent],
+          [
+            match(:present, :present, :absent, 5, 0)
+            |> Map.put(:status, "walkover")
+            |> Map.put(:points_a, 5)
+          ],
+          cascade: :points_first
+        )
+
+      present = entry(standings, :present)
+      assert present.points == 5
+      assert present.bonus == 0
+    end
+  end
 end

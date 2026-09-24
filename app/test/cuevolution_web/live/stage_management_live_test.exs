@@ -76,4 +76,72 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
     assert html =~ "male"
     assert html =~ "128"
   end
+
+  test "the Grassroots deadline box shows on both panels, not just Group settings", %{
+    conn: conn
+  } do
+    conn = log_in_admin(conn)
+    {:ok, view, html} = live(conn, ~p"/admin/stages")
+
+    assert html =~ "Grassroots deadline:"
+
+    html = view |> element("button", "Group settings") |> render_click()
+    assert html =~ "Grassroots deadline:"
+  end
+
+  test "Grassroots Group settings shows the formula columns and best-of-rest table", %{
+    conn: conn
+  } do
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/stages")
+
+    html = view |> element("button", "Group settings") |> render_click()
+
+    assert html =~ "Target size"
+    assert html =~ "Min size"
+    assert html =~ "Min entrants"
+    assert html =~ "Best-of-rest qualifiers"
+    assert html =~ "Individual Male"
+    assert html =~ "Individual Female"
+    assert html =~ "Teams"
+  end
+
+  test "Regional Group settings has no formula columns or best-of-rest table", %{conn: conn} do
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/stages")
+
+    view |> element("button", "Regional") |> render_click()
+    html = view |> element("button", "Group settings") |> render_click()
+
+    refute html =~ "Target size"
+    refute html =~ "Best-of-rest qualifiers"
+    assert html =~ "Group size"
+  end
+
+  test "clicking a group-size value opens an inline editor that saves on blur", %{conn: conn} do
+    grassroots = Repo.get_by!(Stage, name: "Grassroots")
+    config = Cuevolution.Competitions.get_or_create_group_config(grassroots.id, "male")
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/stages")
+    view |> element("button", "Group settings") |> render_click()
+
+    html =
+      view
+      |> element("span[phx-value-id='#{config.id}'][phx-value-field='group_size']")
+      |> render_click()
+
+    assert html =~ ~s(phx-value-field="group_size")
+    assert html =~ "<input"
+
+    html =
+      view
+      |> element("input[phx-value-id='#{config.id}'][phx-value-field='group_size']")
+      |> render_blur(%{value: "10"})
+
+    refute html =~ ~s(<input type="number" value="10")
+
+    updated = Cuevolution.Competitions.group_config(grassroots.id, "male")
+    assert updated.group_size == 10
+  end
 end

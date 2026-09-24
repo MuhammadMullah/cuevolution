@@ -5,7 +5,10 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorker do
   outcome. See `Cuevolution.Notifications.Workers.Support` for the
   crash-safe claim step (spec 002 FR-009).
   """
-  use Oban.Worker, queue: :notifications, max_attempts: 5
+  use Oban.Worker,
+    queue: :notifications,
+    max_attempts: 5,
+    unique: [period: :infinity, keys: [:notification_id]]
 
   alias Cuevolution.Notifications.SmsMessages
   alias Cuevolution.Notifications.Workers.Support
@@ -59,5 +62,9 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorker do
 
   defp build_body(%{event_type: "venue_deactivated", player: player, payload: payload}) do
     SmsMessages.venue_deactivated(player, Support.atomize_payload(payload))
+  end
+
+  defp build_body(%{event_type: "draw_published", player: player, payload: payload}) do
+    SmsMessages.draw_published(player, Support.atomize_payload(payload))
   end
 end

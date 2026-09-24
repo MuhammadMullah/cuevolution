@@ -38,8 +38,54 @@
   </div>
 
   <div
+    :if={@generated_draw?}
+    class="mb-6 overflow-hidden rounded-2xl border border-green-200 bg-green-50"
+  >
+    <div class="border-b border-green-200 px-5 py-4">
+      <p class="text-sm font-bold text-green-950">Published generated schedule</p>
+      <p class="mt-1 text-xs text-green-800">
+        This Grassroots draw is locked. Fixture entry is read-only.
+      </p>
+    </div>
+    <div class={[
+      "border-b px-5 py-3 font-mono text-[11.5px] font-medium",
+      @generated_deadline_state == :warning && "border-amber-200 bg-amber-50 text-amber-900",
+      @generated_deadline_state != :warning && "border-green-100 bg-green-50 text-green-900"
+    ]}>
+      {generated_deadline_message(
+        @generated_deadline,
+        @generated_unplayed_count,
+        @generated_fixture_count
+      )}
+    </div>
+    <div id="generated-fixtures" phx-update="stream" class="divide-y divide-green-100 bg-white">
+      <div
+        :for={{dom_id, fixture} <- @streams.entered_fixtures}
+        id={dom_id}
+        class="flex flex-wrap items-center gap-3 px-5 py-3.5"
+      >
+        <span class="font-mono text-xs font-semibold text-ink-500">{fixture.match_id}</span>
+        <.link
+          navigate={~p"/admin/matches/#{fixture.id}"}
+          class="flex-1 text-sm font-semibold text-ink-950 hover:text-red-700"
+        >
+          {Competitions.participant_name(fixture.participant_a)} vs {Competitions.participant_name(
+            fixture.participant_b
+          )}
+        </.link>
+        <span class="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold capitalize text-ink-700">
+          {fixture_status_label(fixture)}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div
     :if={@show_new_round}
-    class="mb-5 rounded-2xl border border-ink-200 bg-white px-5 py-[18px] shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    class={[
+      "mb-5 rounded-2xl border border-ink-200 bg-white px-5 py-[18px] shadow-[0_1px_2px_rgba(13,12,34,0.05)]",
+      @generated_draw? && "hidden"
+    ]}
   >
     <div class="mb-3 flex flex-wrap gap-2.5">
       <form phx-change="select_new_round_stage">
@@ -100,7 +146,12 @@
     </.form>
   </div>
 
-  <form phx-change="update_rows" phx-submit="noop" id="draws-form">
+  <form
+    phx-change="update_rows"
+    phx-submit="noop"
+    id="draws-form"
+    class={@generated_draw? && "hidden"}
+  >
     <div class="mb-4 overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
       <table class="w-full min-w-[820px] border-collapse">
         <thead>
@@ -207,7 +258,10 @@
     </div>
   </form>
 
-  <div class="mb-9 flex flex-wrap items-center justify-between gap-2.5">
+  <div class={[
+    "mb-9 flex flex-wrap items-center justify-between gap-2.5",
+    @generated_draw? && "hidden"
+  ]}>
     <button
       type="button"
       phx-click="add_row"
@@ -224,13 +278,19 @@
     </button>
   </div>
 
-  <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Already entered</h2>
+  <h2 class={[
+    "mb-3 text-[15px] font-bold tracking-tight text-ink-950",
+    @generated_draw? && "hidden"
+  ]}>
+    Already entered
+  </h2>
   <div
     id="entered-fixtures"
     phx-update="stream"
     class={[
       "overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]",
-      !@has_entered_fixtures && "hidden"
+      !@has_entered_fixtures && "hidden",
+      @generated_draw? && "hidden"
     ]}
   >
     <div
@@ -255,7 +315,10 @@
   </div>
   <div
     :if={!@has_entered_fixtures}
-    class="rounded-2xl border border-ink-200 bg-white px-[22px] py-[30px] text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    class={[
+      "rounded-2xl border border-ink-200 bg-white px-[22px] py-[30px] text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]",
+      @generated_draw? && "hidden"
+    ]}
   >
     No fixtures entered for this round yet — add rows above and save.
   </div>

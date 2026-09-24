@@ -55,6 +55,7 @@ defmodule CuevolutionWeb.Router do
 
     live_session :player_authenticated, on_mount: [{CuevolutionWeb.PlayerAuth, :ensure_player}] do
       live "/fixtures", FixturesLive, :index
+      live "/my-group", Player.MyGroupLive, :index
       live "/standings", StandingsLive, :index
       live "/profile", ProfileSettingsLive, :profile
       live "/profile/settings", ProfileSettingsLive, :settings
@@ -96,6 +97,7 @@ defmodule CuevolutionWeb.Router do
         {CuevolutionWeb.AdminAuth, {:ensure_permission, :record_results}}
       ] do
       live "/results", AdminResultsLive, :index
+      live "/matches/:id", Admin.MatchEntryLive, :show
     end
 
     live_session :admin_operations,
@@ -140,6 +142,7 @@ defmodule CuevolutionWeb.Router do
         {CuevolutionWeb.AdminAuth, {:ensure_permission, :view_directory}}
       ] do
       live "/notifications", NotificationLogLive, :index
+      live "/audit-log", Admin.AuditLogLive, :index
     end
 
     live_session :admin_user_management,

@@ -68,6 +68,7 @@ defmodule CuevolutionWeb.AdminComponents do
     {"Draws", "⚏", "/admin/draws"},
     {"Results & Points", "◔", "/admin/results"},
     {"Directory", "☰", "/admin/players"},
+    {"Audit Log", "◷", "/admin/audit-log"},
     {"Venues", "⚑", "/admin/venues"}
   ]
 
@@ -164,6 +165,52 @@ defmodule CuevolutionWeb.AdminComponents do
     """
   end
 
+  @doc "Shared Grassroots points standings table used by admin and player views."
+  attr :rows, :list, required: true
+  attr :current_participant_id, :string, default: nil
+
+  def grassroots_standings_table(assigns) do
+    ~H"""
+    <div class="overflow-x-auto rounded-xl border border-ink-200 bg-white">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-ink-25 font-mono text-[10px] uppercase tracking-wider text-ink-500">
+          <tr>
+            <th :for={label <- ~w(POS PLAYER P W L FW FL FD BONUS PTS)} class="px-3 py-3">{label}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-100">
+          <tr :for={row <- @rows} class={row.rank == 1 && "bg-[#FCEFCB]/40"}>
+            <td class="px-3 py-3 font-mono">{row.rank}{if row.tied, do: "="}</td>
+            <td class="whitespace-nowrap px-3 py-3 font-semibold">
+              {Map.get(row, :name, row.participant_id)}
+              <span
+                :if={row.participant_id == @current_participant_id}
+                class="ml-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700"
+              >
+                YOU
+              </span>
+              <span
+                :if={row.tied}
+                class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800"
+              >
+                TIED
+              </span>
+            </td>
+            <td class="px-3 py-3 font-mono">{row.wins + row.losses}</td>
+            <td class="px-3 py-3 font-mono">{row.wins}</td>
+            <td class="px-3 py-3 font-mono">{row.losses}</td>
+            <td class="px-3 py-3 font-mono">{row.frames_won}</td>
+            <td class="px-3 py-3 font-mono">{row.frames_won - row.frame_diff}</td>
+            <td class="px-3 py-3 font-mono">{row.frame_diff}</td>
+            <td class="px-3 py-3 font-mono">{row.bonus}</td>
+            <td class="px-3 py-3 font-mono font-bold text-ink-950">{row.points}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
   attr :label, :string, required: true
   attr :icon, :string, required: true
   attr :path, :string, required: true
@@ -191,6 +238,7 @@ defmodule CuevolutionWeb.AdminComponents do
   defp nav_active?(active, "/admin/results"), do: active == :results
   defp nav_active?(active, "/admin/players"), do: active == :directory
   defp nav_active?(active, "/admin/venues"), do: active == :venues
+  defp nav_active?(active, "/admin/audit-log"), do: active == :notifications
   defp nav_active?(active, "/admin/admins"), do: active == :admins
 
   defp nav_items_for(admin) do
@@ -206,6 +254,7 @@ defmodule CuevolutionWeb.AdminComponents do
       {_, _, "/admin/stages"} -> Admin.can?(admin, :manage_stages)
       {_, _, "/admin/groups"} -> Admin.can?(admin, :manage_groups)
       {_, _, "/admin/players"} -> Admin.can?(admin, :view_directory)
+      {_, _, "/admin/audit-log"} -> Admin.can?(admin, :view_directory)
       {_, _, "/admin/venues"} -> Admin.can?(admin, :manage_venues)
       _ -> true
     end)

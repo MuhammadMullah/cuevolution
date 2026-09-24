@@ -43,6 +43,21 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorkerTest do
     assert Repo.get!(Notification, notification.id).status == "sent"
   end
 
+  test "sends a brief draw-published email — no fixture details, just log-in + ID reminder" do
+    player = insert(:player, notification_preference: "email")
+
+    [notification] = Notifications.dispatch(player, :draw_published, %{})
+
+    notification = Repo.get!(Notification, notification.id)
+    assert :ok = perform_job(SendEmailWorker, %{"notification_id" => notification.id})
+
+    assert_email_sent(fn email ->
+      email.html_body =~ "You've been drawn into your Grassroots group" and
+        email.html_body =~ "Please carry a copy of your ID for verification" and
+        not (email.html_body =~ "SP26-")
+    end)
+  end
+
   test "sends the team-assignment email" do
     player = insert(:player, notification_preference: "email")
     payload = %{team_name: "The Sharks", captain_name: "Alex Otieno"}

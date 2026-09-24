@@ -4,7 +4,10 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorker do
   records the outcome. See `Cuevolution.Notifications.Workers.Support` for
   the crash-safe claim step (spec 002 FR-009).
   """
-  use Oban.Worker, queue: :notifications, max_attempts: 5
+  use Oban.Worker,
+    queue: :notifications,
+    max_attempts: 5,
+    unique: [period: :infinity, keys: [:notification_id]]
 
   alias Cuevolution.Mailer
   alias Cuevolution.Notifications.Emails
@@ -56,5 +59,9 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorker do
 
   defp build_email(%{event_type: "venue_deactivated", player: player, payload: payload}) do
     Emails.venue_deactivated(player, Support.atomize_payload(payload))
+  end
+
+  defp build_email(%{event_type: "draw_published", player: player, payload: payload}) do
+    Emails.draw_published(player, Support.atomize_payload(payload))
   end
 end

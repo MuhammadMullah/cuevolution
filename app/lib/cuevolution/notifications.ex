@@ -30,7 +30,8 @@ defmodule Cuevolution.Notifications do
     "team_invitation" => ~w(team_name captain_name),
     "team_player_left" => ~w(team_name player_name roster_count eligible),
     "player_location_updated" => ~w(region_name venue_name),
-    "venue_deactivated" => ~w(venue_name suggested_venues)
+    "venue_deactivated" => ~w(venue_name suggested_venues),
+    "draw_published" => ~w(fixtures)
   }
 
   @doc """
@@ -45,13 +46,14 @@ defmodule Cuevolution.Notifications do
 
   Returns the list of created `Notification` structs (one per channel).
   """
-  def dispatch(%Player{} = recipient, event_type, payload \\ %{}) when is_atom(event_type) do
+  def dispatch(%Player{} = recipient, event_type, payload \\ %{}, opts \\ [])
+      when is_atom(event_type) and is_list(opts) do
     event_type = Atom.to_string(event_type)
     safe_payload = validate_payload!(event_type, payload)
 
     recipient
     |> channels_for()
-    |> Enum.map(&enqueue(recipient, event_type, &1, safe_payload))
+    |> Enum.map(&enqueue(recipient, event_type, &1, safe_payload, opts))
   end
 
   defp channels_for(%Player{notification_preference: "email"}), do: ["email"]
@@ -73,27 +75,47 @@ defmodule Cuevolution.Notifications do
     end
   end
 
-  defp enqueue(recipient, event_type, channel, payload) do
-    {:ok, notification} =
-      %Notification{}
-      |> Notification.changeset(%{
+  defp enqueue(recipient, event_type, channel, payload, opts) do
+    idempotency_key = Keyword.get(opts, :idempotency_key) || Ecto.UUID.generate()
+
+    changeset =
+      Notification.changeset(%Notification{}, %{
         player_id: recipient.id,
         event_type: event_type,
         channel: channel,
         status: "pending",
         payload: payload,
-        idempotency_key: Ecto.UUID.generate()
+        idempotency_key: idempotency_key
       })
-      |> Repo.insert()
 
+    case Repo.insert(changeset) do
+      {:ok, notification} ->
+        enqueue_delivery(notification, channel, event_type, recipient.id)
+        notification
+
+      {:error, changeset} ->
+        if unique_idempotency_error?(changeset) do
+          Repo.get_by!(Notification, idempotency_key: idempotency_key)
+        else
+          raise Ecto.InvalidChangesetError, action: :insert, changeset: changeset
+        end
+    end
+  end
+
+  defp enqueue_delivery(notification, channel, event_type, player_id) do
     worker = if channel == "email", do: SendEmailWorker, else: SendSmsWorker
     {:ok, _job} = %{"notification_id" => notification.id} |> worker.new() |> Oban.insert()
 
     Logger.info(
       "notification enqueued id=#{notification.id} channel=#{channel} " <>
-        "event=#{event_type} player_id=#{recipient.id}"
+        "event=#{event_type} player_id=#{player_id}"
     )
+  end
 
-    notification
+  defp unique_idempotency_error?(changeset) do
+    Enum.any?(changeset.errors, fn
+      {:idempotency_key, {_message, metadata}} -> metadata[:constraint] == :unique
+      _ -> false
+    end)
   end
 end

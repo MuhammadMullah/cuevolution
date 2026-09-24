@@ -7,6 +7,9 @@ defmodule Cuevolution.Competitions.Fixture do
 
   schema "fixtures" do
     field :scheduled_at, :utc_datetime
+    field :match_id, :string
+    field :status, :string, default: "scheduled"
+    field :walkover_kind, :string
 
     belongs_to :round, Cuevolution.Competitions.Round
     belongs_to :participant_a, Cuevolution.Competitions.StageParticipation
@@ -33,15 +36,41 @@ defmodule Cuevolution.Competitions.Fixture do
       :scheduled_at
     ])
     |> validate_same_category_and_stage(pa, pb)
+    |> validate_inclusion(
+      :status,
+      ~w(scheduled live completed verified walkover postponed abandoned)
+    )
+    |> validate_inclusion(:walkover_kind, ~w(single double))
     |> foreign_key_constraint(:round_id)
     |> foreign_key_constraint(:participant_a_id)
     |> foreign_key_constraint(:participant_b_id)
     |> foreign_key_constraint(:venue_id)
+    |> check_constraint(:status, name: :fixture_status_valid)
+    |> check_constraint(:walkover_kind, name: :walkover_kind_valid)
     |> check_constraint(:participant_a_id, name: :participants_must_differ)
     |> unique_constraint([:round_id, :participant_a_id, :participant_b_id],
       name: :fixtures_round_participants_unique_index,
       message: "this pairing already exists in this round"
     )
+  end
+
+  def auto_generate_changeset(fixture, attrs, %{participant_a: pa, participant_b: pb}) do
+    fixture
+    |> cast(attrs, [:round_id, :participant_a_id, :participant_b_id])
+    |> put_change(:match_id, Map.fetch!(attrs, :match_id))
+    |> put_change(:status, "scheduled")
+    |> validate_required([:round_id, :participant_a_id, :participant_b_id, :match_id])
+    |> validate_same_category_and_stage(pa, pb)
+    |> validate_inclusion(
+      :status,
+      ~w(scheduled live completed verified walkover postponed abandoned)
+    )
+    |> foreign_key_constraint(:round_id)
+    |> foreign_key_constraint(:participant_a_id)
+    |> foreign_key_constraint(:participant_b_id)
+    |> unique_constraint(:match_id)
+    |> check_constraint(:status, name: :fixture_status_valid)
+    |> check_constraint(:walkover_kind, name: :walkover_kind_valid)
   end
 
   @doc "Edit changeset — venue/schedule only. Fixtures with a result are locked; `Competitions.update_fixture/2` enforces that before calling this."

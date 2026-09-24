@@ -117,6 +117,17 @@ defmodule Cuevolution.NotificationsTest do
     end
   end
 
+  test "reuses a deterministic idempotency key without creating a duplicate" do
+    player = insert(:player, notification_preference: "email")
+    opts = [idempotency_key: "draw_published:draw-1:#{player.id}"]
+
+    [first] = Notifications.dispatch(player, :draw_published, %{fixtures: []}, opts)
+    [second] = Notifications.dispatch(player, :draw_published, %{fixtures: []}, opts)
+
+    assert second.id == first.id
+    assert Repo.aggregate(Cuevolution.Notifications.Notification, :count, :id) == 1
+  end
+
   test "two separate dispatches for the same player/event get distinct idempotency keys" do
     player = insert(:player, notification_preference: "email")
 

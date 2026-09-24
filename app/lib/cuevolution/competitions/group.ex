@@ -10,8 +10,10 @@ defmodule Cuevolution.Competitions.Group do
   schema "groups" do
     field :name, :string
     field :category, :string
+    field :tie_breakers, {:array, :string}, default: []
 
     belongs_to :stage, Cuevolution.Competitions.Stage
+    belongs_to :draw, Cuevolution.Competitions.Draw
     belongs_to :region, Cuevolution.Accounts.Region
     belongs_to :venue, Cuevolution.Venues.Venue
     has_many :group_memberships, Cuevolution.Competitions.GroupMembership
@@ -32,6 +34,7 @@ defmodule Cuevolution.Competitions.Group do
     |> validate_required([:stage_id, :region_id, :category, :name])
     |> validate_inclusion(:category, @categories)
     |> foreign_key_constraint(:stage_id)
+    |> foreign_key_constraint(:draw_id)
     |> foreign_key_constraint(:region_id)
     |> foreign_key_constraint(:venue_id)
     |> unique_constraint([:stage_id, :region_id, :category, :name],
@@ -40,5 +43,6 @@ defmodule Cuevolution.Competitions.Group do
     |> unique_constraint([:stage_id, :venue_id, :category, :name],
       name: :groups_venue_scoped_unique_index
     )
+    |> unique_constraint([:draw_id, :name], name: :groups_draw_scoped_unique_index)
   end
 end

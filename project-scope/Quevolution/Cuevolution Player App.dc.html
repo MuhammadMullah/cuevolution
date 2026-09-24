@@ -476,6 +476,48 @@ input::placeholder{color:#9E9EA7;}
           </sc-if>
         </sc-if>
 
+        <!-- ===== MY GROUP STANDINGS (Grassroots) ===== -->
+        <sc-if value="{{ rIsGroup }}" hint-placeholder-val="">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Grassroots · Group stage</div>
+          <h1 style="font-size:clamp(26px,4vw,32px);font-weight:700;letter-spacing:-0.025em;color:#0D0C22;margin:0 0 6px;">My group standings</h1>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
+            <div style="font-size:14px;color:#6E6D7A;">{{ grScope }}</div>
+            <span style="padding:4px 11px;border-radius:9999px;background:#F3F3F4;color:#3A3546;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">{{ grStateLabel }}</span>
+          </div>
+
+          <div style="border:1px solid #E7E7E9;border-radius:16px;background:#fff;overflow-x:auto;box-shadow:0 1px 2px rgba(13,12,34,0.05);">
+            <div style="min-width:600px;">
+              <div style="display:grid;grid-template-columns:44px minmax(110px,1fr) repeat(7,40px) 52px;background:#FAF9FB;border-bottom:1px solid #E7E7E9;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6E6D7A;">
+                <div style="padding:11px 8px;">Pos</div>
+                <div style="padding:11px 8px;">Player</div>
+                <div style="padding:11px 8px;text-align:right;">P</div>
+                <div style="padding:11px 8px;text-align:right;">W</div>
+                <div style="padding:11px 8px;text-align:right;">L</div>
+                <div style="padding:11px 8px;text-align:right;">FW</div>
+                <div style="padding:11px 8px;text-align:right;">FL</div>
+                <div style="padding:11px 8px;text-align:right;">FD</div>
+                <div style="padding:11px 8px;text-align:right;">Bon</div>
+                <div style="padding:11px 14px 11px 8px;text-align:right;">Pts</div>
+              </div>
+              <sc-for list="{{ grRows }}" as="r" hint-placeholder-count="6">
+                <div style="{{ r.rowStyle }}">
+                  <div style="padding:10px 8px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#0D0C22;">{{ r.posLabel }}</div>
+                  <div style="padding:10px 8px;font-size:14px;font-weight:600;color:#0D0C22;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.name }}<sc-if value="{{ r.isMe }}" hint-placeholder-val=""><span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:0.08em;color:#A81810;margin-left:7px;">YOU</span></sc-if></div>
+                  <div style="{{ r.numStyle }}">{{ r.P }}</div>
+                  <div style="{{ r.numStyle }}">{{ r.W }}</div>
+                  <div style="{{ r.numStyle }}">{{ r.L }}</div>
+                  <div style="{{ r.numStyle }}">{{ r.FW }}</div>
+                  <div style="{{ r.numStyle }}">{{ r.FL }}</div>
+                  <div style="{{ r.numStyle }}">{{ r.FD }}</div>
+                  <div style="{{ r.numStyle }}">{{ r.BON }}</div>
+                  <div style="{{ r.ptsStyle }}">{{ r.PTS }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <p style="font-size:13px;line-height:1.55;color:#9E9EA7;margin:12px 0 0;max-width:62ch;">Points here are frames won plus a clean-sweep bonus — separate from Cuevo Points, which start at Circuit stage.</p>
+        </sc-if>
+
         <!-- ===== FIXTURES ===== -->
         <sc-if value="{{ rIsFixtures }}" hint-placeholder-val="">
           <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#C81E16;margin-bottom:6px;">Draws &amp; Fixtures</div>
@@ -484,7 +526,7 @@ input::placeholder{color:#9E9EA7;}
           <sc-if value="{{ hasUpcoming }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex;gap:12px;align-items:flex-start;background:#0D0C22;color:#FDFCFB;border-radius:16px;padding:16px 20px;margin-bottom:26px;">
             <div style="width:34px;height:34px;border-radius:9999px;background:#E32219;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none;">◆</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;margin-bottom:2px;">A new draw has been published</div><div style="font-size:13.5px;color:#DBDBDE;">You have 2 upcoming fixtures. Notifications were sent to your email and SMS.</div></div>
+            <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;margin-bottom:2px;">A new draw has been published</div><div style="font-size:13.5px;color:#DBDBDE;">You have 2 upcoming fixtures. Notifications were sent to your email and SMS. Play them by {{ grDeadline }}.</div></div>
           </div>
           </sc-if>
 
@@ -504,11 +546,22 @@ input::placeholder{color:#9E9EA7;}
                   <span style="font-size:12px;font-weight:600;color:#6E6D7A;text-transform:uppercase;letter-spacing:0.06em;">{{ f.type }}</span>
                   <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600;background:{{ f.badgeBg }};color:{{ f.badgeColor }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ f.dotColor }};"></span>{{ f.stage }}</span>
                 </div>
+                <sc-if value="{{ f.hasStatus }}" hint-placeholder-val="">
+                  <div style="margin-bottom:10px;"><span style="{{ f.statusStyle }}">{{ f.statusLabel }}</span></div>
+                </sc-if>
                 <div style="font-size:13px;color:#9E9EA7;margin-bottom:3px;">vs</div>
                 <div style="font-size:19px;font-weight:700;color:#0D0C22;letter-spacing:-0.01em;margin-bottom:14px;">{{ f.opp }}</div>
                 <div style="display:flex;flex-direction:column;gap:7px;font-size:14px;color:#3A3546;">
-                  <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">When</span><span style="font-weight:600;color:#0D0C22;">{{ f.date }} · {{ f.time }}</span></div>
+                  <sc-if value="{{ f.isGr }}" hint-placeholder-val="">
+                    <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">Play by</span><span style="font-weight:600;color:#0D0C22;">{{ grDeadline }}</span></div>
+                  </sc-if>
+                  <sc-if value="{{ f.notGr }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">When</span><span style="font-weight:600;color:#0D0C22;">{{ f.date }} · {{ f.time }}</span></div>
+                  </sc-if>
                   <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">Where</span><span>{{ f.venue }}</span></div>
+                  <sc-if value="{{ f.matchId }}" hint-placeholder-val="">
+                    <div style="display:flex;gap:8px;"><span style="color:#9E9EA7;width:52px;flex:none;">Match</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#6E6D7A;">{{ f.matchId }}</span></div>
+                  </sc-if>
                 </div>
               </div>
             </sc-for>
@@ -524,7 +577,12 @@ input::placeholder{color:#9E9EA7;}
             <sc-for list="{{ resFixtures }}" as="f" hint-placeholder-count="3">
               <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #F3F3F4;">
                 <div style="{{ f.resIcon }}">{{ f.resGlyph }}</div>
-                <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;color:#0D0C22;">vs {{ f.opp }}</div><div style="font-size:13px;color:#9E9EA7;">{{ f.date }} · {{ f.stage }}</div></div>
+                <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:600;color:#0D0C22;">vs {{ f.opp }}</div><div style="font-size:13px;color:#9E9EA7;">{{ f.date }} · {{ f.stage }}</div><sc-if value="{{ f.hasMatchId }}" hint-placeholder-val=""><div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9E9EA7;margin-top:2px;">{{ f.matchId }}</div></sc-if></div>
+                <sc-if value="{{ f.hasStrip }}" hint-placeholder-val="">
+                  <div style="display:flex;gap:4px;flex:none;">
+                    <sc-for list="{{ f.strip }}" as="s" hint-placeholder-count="5"><div style="{{ s.style }}">{{ s.label }}</div></sc-for>
+                  </div>
+                </sc-if>
                 <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:{{ f.resColor }};">{{ f.result }}</div>
               </div>
             </sc-for>
@@ -759,11 +817,16 @@ class Component extends DCLogic {
     ]
   };
   UP=[
+    {type:'Individual',opp:'Patrick Mutua',stage:'Grassroots',date:'Sat 12 Jul',time:'2:00 PM',venue:'Westlands Cue Club',matchId:'SP26-WES01-MS-A-R1-M1',status:'scheduled'},
+    {type:'Individual',opp:'Collins Chebet',stage:'Grassroots',date:'Wed 15 Jul',time:'6:30 PM',venue:'Westlands Cue Club',matchId:'SP26-WES01-MS-A-R2-M2',status:'postponed'},
     {type:'Team match',opp:'Rift Valley Racks',stage:'Circuit',date:'Sat 12 Jul',time:'3:00 PM',venue:'Westlands Cue Club'},
     {type:'Individual',opp:'Kevin Mwangi',stage:'Circuit',date:'Sun 13 Jul',time:'11:00 AM',venue:'Kilimani Rack House'},
     {type:'Team match',opp:'Coastal Breakers',stage:'Circuit',date:'Sat 19 Jul',time:'1:00 PM',venue:'CBD Pool Lounge'},
   ];
   RES=[
+    {opp:'Charles Omondi',stage:'Grassroots',date:'Sat 5 Jul',result:'3–2',won:true,matchId:'SP26-WES01-MS-A-R1-M3',status:'verified',frames:['a','b','a','b','a']},
+    {opp:'Michael Mutua',stage:'Grassroots',date:'Wed 2 Jul',result:'5–0 w/o',won:true,matchId:'SP26-WES01-MS-A-R2-M1',status:'walkover',frames:[]},
+    {opp:'James Omondi',stage:'Grassroots',date:'Stage deadline',result:'No result',won:null,matchId:'SP26-WES01-MS-A-R4-M2',status:'double_walkover',frames:[]},
     {opp:'Central Cue Masters',stage:'Circuit',date:'Sat 5 Jul',result:'Won 5–3',won:true},
     {opp:'Daniel Mutua',stage:'Circuit',date:'Sun 29 Jun',result:'Won 4–2',won:true},
     {opp:'Eastlands Snipers',stage:'Regional',date:'Sat 21 Jun',result:'Lost 2–5',won:false},
@@ -837,6 +900,26 @@ class Component extends DCLogic {
     return out;
   }
 
+  GR_STATUS={
+    scheduled:{label:'Scheduled',bg:'#F3F3F4',color:'#3A3546'},
+    postponed:{label:'Postponed',bg:'#FEF3E2',color:'#92400E'},
+    completed:{label:'Completed \u2014 awaiting verification',bg:'#FEF3E2',color:'#92400E'},
+    verified:{label:'Verified',bg:'#DCF3E4',color:'#0E6A30'},
+    walkover:{label:'Walkover',bg:'#E8EEF7',color:'#1F4D7A'},
+    double_walkover:{label:'No result \u2014 deadline',bg:'#EDEDEF',color:'#6E6D7A'}
+  };
+  GR_DEADLINE='14 Oct 2026';
+  GR_GROUP={
+    scope:'Westlands Cue Club · Individual Male · Group A', me:'Brian Otieno', isFinal:false,
+    rows:[
+      {name:'James Omondi',P:5,W:5,L:0,FW:16,FL:9,BON:0},
+      {name:'Brian Otieno',P:4,W:3,L:1,FW:14,FL:6,BON:1},
+      {name:'Collins Chebet',P:4,W:3,L:1,FW:13,FL:7,BON:0},
+      {name:'Charles Omondi',P:5,W:1,L:4,FW:8,FL:17,BON:0},
+      {name:'Michael Mutua',P:3,W:1,L:2,FW:7,FL:8,BON:0},
+      {name:'Patrick Mutua',P:2,W:0,L:2,FW:2,FL:8,BON:0}
+    ]
+  };
   stageStyle(stage){
     const m={
       Grassroots:['rgba(110,109,122,0.14)','#3A3546','#6E6D7A'],
@@ -995,11 +1078,18 @@ class Component extends DCLogic {
 
     // --- fixtures ---
     const upSource = cfg.team==='none' ? this.UP.filter(f=>f.type==='Individual') : this.UP;
-    const upFixtures=(cfg.upcoming?upSource:[]).map(f=>{ const [bg,col,dot]=this.stageStyle(f.stage); return {...f,badgeBg:bg,badgeColor:col,dotColor:dot}; });
+    const upFixtures=(cfg.upcoming?upSource:[]).map(f=>{ const [bg,col,dot]=this.stageStyle(f.stage); const st=f.status?this.GR_STATUS[f.status]:null; return {...f,badgeBg:bg,badgeColor:col,dotColor:dot,
+      hasStatus:!!st, statusLabel:st?st.label:'', matchId:f.matchId||'', isGr:!!f.matchId, notGr:!f.matchId,
+      statusStyle:st?'font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.04em;color:'+st.color+';background:'+st.bg+';padding:3px 9px;border-radius:9999px;white-space:nowrap;':''}; });
     const resFixtures=(cfg.results?this.RES:[]).map(f=>({...f,
-      resColor: f.won?'#16A34A':'#A81810',
-      resGlyph: f.won?'W':'L',
-      resIcon:`width:34px;height:34px;border-radius:9999px;flex:none;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;background:${f.won?'#E7F6ED':'#FDECEA'};color:${f.won?'#16A34A':'#A81810'};`
+      matchId:f.matchId||'', hasMatchId:!!f.matchId,
+      hasStrip:!!(f.frames&&f.frames.length),
+      strip:(f.frames||[]).map(w=>({label:w==='a'?'B':'O',
+        style:'display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;font-weight:700;background:'+(w==='a'?'#0D0C22':'#F3F3F4')+';color:'+(w==='a'?'#fff':'#6E6D7A')+';'})),
+      isDoubleWo: f.status==='double_walkover',
+      resColor: f.status==='double_walkover'?'#6E6D7A':(f.won?'#16A34A':'#A81810'),
+      resGlyph: f.status==='double_walkover'?'–':(f.won?'W':'L'),
+      resIcon:`width:34px;height:34px;border-radius:9999px;flex:none;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;background:${f.status==='double_walkover'?'#EDEDEF':(f.won?'#E7F6ED':'#FDECEA')};color:${f.status==='double_walkover'?'#6E6D7A':(f.won?'#16A34A':'#A81810')};`
     }));
 
     // --- profile ---
@@ -1034,8 +1124,24 @@ class Component extends DCLogic {
       this.setState({acct:{...a,curPass:'',newPass:'',confirmPass:''},acctError:'',acctMsg:'Account details updated.'});
     };
 
+    // --- my group standings (Grassroots frame points) ---
+    const grRows=this.GR_GROUP.rows.map(r=>({...r,FD:r.FW-r.FL,PTS:r.FW+r.BON}))
+      .sort((a,b)=>(b.PTS-a.PTS)||(b.W-a.W)||(b.FD-a.FD)||a.name.localeCompare(b.name))
+      .map((r,i)=>{
+        const mine=r.name===this.GR_GROUP.me;
+        return {
+          posLabel:String(i+1), name:r.name, isMe:mine,
+          P:String(r.P), W:String(r.W), L:String(r.L), FW:String(r.FW), FL:String(r.FL),
+          FD:(r.FD>0?'+':'')+r.FD, BON:String(r.BON), PTS:String(r.PTS),
+          rowStyle:'display:grid;grid-template-columns:44px minmax(110px,1fr) repeat(7,40px) 52px;align-items:center;border-bottom:1px solid #F3F3F4;background:'+(mine?'#FDECEA':'#fff')+';',
+          numStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:13px;color:#3A3546;text-align:right;padding:10px 8px;',
+          ptsStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:15px;font-weight:700;color:#0D0C22;text-align:right;padding:10px 14px 10px 8px;'
+        };
+      });
+    const grStateLabel=this.GR_GROUP.isFinal?'Final':'Provisional';
+
     // --- nav ---
-    const navDefs=[['fixtures','Fixtures'],['standings','Standings'],['team','My Team']];
+    const navDefs=[['fixtures','Fixtures'],['group','My Group'],['standings','Standings'],['team','My Team']];
     const navItems=navDefs.map(([r,label])=>({label,onClick:()=>this.go(r),style:this.navStyle(S.route===r)}));
 
     return {
@@ -1043,6 +1149,7 @@ class Component extends DCLogic {
       showAuth:!S.authed, isSignin:S.route==='signin', isRegister:S.route==='register',
       isForgot:S.route==='forgot', isForgotSent:S.route==='forgotSent', isReset:S.route==='reset', isResetDone:S.route==='resetDone',
       showApp:S.authed, rIsStandings:S.route==='standings', rIsTeam:S.route==='team', rIsFixtures:S.route==='fixtures', rIsProfile:S.route==='profile', rIsSettings:S.route==='settings',
+      rIsGroup:S.route==='group', grDeadline:this.GR_DEADLINE, grRows, grStateLabel, grScope:this.GR_GROUP.scope,
       go:{signin:()=>{this.setState({fp:{email:'',pass:'',confirm:''},fpError:''});this.go('signin');}, register:()=>{this.setState({regStep:1});this.go('register');}, forgot:()=>{this.setState({fpError:''});this.go('forgot');}, reset:()=>{this.setState({fpError:''});this.go('reset');}, standings:()=>this.go('standings'), team:()=>this.go('team'), fixtures:()=>this.go('fixtures'), profile:()=>this.go('profile')},
       menuOpen:S.menuOpen,
       toggleMenu:()=>this.setState(s=>({menuOpen:!s.menuOpen})),

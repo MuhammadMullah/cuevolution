@@ -14,6 +14,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions.CuevoPointsEntry
+  alias Cuevolution.Competitions.Draw
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Competitions.Group
   alias Cuevolution.Competitions.GroupMembership
@@ -26,6 +27,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Competitions.StageGroupConfig
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Competitions.StandingsCalculator
+  alias Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams
@@ -40,6 +42,22 @@ defmodule Cuevolution.Competitions do
     Repo.all(from s in Stage, order_by: s.order)
   end
 
+  @doc "Sets the stage-wide Grassroots completion deadline."
+  def set_grassroots_deadline(%Admin{} = admin, deadline) do
+    cond do
+      not Admin.can?(admin, :manage_stages) ->
+        {:error, :unauthorized}
+
+      not is_nil(deadline) and not match?(%Date{}, deadline) ->
+        {:error, :invalid_date}
+
+      true ->
+        grassroots_stage()
+        |> Stage.changeset(%{completion_deadline: deadline})
+        |> Repo.update()
+    end
+  end
+
   @doc "The stage immediately after `stage` in pipeline order, or `nil` if `stage` is Finals."
   def next_stage(%Stage{order: order}) do
     Repo.one(from s in Stage, where: s.order == ^(order + 1))
@@ -48,6 +66,34 @@ defmodule Cuevolution.Competitions do
   @doc "The first stage in pipeline order — every new player/team enters here (spec 006)."
   def grassroots_stage do
     Repo.one!(from s in Stage, where: s.order == 1)
+  end
+
+  @doc "Recent verified and walkover fixtures for a player, including Grassroots deadline results."
+  def recent_results_for_player(player_id) do
+    participant_ids =
+      from sp in StageParticipation,
+        where: sp.player_id == ^player_id,
+        select: sp.id
+
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: mr in MatchResult,
+      on: mr.fixture_id == f.id,
+      where:
+        f.status in ["verified", "walkover"] and
+          (f.participant_a_id in subquery(participant_ids) or
+             f.participant_b_id in subquery(participant_ids)),
+      order_by: [desc: f.updated_at],
+      limit: 20,
+      preload: [
+        :result,
+        participant_a: :player,
+        participant_b: :player,
+        round: :stage
+      ]
+    )
+    |> Repo.all()
   end
 
   @doc """
@@ -273,6 +319,14 @@ defmodule Cuevolution.Competitions do
   end
 
   def assign_to_group(%StageParticipation{} = participation, %Group{} = group) do
+    if published_draw_group?(group) do
+      {:error, :draw_published}
+    else
+      do_assign_to_group(participation, group)
+    end
+  end
+
+  defp do_assign_to_group(participation, group) do
     Multi.new()
     |> Multi.run(:eligibility_check, fn repo, _changes ->
       if eligible_for_tournament?(repo, participation),
@@ -297,6 +351,15 @@ defmodule Cuevolution.Competitions do
 
       {:error, :membership, changeset, _changes} ->
         {:error, changeset}
+    end
+  end
+
+  defp published_draw_group?(%Group{draw_id: nil}), do: false
+
+  defp published_draw_group?(%Group{draw_id: draw_id}) do
+    case Repo.get(Draw, draw_id) do
+      %Draw{state: "published"} -> true
+      _ -> false
     end
   end
 
@@ -331,6 +394,22 @@ defmodule Cuevolution.Competitions do
     Group
     |> where([g], g.stage_id == ^stage_id and g.category == ^category)
     |> filter_by_group_scope(scope)
+    |> order_by(asc: :name)
+    |> preload(group_memberships: [stage_participation: [:player, :team]])
+    |> Repo.all()
+  end
+
+  @doc """
+  Groups belonging to a specific `draw_id`, in name order — narrower than
+  `list_groups/3`: a redraw creates a fresh `Draw` without deleting the
+  superseded one's groups, so listing by stage+venue+category alone would
+  mix a still-published old draw's groups in with a fresh one's. The Groups
+  page uses this once a `Draw` is on screen, so it only ever shows the
+  groups that actual draw produced.
+  """
+  def list_groups_for_draw(draw_id) do
+    Group
+    |> where([g], g.draw_id == ^draw_id)
     |> order_by(asc: :name)
     |> preload(group_memberships: [stage_participation: [:player, :team]])
     |> Repo.all()
@@ -444,6 +523,677 @@ defmodule Cuevolution.Competitions do
     |> Repo.update()
   end
 
+  @doc "Returns the existing group configuration or creates the documented defaults on first use."
+  def get_or_create_group_config(stage_id, category) do
+    case group_config(stage_id, category) do
+      %StageGroupConfig{} = config ->
+        config
+
+      nil ->
+        attrs = %{
+          stage_id: stage_id,
+          category: category,
+          group_size: 8,
+          advancer_count: 2,
+          target_group_size: 8,
+          minimum_group_size: 6,
+          minimum_entrants: 4,
+          extra_qualifier_count: 0
+        }
+
+        case %StageGroupConfig{}
+             |> StageGroupConfig.changeset(attrs)
+             |> Repo.insert() do
+          {:ok, config} -> config
+          {:error, _changeset} -> group_config(stage_id, category)
+        end
+    end
+  end
+
+  @doc "Calculates the Grassroots group count and balanced sizes for a venue/category."
+  def propose_draw(stage_id, venue_id, category) do
+    config = get_or_create_group_config(stage_id, category)
+    entrants = draw_entrants(stage_id, venue_id, category)
+
+    case propose_group_sizes(config, length(entrants)) do
+      {:ok, proposal} -> {:ok, Map.put(proposal, :entrants, entrants)}
+      error -> error
+    end
+  end
+
+  @doc "Pure group-size calculation used by `propose_draw/3` and its tests."
+  def propose_group_sizes(%StageGroupConfig{} = config, entrant_count)
+      when entrant_count < config.minimum_entrants,
+      do: {:error, :below_minimum}
+
+  def propose_group_sizes(%StageGroupConfig{} = config, entrant_count) do
+    group_count = ceil_div(entrant_count, config.target_group_size)
+
+    group_count =
+      reduce_to_minimum_group_size(group_count, entrant_count, config.minimum_group_size)
+
+    base_size = div(entrant_count, group_count)
+    remainder = rem(entrant_count, group_count)
+
+    sizes =
+      for index <- 0..(group_count - 1) do
+        base_size + if(index < remainder, do: 1, else: 0)
+      end
+
+    {:ok, %{group_count: group_count, sizes: sizes, entrant_count: entrant_count}}
+  end
+
+  @doc "Creates a draft draw with the current formula proposal and a reproducibility seed."
+  def create_draw(attrs, %Admin{} = admin) when is_map(attrs) do
+    if Admin.can?(admin, :manage_groups), do: do_create_draw(attrs), else: {:error, :unauthorized}
+  end
+
+  def create_draw(_attrs), do: {:error, :unauthorized}
+
+  defp do_create_draw(attrs) do
+    with {:ok, proposal} <- propose_draw(attrs.stage_id, attrs.venue_id, attrs.category) do
+      draw_attrs = %{
+        stage_id: attrs.stage_id,
+        venue_id: attrs.venue_id,
+        category: attrs.category,
+        state: "draft",
+        random_seed: Map.get(attrs, :random_seed, Ecto.UUID.generate()),
+        formula_group_count: proposal.group_count
+      }
+
+      %Draw{}
+      |> Draw.changeset(draw_attrs)
+      |> Repo.insert()
+    end
+  end
+
+  @doc "Deals venue entrants into groups and moves the draw to Previewed."
+  def deal_draw(%Draw{} = draw, group_count_override \\ nil)
+      when is_nil(group_count_override) or is_integer(group_count_override) do
+    do_deal_draw(draw, nil, group_count_override)
+  end
+
+  @doc "Deals a draw and records a group-count override against the acting admin."
+  def deal_draw(%Draw{} = draw, %Admin{} = admin, group_count_override) do
+    do_deal_draw(draw, admin, group_count_override)
+  end
+
+  defp do_deal_draw(%Draw{} = draw, admin, group_count_override) do
+    draw = Repo.preload(draw, venue: :region)
+
+    with :ok <- authorize_draw_admin(admin),
+         {:ok, proposal} <- propose_draw(draw.stage_id, draw.venue_id, draw.category),
+         :ok <- validate_draw_override(group_count_override, proposal.entrant_count),
+         :ok <- ensure_draw_not_dealt(draw.id) do
+      group_count = group_count_override || proposal.group_count
+      sizes = balanced_sizes(proposal.entrant_count, group_count)
+      entrants = proposal.entrants |> seeded_shuffle(draw.random_seed)
+      buckets = deal_entrants(entrants, sizes)
+
+      persist_dealt_draw(draw, admin, group_count_override, buckets)
+    end
+  end
+
+  defp persist_dealt_draw(draw, admin, group_count_override, buckets) do
+    result =
+      Multi.new()
+      |> Multi.run(:groups, fn repo, _changes -> insert_draw_groups(repo, draw, buckets) end)
+      |> Multi.update(:draw, fn _changes ->
+        Draw.changeset(draw, %{state: "previewed", group_count_override: group_count_override})
+      end)
+      |> Repo.transaction()
+
+    with {:ok, %{groups: groups}} <- result,
+         :ok <- maybe_log_group_count_override(draw, admin, group_count_override) do
+      {:ok, groups}
+    end
+  end
+
+  @doc "Reshuffles a previewed draw in place, up to three times before approval."
+  def reshuffle_draw(%Draw{state: "previewed"} = draw, %Admin{} = admin) do
+    cond do
+      not Admin.can?(admin, :manage_groups) ->
+        {:error, :unauthorized}
+
+      draw.redraw_count >= 3 ->
+        {:error, :redraw_limit_reached}
+
+      true ->
+        draw = Repo.preload(draw, venue: :region)
+
+        entrants = draw_entrants_for_draw(draw.id)
+        config = get_or_create_group_config(draw.stage_id, draw.category)
+
+        with {:ok, proposal} <- propose_group_sizes(config, length(entrants)) do
+          group_count = draw.group_count_override || proposal.group_count
+          sizes = balanced_sizes(length(entrants), group_count)
+          random_seed = Ecto.UUID.generate()
+          buckets = deal_entrants(seeded_shuffle(entrants, random_seed), sizes)
+
+          result =
+            Multi.new()
+            |> Multi.delete_all(:groups, from(g in Group, where: g.draw_id == ^draw.id))
+            |> Multi.run(:new_groups, fn repo, _changes ->
+              insert_draw_groups(repo, %{draw | random_seed: random_seed}, buckets)
+            end)
+            |> Multi.update(:draw, fn _changes ->
+              Draw.changeset(draw, %{
+                random_seed: random_seed,
+                redraw_count: draw.redraw_count + 1,
+                state: "previewed"
+              })
+            end)
+            |> Repo.transaction()
+
+          case result do
+            {:ok, %{draw: reshuffled}} ->
+              reshuffled = Repo.preload(reshuffled, venue: :region)
+
+              with {:ok, _log} <-
+                     Accounts.log_admin_action("redraw_preview", admin, reshuffled,
+                       prior_value: %{"redraw_count" => draw.redraw_count},
+                       new_value: %{"redraw_count" => reshuffled.redraw_count}
+                     ) do
+                {:ok, reshuffled}
+              end
+
+            error ->
+              error
+          end
+        end
+    end
+  end
+
+  def reshuffle_draw(%Draw{}, %Admin{} = admin), do: authorize_draw_admin(admin) |> error_result()
+
+  defp error_result(:ok), do: {:error, :invalid_transition}
+  defp error_result(error), do: error
+
+  defp maybe_log_group_count_override(_draw, nil, nil), do: :ok
+  defp maybe_log_group_count_override(_draw, nil, _override), do: {:error, :admin_required}
+
+  defp maybe_log_group_count_override(draw, _admin, override)
+       when override == draw.formula_group_count,
+       do: :ok
+
+  defp maybe_log_group_count_override(draw, %Admin{} = admin, override) do
+    case Accounts.log_admin_action("override_group_count", admin, draw,
+           prior_value: %{"group_count" => draw.formula_group_count},
+           new_value: %{"group_count" => override}
+         ) do
+      {:ok, _log} -> :ok
+      error -> error
+    end
+  end
+
+  @doc "Advances a draw through Draft → Previewed → Approved → Published."
+  def advance_draw_state(%Draw{} = draw, %Admin{} = admin, target_state) do
+    draw = Repo.preload(draw, venue: :region)
+
+    cond do
+      not Admin.can?(admin, :manage_groups) ->
+        {:error, :unauthorized}
+
+      not valid_draw_transition?(draw.state, target_state) ->
+        {:error, :invalid_transition}
+
+      target_state == "published" ->
+        publish_draw(draw, admin)
+
+      true ->
+        draw
+        |> Draw.changeset(%{state: target_state})
+        |> Repo.update()
+    end
+  end
+
+  @doc "Redraws a published draw after confirming no result-bearing fixture exists."
+  def redraw(%Draw{} = draw, %Admin{} = admin, reason) when is_binary(reason) do
+    cond do
+      not Admin.can?(admin, :manage_groups) ->
+        {:error, :unauthorized}
+
+      String.trim(reason) == "" ->
+        {:error, :reason_required}
+
+      draw_has_results?(draw.id) ->
+        {:error, :results_exist}
+
+      true ->
+        attrs = %{
+          stage_id: draw.stage_id,
+          venue_id: draw.venue_id,
+          category: draw.category,
+          random_seed: Ecto.UUID.generate(),
+          formula_group_count: draw.formula_group_count
+        }
+
+        case %Draw{} |> Draw.changeset(attrs) |> Repo.insert() do
+          {:ok, new_draw} = result ->
+            Accounts.log_admin_action("redraw", admin, new_draw,
+              prior_value: %{"draw_id" => draw.id},
+              new_value: %{"reason" => reason}
+            )
+
+            result
+
+          error ->
+            error
+        end
+    end
+  end
+
+  @doc """
+  The most recently created `Draw` for a stage+venue+category, or `nil` if
+  none exists yet. A redraw inserts a new `Draw` row without touching the
+  superseded one's `state` (it stays `"published"` for history/dispute
+  reproduction), so "most recent" — not "state == published" — is what
+  identifies the one currently in play for this scope.
+  """
+  def latest_draw(stage_id, venue_id, category) do
+    Repo.one(
+      from d in Draw,
+        where: d.stage_id == ^stage_id and d.venue_id == ^venue_id and d.category == ^category,
+        order_by: [desc: d.inserted_at],
+        limit: 1
+    )
+  end
+
+  @doc "Generates Berger-method fixtures for all groups in a draw."
+  def generate_fixtures_for_draw(%Draw{} = draw) do
+    result =
+      Multi.new()
+      |> Multi.run(:fixtures, fn repo, _changes -> generate_fixtures_for_draw_repo(repo, draw) end)
+      |> Repo.transaction()
+
+    case result do
+      {:ok, %{fixtures: fixtures}} ->
+        enqueue_draw_notifications(draw.id)
+        {:ok, fixtures}
+
+      error ->
+        error
+    end
+  end
+
+  defp publish_draw(%Draw{} = draw, admin) do
+    result =
+      Multi.new()
+      |> Multi.update_all(
+        :claim,
+        from(d in Draw, where: d.id == ^draw.id and d.state == "approved"),
+        set: [state: "published", updated_at: NaiveDateTime.utc_now()]
+      )
+      |> Multi.run(:draw, fn repo, %{claim: {count, _}} ->
+        if count == 1 do
+          {:ok, repo.get!(Draw, draw.id) |> repo.preload(venue: :region)}
+        else
+          {:error, :draw_already_published}
+        end
+      end)
+      |> Multi.run(:fixtures, fn repo, %{draw: published} ->
+        generate_fixtures_for_draw_repo(repo, published)
+      end)
+      |> Repo.transaction()
+
+    case result do
+      {:ok, %{draw: published, fixtures: fixtures}} ->
+        enqueue_draw_notifications(published.id)
+        Accounts.log_admin_action("publish_draw", admin, published)
+        {:ok, %{draw: published, fixtures: fixtures}}
+
+      error ->
+        error
+    end
+  end
+
+  defp generate_fixtures_for_draw_repo(repo, draw) do
+    groups =
+      from(g in Group,
+        where: g.draw_id == ^draw.id,
+        order_by: g.name,
+        preload: [
+          :venue,
+          group_memberships: [stage_participation: [:player, :team]]
+        ]
+      )
+      |> repo.all()
+
+    case groups do
+      [] -> {:error, :draw_not_dealt}
+      groups -> generate_group_fixtures(repo, draw, groups)
+    end
+  end
+
+  defp generate_group_fixtures(repo, draw, groups) do
+    existing_match_ids =
+      repo.all(from f in Fixture, where: not is_nil(f.match_id), select: f.match_id)
+      |> MapSet.new()
+
+    Enum.reduce_while(groups, {:ok, [], existing_match_ids}, fn group,
+                                                                {:ok, fixtures, match_ids} ->
+      participants = Enum.map(group.group_memberships, & &1.stage_participation)
+
+      case insert_group_fixtures(repo, draw, group, participants, match_ids) do
+        {:ok, group_fixtures, updated_ids} ->
+          {:cont, {:ok, fixtures ++ group_fixtures, updated_ids}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+    |> normalize_fixture_result()
+  end
+
+  defp normalize_fixture_result({:ok, fixtures, _match_ids}), do: {:ok, fixtures}
+  defp normalize_fixture_result({:ok, fixtures}), do: {:ok, fixtures}
+  defp normalize_fixture_result(error), do: error
+
+  defp insert_group_fixtures(repo, draw, group, participants, existing_match_ids) do
+    rounds = round_robin_rounds(participants)
+    venue_code = venue_code(draw.venue)
+
+    Enum.reduce_while(Enum.with_index(rounds, 1), {:ok, [], existing_match_ids}, fn
+      {pairs, round_number}, {:ok, fixtures, match_ids} ->
+        round_changeset =
+          Round.changeset(%Round{}, %{
+            stage_id: draw.stage_id,
+            group_id: group.id,
+            name: "Round #{round_number}"
+          })
+
+        with {:ok, round} <- repo.insert(round_changeset),
+             {:ok, new_fixtures, new_match_ids} <-
+               insert_round_fixtures(
+                 repo,
+                 round,
+                 draw,
+                 group,
+                 pairs,
+                 round_number,
+                 venue_code,
+                 match_ids
+               ) do
+          {:cont, {:ok, fixtures ++ new_fixtures, new_match_ids}}
+        else
+          error -> {:halt, error}
+        end
+    end)
+  end
+
+  defp insert_round_fixtures(repo, round, draw, group, pairs, round_number, venue_code, match_ids) do
+    Enum.reduce_while(Enum.with_index(pairs, 1), {:ok, [], match_ids}, fn
+      {{participant_a, participant_b}, match_number}, {:ok, fixtures, ids} ->
+        match_id =
+          next_match_id(venue_code, draw.category, group.name, round_number, match_number, ids)
+
+        changeset =
+          Fixture.auto_generate_changeset(
+            %Fixture{},
+            %{
+              round_id: round.id,
+              participant_a_id: participant_a.id,
+              participant_b_id: participant_b.id,
+              match_id: match_id
+            },
+            %{participant_a: participant_a, participant_b: participant_b}
+          )
+
+        case repo.insert(changeset) do
+          {:ok, fixture} ->
+            {:cont, {:ok, fixtures ++ [fixture], MapSet.put(ids, match_id)}}
+
+          error ->
+            {:halt, error}
+        end
+    end)
+  end
+
+  defp enqueue_draw_notifications(draw_id) do
+    %{"draw_id" => draw_id}
+    |> DispatchDrawPublishedNotifications.new()
+    |> Oban.insert()
+  end
+
+  defp draw_entrants(stage_id, venue_id, category) do
+    grouped_ids = grouped_draw_participation_ids(stage_id, venue_id, category)
+
+    from(sp in StageParticipation,
+      join: p in Player,
+      on: p.id == sp.player_id,
+      where:
+        sp.stage_id == ^stage_id and sp.category == ^category and
+          p.preferred_venue_id == ^venue_id and is_nil(p.anonymized_at) and
+          p.inserted_at < ^Accounts.tournament_registration_cutoff() and
+          sp.id not in subquery(grouped_ids),
+      preload: [player: :team]
+    )
+    |> Repo.all()
+  end
+
+  defp draw_entrants_for_draw(draw_id) do
+    from(sp in StageParticipation,
+      join: gm in GroupMembership,
+      on: gm.stage_participation_id == sp.id,
+      join: g in Group,
+      on: g.id == gm.group_id,
+      where: g.draw_id == ^draw_id,
+      preload: [player: :team]
+    )
+    |> Repo.all()
+  end
+
+  defp grouped_draw_participation_ids(stage_id, venue_id, category) do
+    from gm in GroupMembership,
+      join: g in Group,
+      on: g.id == gm.group_id,
+      left_join: d in Draw,
+      on: d.id == g.draw_id,
+      where:
+        g.stage_id == ^stage_id and g.venue_id == ^venue_id and g.category == ^category and
+          (is_nil(g.draw_id) or d.state != "published"),
+      select: gm.stage_participation_id
+  end
+
+  defp reduce_to_minimum_group_size(1, _entrant_count, _minimum), do: 1
+
+  defp reduce_to_minimum_group_size(group_count, entrant_count, minimum) do
+    if div(entrant_count, group_count) < minimum do
+      reduce_to_minimum_group_size(group_count - 1, entrant_count, minimum)
+    else
+      group_count
+    end
+  end
+
+  defp ceil_div(value, divisor), do: div(value + divisor - 1, divisor)
+
+  @doc "Pure group-size distribution for `entrant_count` split across `group_count` groups — the first `rem(entrant_count, group_count)` groups get one extra entrant. Shared by the actual deal and the Draw Wizard's live group-count preview."
+  def balanced_sizes(entrant_count, group_count) do
+    base_size = div(entrant_count, group_count)
+    remainder = rem(entrant_count, group_count)
+
+    for index <- 0..(group_count - 1) do
+      base_size + if(index < remainder, do: 1, else: 0)
+    end
+  end
+
+  defp seeded_shuffle(list, seed) do
+    state = :rand.seed_s(:exsss, seed_tuple(seed))
+    shuffle_with_state(list, state)
+  end
+
+  defp shuffle_with_state([], _state), do: []
+
+  defp shuffle_with_state(list, state) do
+    {index, state} = :rand.uniform_s(length(list), state)
+    {item, rest} = List.pop_at(list, index - 1)
+    [item | shuffle_with_state(rest, state)]
+  end
+
+  defp seed_tuple(seed) do
+    {
+      :erlang.phash2({seed, 1}, 4_294_967_295),
+      :erlang.phash2({seed, 2}, 4_294_967_295),
+      :erlang.phash2({seed, 3}, 4_294_967_295)
+    }
+  end
+
+  defp deal_entrants(entrants, sizes) do
+    Enum.reduce(entrants, Enum.map(sizes, fn size -> %{limit: size, members: []} end), fn entrant,
+                                                                                          buckets ->
+      candidate_indices =
+        buckets
+        |> Enum.with_index()
+        |> Enum.filter(fn {bucket, _index} ->
+          length(bucket.members) < bucket.limit and not same_team?(entrant, bucket.members)
+        end)
+
+      {_bucket, index} =
+        List.first(candidate_indices) ||
+          Enum.find(Enum.with_index(buckets), fn {bucket, _} ->
+            length(bucket.members) < bucket.limit
+          end)
+
+      List.update_at(buckets, index, fn bucket ->
+        %{bucket | members: bucket.members ++ [entrant]}
+      end)
+    end)
+    |> Enum.map(& &1.members)
+  end
+
+  defp same_team?(%StageParticipation{player: %{team_id: nil}}, _members), do: false
+
+  defp same_team?(%StageParticipation{player: %{team_id: team_id}}, members) do
+    Enum.any?(members, fn %StageParticipation{player: %{team_id: member_team_id}} ->
+      team_id == member_team_id
+    end)
+  end
+
+  defp same_team?(_, _members), do: false
+
+  defp insert_draw_groups(repo, draw, buckets) do
+    region_id = draw.venue.region_id
+
+    Enum.reduce_while(Enum.with_index(buckets), {:ok, []}, fn {members, index}, {:ok, groups} ->
+      group_name = "Group #{group_label(index)}"
+
+      group_changeset =
+        Group.changeset(%Group{draw_id: draw.id}, %{
+          stage_id: draw.stage_id,
+          region_id: region_id,
+          venue_id: draw.venue_id,
+          category: draw.category,
+          name: group_name
+        })
+
+      with {:ok, group} <- repo.insert(group_changeset),
+           {:ok, group} <- insert_group_memberships(repo, group, members) do
+        {:cont, {:ok, groups ++ [group]}}
+      else
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp insert_group_memberships(repo, group, members) do
+    Enum.reduce_while(members, {:ok, group}, fn participant, {:ok, group} ->
+      case repo.insert(
+             GroupMembership.changeset(%GroupMembership{}, %{
+               group_id: group.id,
+               stage_participation_id: participant.id
+             })
+           ) do
+        {:ok, _membership} -> {:cont, {:ok, group}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp round_robin_rounds([]), do: []
+
+  defp round_robin_rounds(participants) do
+    players = if rem(length(participants), 2) == 0, do: participants, else: participants ++ [nil]
+    [fixed | rotating] = players
+    round_count = length(players) - 1
+
+    for round_number <- 0..(round_count - 1) do
+      round_players = [fixed | rotate(rotating, round_number)]
+
+      for index <- 0..(div(length(players), 2) - 1),
+          participant_a = Enum.at(round_players, index),
+          participant_b = Enum.at(round_players, length(players) - 1 - index),
+          not is_nil(participant_a) and not is_nil(participant_b),
+          do: {participant_a, participant_b}
+    end
+  end
+
+  defp rotate(list, 0), do: list
+
+  defp rotate(list, count),
+    do: Enum.drop(list, rem(count, length(list))) ++ Enum.take(list, rem(count, length(list)))
+
+  defp next_match_id(venue_code, category, group_name, round_number, match_number, ids) do
+    category_code = if category == "male", do: "MS", else: "FS"
+    group_code = group_code(group_name)
+    base = "SP26-#{venue_code}-#{category_code}-#{group_code}-R#{round_number}-M"
+    next_match_id(base, match_number, ids)
+  end
+
+  defp group_code(group_name) do
+    case Regex.run(~r/^Group ([A-Z])/, group_name) do
+      [_, code] -> code
+      _ -> group_name |> String.replace(~r/[^A-Za-z0-9]/, "") |> String.last() || "A"
+    end
+  end
+
+  defp next_match_id(base, number, ids) do
+    id = base <> to_string(number)
+    if MapSet.member?(ids, id), do: next_match_id(base, number + 1, ids), else: id
+  end
+
+  defp venue_code(%{name: name}) do
+    name
+    |> String.upcase()
+    |> String.replace(~r/[^A-Z0-9]/, "")
+    |> String.slice(0, 5)
+  end
+
+  defp group_label(index) when index < 26, do: <<?A + index::utf8>>
+  defp group_label(index), do: "G#{index + 1}"
+
+  defp authorize_draw_admin(nil), do: :ok
+
+  defp authorize_draw_admin(%Admin{} = admin),
+    do: if(Admin.can?(admin, :manage_groups), do: :ok, else: {:error, :unauthorized})
+
+  defp validate_draw_override(nil, _entrant_count), do: :ok
+
+  defp validate_draw_override(group_count, entrant_count)
+       when group_count > 0 and group_count <= entrant_count, do: :ok
+
+  defp validate_draw_override(_group_count, _entrant_count), do: {:error, :invalid_group_count}
+
+  defp ensure_draw_not_dealt(draw_id) do
+    if Repo.exists?(from g in Group, where: g.draw_id == ^draw_id),
+      do: {:error, :already_dealt},
+      else: :ok
+  end
+
+  defp valid_draw_transition?(from, to),
+    do:
+      %{"draft" => "previewed", "previewed" => "approved", "approved" => "published"}[from] == to
+
+  defp draw_has_results?(draw_id) do
+    Repo.exists?(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        join: group in Group,
+        on: group.id == r.group_id,
+        where: group.draw_id == ^draw_id and f.status in ["completed", "verified", "walkover"]
+    )
+  end
+
   @doc "The knockout bracket for `stage_id`/`category` (Circuit/Finals), or `nil` if not yet started."
   def get_knockout_bracket(stage_id, category) do
     Repo.one(
@@ -490,14 +1240,21 @@ defmodule Cuevolution.Competitions do
   @doc """
   All rounds across every stage, preloaded with `:stage` and ordered by
   stage pipeline order then most-recently-created — backs the admin Draws
-  page's single combined "{Stage} — {Round}" picker (spec 007).
+  page's single combined round picker (spec 007).
+
+  Also preloads `group: [:venue, :region]` — every stage/category can have
+  multiple groups, each independently numbering its own rounds "Round 1",
+  "Round 2", ..., so the picker's label needs the group (and venue/region)
+  to tell two different groups' "Round 1" apart. A bare "{Stage} — {Round}"
+  label was ambiguous the moment more than one group existed for a stage,
+  which is exactly what the Grassroots auto-draw formula produces routinely.
   """
   def list_rounds do
     Repo.all(
       from r in Round,
         join: s in assoc(r, :stage),
         order_by: [asc: s.order, desc: r.inserted_at],
-        preload: [stage: s]
+        preload: [stage: s, group: [:venue, :region]]
     )
   end
 
@@ -522,6 +1279,20 @@ defmodule Cuevolution.Competitions do
       participant_a: [:player, :team],
       participant_b: [:player, :team]
     ])
+    |> Repo.all()
+  end
+
+  @doc """
+  Every fixture across every round of `group_id`, ordered by round then
+  match number — backs the Groups page's inline "expand a group card, see
+  its fixtures" view for auto-drawn Grassroots groups.
+  """
+  def list_fixtures_for_group(group_id) do
+    Fixture
+    |> join(:inner, [f], r in Round, on: r.id == f.round_id)
+    |> where([f, r], r.group_id == ^group_id)
+    |> order_by([f, r], asc: r.inserted_at, asc: f.match_id)
+    |> preload(participant_a: [:player, :team], participant_b: [:player, :team])
     |> Repo.all()
   end
 
@@ -764,6 +1535,7 @@ defmodule Cuevolution.Competitions do
     |> order_by(asc: :scheduled_at)
     |> preload([
       :venue,
+      round: [group: :stage],
       participant_a: [:player, :team, :stage],
       participant_b: [:player, :team, :stage]
     ])
@@ -861,6 +1633,224 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc "Records the five structured singles frames and moves a scheduled fixture to completed."
+  def record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners)
+      when is_list(frame_winners) do
+    if Admin.can?(admin, :record_results) do
+      do_record_frames(fixture, admin, frame_winners)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_record_frames(%Fixture{status: status}, _admin, _frame_winners)
+       when status not in ["scheduled", nil],
+       do: {:error, :invalid_fixture_state}
+
+  defp do_record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners) do
+    fixture = Repo.preload(fixture, participant_a: :player, participant_b: :player)
+
+    with {:ok, winners} <- normalize_frame_winners(frame_winners),
+         {:ok, winner_id} <- majority_winner(fixture, winners) do
+      frames_a = Enum.count(winners, &(&1 == :a))
+      frames_b = length(winners) - frames_a
+
+      result_attrs = %{
+        fixture_id: fixture.id,
+        winner_participation_id: winner_id,
+        score: %{
+          "participant_a_frames" => frames_a,
+          "participant_b_frames" => frames_b,
+          "points_a" => points_for_frames(frames_a, frames_b),
+          "points_b" => points_for_frames(frames_b, frames_a)
+        },
+        recorded_by_admin_id: admin.id
+      }
+
+      Multi.new()
+      |> Multi.insert(:result, MatchResult.create_changeset(%MatchResult{}, result_attrs))
+      |> Multi.run(:frames, fn repo, %{result: result} ->
+        insert_structured_frames(repo, result, fixture, winners)
+      end)
+      |> Multi.update(:fixture, fn %{result: result} ->
+        fixture
+        |> Ecto.Changeset.change(%{result_id: result.id, status: "completed"})
+      end)
+      |> Multi.run(:roster_lock, fn _repo, _changes -> lock_rosters_if_team(fixture) end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{result: result}} -> {:ok, Repo.preload(result, :match_frames)}
+        {:error, :result, changeset, _changes} -> {:error, changeset}
+        {:error, :frames, reason, _changes} -> {:error, reason}
+      end
+    end
+  end
+
+  @doc "Verifies a completed structured result; only verified Grassroots results enter standings."
+  def verify_result(%Fixture{} = fixture, %Admin{} = admin, frame_corrections \\ nil) do
+    if Admin.can?(admin, :approve_results) do
+      do_verify_result(fixture, admin, frame_corrections)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_verify_result(%Fixture{status: "completed"} = fixture, %Admin{} = admin, corrections) do
+    fixture = Repo.preload(fixture, [:result, participant_a: :player, participant_b: :player])
+
+    with {:ok, winners} <- optional_frame_corrections(corrections, fixture.result),
+         {:ok, correction_attrs} <- correction_result_attrs(fixture, winners) do
+      Multi.new()
+      |> maybe_replace_structured_frames(fixture, winners)
+      |> Multi.update(:result, MatchResult.correction_changeset(fixture.result, correction_attrs))
+      |> Multi.update(:fixture, Ecto.Changeset.change(fixture, status: "verified"))
+      |> Multi.run(:log, fn _repo, %{fixture: verified} ->
+        Accounts.log_admin_action("verify_result", admin, verified)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{fixture: verified}} -> {:ok, Repo.preload(verified, :result)}
+        {:error, _step, changeset, _changes} -> {:error, changeset}
+      end
+    end
+  end
+
+  defp do_verify_result(%Fixture{}, _admin, _corrections), do: {:error, :invalid_fixture_state}
+
+  @doc "Moves a scheduled fixture to postponed, recording the required reason in the audit log."
+  def postpone_fixture(%Fixture{status: "scheduled"} = fixture, %Admin{} = admin, reason) do
+    if Admin.can?(admin, :approve_results) and nonempty_reason?(reason) do
+      with {:ok, fixture} <- Repo.update(Ecto.Changeset.change(fixture, status: "postponed")),
+           {:ok, _log} <-
+             Accounts.log_admin_action("postpone_fixture", admin, fixture,
+               new_value: %{reason: reason}
+             ) do
+        {:ok, fixture}
+      end
+    else
+      if Admin.can?(admin, :approve_results),
+        do: {:error, :reason_required},
+        else: {:error, :unauthorized}
+    end
+  end
+
+  def postpone_fixture(%Fixture{}, _admin, _reason), do: {:error, :invalid_fixture_state}
+
+  @doc "Resumes a postponed fixture back to the scheduled state."
+  def resume_fixture(%Fixture{status: "postponed"} = fixture, %Admin{} = admin) do
+    if Admin.can?(admin, :approve_results) do
+      Repo.update(Ecto.Changeset.change(fixture, status: "scheduled"))
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def resume_fixture(%Fixture{}, _admin), do: {:error, :invalid_fixture_state}
+
+  @doc "Records a single walkover for the participant who was present."
+  def record_walkover(
+        %Fixture{status: "scheduled"} = fixture,
+        %Admin{} = admin,
+        present_participant
+      ) do
+    if Admin.can?(admin, :record_results) do
+      do_record_walkover(fixture, admin, present_participant)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def record_walkover(%Fixture{}, _admin, _present_participant),
+    do: {:error, :invalid_fixture_state}
+
+  defp do_record_walkover(fixture, admin, present_participant) do
+    fixture = Repo.preload(fixture, [:participant_a, :participant_b])
+    present_id = present_participant_id(present_participant)
+
+    case present_id do
+      id when id in [fixture.participant_a_id, fixture.participant_b_id] ->
+        absent_id =
+          if present_id == fixture.participant_a_id,
+            do: fixture.participant_b_id,
+            else: fixture.participant_a_id
+
+        score =
+          if present_id == fixture.participant_a_id,
+            do: %{"participant_a_frames" => 5, "participant_b_frames" => 0},
+            else: %{"participant_a_frames" => 0, "participant_b_frames" => 5}
+
+        Multi.new()
+        |> Multi.insert(
+          :result,
+          MatchResult.create_changeset(%MatchResult{}, %{
+            fixture_id: fixture.id,
+            winner_participation_id: present_id,
+            score: Map.put(score, "walkover", true),
+            recorded_by_admin_id: admin.id
+          })
+        )
+        |> Multi.update(:fixture, fn %{result: result} ->
+          Ecto.Changeset.change(fixture,
+            result_id: result.id,
+            status: "walkover",
+            walkover_kind: "single"
+          )
+        end)
+        |> Multi.run(:log, fn _repo, %{fixture: updated} ->
+          Accounts.log_admin_action("record_walkover", admin, updated,
+            new_value: %{present_participant_id: present_id, absent_participant_id: absent_id}
+          )
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{fixture: updated}} -> {:ok, Repo.preload(updated, :result)}
+          {:error, _step, changeset, _changes} -> {:error, changeset}
+        end
+
+      _ ->
+        {:error, :participant_required}
+    end
+  end
+
+  @doc "Processes a withdrawal, preserving played matches or converting the remaining schedule to walkovers."
+  def process_withdrawal(%StageParticipation{} = participation, %Admin{} = admin) do
+    if Admin.can?(admin, :approve_results) do
+      do_process_withdrawal(participation, admin)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_process_withdrawal(participation, admin) do
+    fixtures = withdrawal_fixtures(participation.id)
+    played = Enum.count(fixtures, &(&1.status in ["completed", "verified", "walkover"]))
+    keep_played = played * 2 >= length(fixtures)
+
+    Multi.new()
+    |> Multi.run(:fixtures, fn repo, _changes ->
+      if keep_played do
+        convert_withdrawal_fixtures(repo, fixtures, participation.id, admin)
+      else
+        reset_withdrawal_fixtures(repo, fixtures)
+      end
+    end)
+    |> Multi.run(:log, fn _repo, %{fixtures: updated} ->
+      Accounts.log_admin_action("process_withdrawal", admin, participation,
+        new_value: %{
+          played: played,
+          total: length(fixtures),
+          preserved_played: keep_played,
+          converted_fixture_ids: Enum.map(updated, & &1.id)
+        }
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{fixtures: fixtures}} -> {:ok, fixtures}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
   defp do_correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
     prior_value = %{
       "winner_participation_id" => result.winner_participation_id,
@@ -893,6 +1883,183 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  defp normalize_frame_winners(winners) when length(winners) != 5,
+    do: {:error, :five_frames_required}
+
+  defp normalize_frame_winners(winners) do
+    normalized = Enum.map(winners, &normalize_frame_winner/1)
+
+    if Enum.any?(normalized, &is_nil/1),
+      do: {:error, :invalid_frame_winner},
+      else: {:ok, normalized}
+  end
+
+  defp normalize_frame_winner(value) when value in [:a, "a", "participant_a"], do: :a
+  defp normalize_frame_winner(value) when value in [:b, "b", "participant_b"], do: :b
+  defp normalize_frame_winner(%{"winner" => value}), do: normalize_frame_winner(value)
+  defp normalize_frame_winner(%{winner: value}), do: normalize_frame_winner(value)
+  defp normalize_frame_winner(_value), do: nil
+
+  defp majority_winner(
+         %Fixture{participant_a_id: participant_a_id, participant_b_id: participant_b_id},
+         winners
+       ) do
+    a_wins = Enum.count(winners, &(&1 == :a))
+
+    cond do
+      a_wins >= 3 -> {:ok, participant_a_id}
+      length(winners) - a_wins >= 3 -> {:ok, participant_b_id}
+      true -> {:error, :no_majority}
+    end
+  end
+
+  defp points_for_frames(5, 0), do: 6
+  defp points_for_frames(frames_won, _frames_lost), do: frames_won
+
+  defp insert_structured_frames(repo, result, fixture, winners) do
+    Enum.with_index(winners, 1)
+    |> Enum.reduce_while({:ok, []}, fn {winner, sequence}, {:ok, inserted} ->
+      home_id = fixture.participant_a.player_id
+      away_id = fixture.participant_b.player_id
+      winner_id = if winner == :a, do: home_id, else: away_id
+
+      attrs = %{
+        match_result_id: result.id,
+        home_player_id: home_id,
+        away_player_id: away_id,
+        winner_player_id: winner_id,
+        sequence: sequence
+      }
+
+      case %MatchFrame{} |> MatchFrame.changeset(attrs) |> repo.insert() do
+        {:ok, frame} -> {:cont, {:ok, [frame | inserted]}}
+        {:error, changeset} -> {:halt, {:error, changeset}}
+      end
+    end)
+  end
+
+  defp optional_frame_corrections(nil, _result), do: {:ok, nil}
+  defp optional_frame_corrections([], _result), do: {:ok, nil}
+  defp optional_frame_corrections(corrections, _result), do: normalize_frame_winners(corrections)
+
+  defp correction_result_attrs(_fixture, nil), do: {:ok, %{}}
+
+  defp correction_result_attrs(fixture, winners) do
+    with {:ok, winner_id} <- majority_winner(fixture, winners) do
+      frames_a = Enum.count(winners, &(&1 == :a))
+      frames_b = length(winners) - frames_a
+
+      {:ok,
+       %{
+         winner_participation_id: winner_id,
+         score: %{
+           "participant_a_frames" => frames_a,
+           "participant_b_frames" => frames_b,
+           "points_a" => points_for_frames(frames_a, frames_b),
+           "points_b" => points_for_frames(frames_b, frames_a)
+         }
+       }}
+    end
+  end
+
+  defp maybe_replace_structured_frames(multi, _fixture, nil), do: multi
+
+  defp maybe_replace_structured_frames(multi, fixture, winners) do
+    Multi.delete_all(
+      multi,
+      :old_frames,
+      from(f in MatchFrame, where: f.match_result_id == ^fixture.result.id)
+    )
+    |> Multi.run(:replacement_frames, fn repo, _changes ->
+      insert_structured_frames(repo, fixture.result, fixture, winners)
+    end)
+  end
+
+  defp nonempty_reason?(reason), do: is_binary(reason) and String.trim(reason) != ""
+
+  defp present_participant_id(%StageParticipation{id: id}), do: id
+  defp present_participant_id(id) when is_binary(id), do: id
+  defp present_participant_id(_), do: nil
+
+  defp withdrawal_fixtures(participation_id) do
+    Fixture
+    |> join(:inner, [f], r in Round, on: r.id == f.round_id)
+    |> where(
+      [f, _r],
+      f.participant_a_id == ^participation_id or f.participant_b_id == ^participation_id
+    )
+    |> preload([:result, :participant_a, :participant_b])
+    |> Repo.all()
+  end
+
+  defp convert_withdrawal_fixtures(repo, fixtures, withdrawn_id, admin) do
+    Enum.reduce_while(fixtures, {:ok, []}, fn fixture, {:ok, converted} ->
+      case convert_withdrawal_fixture(repo, fixture, withdrawn_id, admin) do
+        :skip -> {:cont, {:ok, converted}}
+        {:ok, updated} -> {:cont, {:ok, [updated | converted]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp convert_withdrawal_fixture(_repo, %Fixture{status: status}, _withdrawn_id, _admin)
+       when status != "scheduled",
+       do: :skip
+
+  defp convert_withdrawal_fixture(repo, fixture, withdrawn_id, admin) do
+    opponent_id =
+      if fixture.participant_a_id == withdrawn_id,
+        do: fixture.participant_b_id,
+        else: fixture.participant_a_id
+
+    result_attrs = %{
+      fixture_id: fixture.id,
+      winner_participation_id: opponent_id,
+      score: withdrawal_score(fixture, opponent_id),
+      recorded_by_admin_id: admin.id
+    }
+
+    case repo.insert(MatchResult.create_changeset(%MatchResult{}, result_attrs)) do
+      {:ok, result} ->
+        repo.update(
+          Ecto.Changeset.change(fixture,
+            result_id: result.id,
+            status: "walkover",
+            walkover_kind: "single"
+          )
+        )
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp withdrawal_score(%Fixture{participant_a_id: participant_a_id}, participant_a_id),
+    do: %{"participant_a_frames" => 5, "participant_b_frames" => 0, "withdrawal" => true}
+
+  defp withdrawal_score(%Fixture{}, _participant_b_id),
+    do: %{"participant_a_frames" => 0, "participant_b_frames" => 5, "withdrawal" => true}
+
+  defp reset_withdrawal_fixtures(repo, fixtures) do
+    Enum.reduce_while(fixtures, {:ok, []}, fn fixture, {:ok, reset} ->
+      if fixture.result_id do
+        repo.delete_all(from f in MatchFrame, where: f.match_result_id == ^fixture.result_id)
+        repo.delete_all(from mr in MatchResult, where: mr.id == ^fixture.result_id)
+      end
+
+      case repo.update(
+             Ecto.Changeset.change(fixture,
+               result_id: nil,
+               status: "scheduled",
+               walkover_kind: nil
+             )
+           ) do
+        {:ok, updated} -> {:cont, {:ok, [updated | reset]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
   @doc """
   Ranked standings for `group` (spec 008 FR-002/FR-003) — wraps
   `StandingsCalculator` with real match data. Applies identically at
@@ -907,7 +2074,181 @@ defmodule Cuevolution.Competitions do
           select: gm.stage_participation_id
       )
 
-    StandingsCalculator.rank(participant_ids, group_matches(group.id))
+    case Repo.preload(group, :stage).stage.name do
+      "Grassroots" ->
+        grassroots_group_standings(group)
+
+      _ ->
+        StandingsCalculator.rank(participant_ids, group_matches(group.id), cascade: :wins_first)
+    end
+  end
+
+  @doc "Points-first standings for a Grassroots group, including persisted TD tie overrides."
+  def grassroots_group_standings(%Group{} = group) do
+    participant_ids =
+      Repo.all(
+        from gm in GroupMembership,
+          where: gm.group_id == ^group.id,
+          select: gm.stage_participation_id
+      )
+
+    group = Repo.preload(group, :stage)
+
+    if group.stage.name == "Grassroots" do
+      StandingsCalculator.rank(participant_ids, group_matches(group.id),
+        cascade: :points_first,
+        tie_breakers: Enum.chunk_every(group.tie_breakers || [], 2)
+      )
+    else
+      []
+    end
+  end
+
+  @doc "Persists a TD decision that `participant_a` ranks ahead of `participant_b`."
+  def resolve_tie(%Group{} = group, %Admin{} = admin, participant_a, participant_b) do
+    if Admin.can?(admin, :manage_groups),
+      do: persist_tie_resolution(group, participant_a, participant_b),
+      else: {:error, :unauthorized}
+  end
+
+  defp persist_tie_resolution(group, participant_a, participant_b) do
+    existing = Enum.chunk_every(Repo.get!(Group, group.id).tie_breakers || [], 2)
+
+    if participant_a == participant_b or
+         Enum.any?(existing, fn [winner, loser] ->
+           winner == participant_b and loser == participant_a
+         end) do
+      {:error, :invalid_tie_override}
+    else
+      tie_breakers =
+        existing
+        |> Enum.reject(fn [winner, loser] ->
+          winner == participant_a or loser == participant_b
+        end)
+        |> Kernel.++([[to_string(participant_a), to_string(participant_b)]])
+        |> List.flatten()
+
+      Repo.update(Ecto.Changeset.change(Repo.get!(Group, group.id), tie_breakers: tie_breakers))
+    end
+  end
+
+  @doc "Ranks non-top-N Grassroots participants across groups by normalized performance."
+  def best_of_rest_qualifiers(stage_id, category) do
+    groups = Repo.all(from g in Group, where: g.stage_id == ^stage_id and g.category == ^category)
+    config = get_or_create_group_config(stage_id, category)
+    top_count = config.advancer_count
+
+    groups
+    |> Enum.flat_map(fn group ->
+      standings = grassroots_group_standings(group)
+      top_ids = standings |> Enum.take(top_count) |> MapSet.new(& &1.participant_id)
+
+      Enum.flat_map(standings, &best_rest_row(&1, top_ids, group.id))
+    end)
+    |> Enum.sort_by(fn row ->
+      {-row.points_per_match, -row.frame_diff_per_match, to_string(row.participant_id)}
+    end)
+    |> Enum.take(config.extra_qualifier_count)
+  end
+
+  defp best_rest_row(row, top_ids, group_id) do
+    played = row.wins + row.losses
+
+    if played > 0 and not MapSet.member?(top_ids, row.participant_id) do
+      [
+        Map.merge(row, %{
+          matches_played: played,
+          points_per_match: row.points / played,
+          frame_diff_per_match: row.frame_diff / played,
+          group_id: group_id
+        })
+      ]
+    else
+      []
+    end
+  end
+
+  @doc """
+  Groups within `stage_id`/`category` whose fixtures are all complete
+  (verified/walkover) — the only groups whose standings are settled enough
+  to contribute automatic top-N qualifiers. Deliberately cross-venue (a
+  Grassroots category closes across every venue at once), but excludes:
+  a venue's superseded groups left behind by a redraw (they never got
+  fixtures at all, so `final?` is false), and any group still mid-play.
+  Without this, a freshly redrawn, unplayed group's all-tied-at-zero
+  standings would "qualify" arbitrary participants who haven't played a
+  single fixture.
+  """
+  def final_groups(stage_id, category) do
+    Group
+    |> where([g], g.stage_id == ^stage_id and g.category == ^category)
+    |> Repo.all()
+    |> Enum.filter(&group_final?/1)
+  end
+
+  defp group_final?(group) do
+    case list_fixtures_for_group(group.id) do
+      [] -> false
+      fixtures -> Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
+    end
+  end
+
+  @doc "Advances the reviewed top-N and best-of-rest qualifiers into the next stage."
+  def close_grassroots_stage(stage_id, category, %Admin{} = admin, confirmed_ids)
+      when is_list(confirmed_ids) do
+    with true <- Admin.can?(admin, :manage_groups),
+         %Stage{name: "Grassroots"} = stage <- Repo.get(Stage, stage_id),
+         next_stage when not is_nil(next_stage) <- next_stage(stage),
+         groups <- final_groups(stage_id, category),
+         config <- get_or_create_group_config(stage_id, category),
+         top_ids <-
+           Enum.flat_map(groups, fn group ->
+             Enum.take(group_standings(group), config.advancer_count)
+           end)
+           |> Enum.map(& &1.participant_id),
+         best_ids <- Enum.map(best_of_rest_qualifiers(stage_id, category), & &1.participant_id),
+         expected <- Enum.uniq(top_ids ++ best_ids),
+         true <-
+           Enum.sort(Enum.map(confirmed_ids, &to_string/1)) ==
+             Enum.sort(Enum.map(expected, &to_string/1)) do
+      participations = Repo.all(from sp in StageParticipation, where: sp.id in ^expected)
+
+      advance_qualifiers(participations, next_stage)
+    else
+      false -> {:error, :unauthorized}
+      nil -> {:error, :stage_not_found}
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_qualifiers}
+    end
+  end
+
+  defp advance_qualifiers(participations, next_stage) do
+    Enum.reduce_while(participations, {:ok, []}, fn participation, {:ok, advanced} ->
+      case advance_to_stage(participation, next_stage) do
+        {:ok, advanced_participation} -> {:cont, {:ok, [advanced_participation | advanced]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  def grassroots_group_for_player(player_id) do
+    group_id =
+      Repo.one(
+        from gm in GroupMembership,
+          join: g in Group,
+          on: g.id == gm.group_id,
+          join: s in Stage,
+          on: s.id == g.stage_id,
+          join: sp in StageParticipation,
+          on: sp.id == gm.stage_participation_id,
+          where: sp.player_id == ^player_id and s.name == "Grassroots",
+          select: gm.group_id
+      )
+
+    if group_id do
+      Repo.get!(Group, group_id)
+      |> Repo.preload([:stage, group_memberships: :stage_participation])
+    end
   end
 
   @doc """
@@ -933,6 +2274,7 @@ defmodule Cuevolution.Competitions do
       join: r in Round,
       on: r.id == f.round_id,
       where: r.group_id == ^group_id,
+      where: is_nil(f.match_id) or f.status in ["verified", "walkover"],
       preload: [fixture: [:participant_a, :participant_b]]
     )
     |> Repo.all()
@@ -941,13 +2283,19 @@ defmodule Cuevolution.Competitions do
 
   defp to_calculator_match(%MatchResult{fixture: fixture} = result) do
     {frames_a, frames_b} = frame_tally(result, fixture)
+    score = result.score || %{}
 
     %{
       winner_id: result.winner_participation_id,
       participant_a_id: fixture.participant_a_id,
       participant_b_id: fixture.participant_b_id,
       frames_won_a: frames_a,
-      frames_won_b: frames_b
+      frames_won_b: frames_b,
+      points_a: Map.get(score, "points_a"),
+      points_b: Map.get(score, "points_b"),
+      bonus_a: Map.get(score, "bonus_a"),
+      bonus_b: Map.get(score, "bonus_b"),
+      status: fixture.status
     }
   end
 

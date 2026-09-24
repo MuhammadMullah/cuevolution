@@ -30,6 +30,15 @@ defmodule Cuevolution.Competitions.MatchResult do
     )
   end
 
+  @doc "Creates the winnerless, adminless result produced by deadline double-walkovers."
+  def system_double_walkover_changeset(result, attrs) do
+    result
+    |> cast(attrs, [:fixture_id, :score])
+    |> validate_required([:fixture_id])
+    |> foreign_key_constraint(:fixture_id)
+    |> unique_constraint(:fixture_id)
+  end
+
   @doc "Correction changeset — caller snapshots the pre-update struct into :prior_value before calling this."
   def correction_changeset(result, attrs) do
     result

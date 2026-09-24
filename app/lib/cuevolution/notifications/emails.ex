@@ -106,6 +106,29 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "Sent when a Grassroots draw is published for the player."
+  def draw_published(player, _payload) do
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("You've been drawn — Grassroots")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">You've been drawn into your Grassroots group. Log in to see your upcoming fixtures.</p>
+      #{button("View My Fixtures", url("/fixtures"))}
+      <p style="margin:16px 0 0;">Please carry a copy of your ID for verification at your matches.</p>
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    You've been drawn into your Grassroots group. Log in to see your upcoming fixtures: #{url("/fixtures")}
+
+    Please carry a copy of your ID for verification at your matches.
+    """)
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload

@@ -1,0 +1,193 @@
+<AdminComponents.app_shell current_admin={@current_admin} active={:results} flash={@flash}>
+  <div class="mx-auto max-w-4xl">
+    <AdminComponents.eyebrow class="mb-2">Results &amp; verification</AdminComponents.eyebrow>
+    <h1 class="text-[clamp(26px,4vw,38px)] font-bold tracking-tight text-ink-950">Match entry</h1>
+
+    <div
+      :if={is_nil(@fixture)}
+      class="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800"
+    >
+      This fixture could not be found.
+    </div>
+
+    <div :if={@fixture} class="mt-6 space-y-5">
+      <section class="rounded-2xl border border-ink-200 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)] sm:p-7">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p class="font-mono text-xs font-semibold text-ink-500">
+              {@fixture.match_id || "Manual fixture"}
+            </p>
+            <h2 class="mt-2 text-xl font-bold text-ink-950">
+              {participant_label(@fixture.participant_a)}
+              <span class="text-ink-300">vs</span> {participant_label(@fixture.participant_b)}
+            </h2>
+          </div>
+          <span class={[
+            "rounded-full px-3 py-1 text-xs font-semibold",
+            @fixture.walkover_kind == "double" && "bg-ink-100 text-ink-600",
+            @fixture.walkover_kind != "double" && "bg-ink-100 text-ink-700"
+          ]}>
+            {status_label(@fixture)}
+          </span>
+        </div>
+      </section>
+
+      <section
+        :if={@fixture.status == "scheduled"}
+        class="rounded-2xl border border-ink-200 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)] sm:p-7"
+      >
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-base font-bold text-ink-950">Record five frames</h2>
+          <div class="font-mono text-2xl font-semibold text-ink-950">
+            {score_tally(@frame_winners)}
+          </div>
+        </div>
+        <p class="mt-1 text-sm text-ink-500">
+          Select the winner of every frame. A match result requires a three-frame majority.
+        </p>
+        <div class="mt-5 space-y-2">
+          <div
+            :for={sequence <- 1..5}
+            class="flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 p-3"
+          >
+            <span class="w-20 text-sm font-semibold text-ink-600">Frame {sequence}</span>
+            <button
+              :for={
+                {value, label} <- [
+                  {"a", participant_label(@fixture.participant_a)},
+                  {"b", participant_label(@fixture.participant_b)}
+                ]
+              }
+              type="button"
+              phx-click="set_frame"
+              phx-value-sequence={sequence}
+              phx-value-winner={value}
+              class={[
+                "rounded-full border px-3 py-1.5 text-xs font-semibold",
+                @frame_winners[to_string(sequence)] == value &&
+                  "border-ink-950 bg-ink-950 text-white",
+                @frame_winners[to_string(sequence)] != value &&
+                  "border-ink-300 text-ink-700 hover:bg-ink-50"
+              ]}
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+        <button
+          id="record-frames"
+          type="button"
+          phx-click="record_frames"
+          class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+        >
+          Record result
+        </button>
+      </section>
+
+      <section
+        :if={@fixture.status == "completed"}
+        class="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7"
+      >
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-base font-bold text-amber-950">Awaiting verification</h2>
+          <div class="font-mono text-2xl font-semibold text-amber-950">
+            {score_tally(@correction_winners)}
+          </div>
+        </div>
+        <p class="mt-1 text-sm text-amber-800">
+          Review every frame the rep recorded. Click a name to correct a frame before verifying.
+        </p>
+        <div class="mt-4 space-y-2">
+          <div
+            :for={sequence <- 1..5}
+            class="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-white p-3"
+          >
+            <span class="w-20 text-sm font-semibold text-ink-600">Frame {sequence}</span>
+            <button
+              :for={
+                {value, label} <- [
+                  {"a", participant_label(@fixture.participant_a)},
+                  {"b", participant_label(@fixture.participant_b)}
+                ]
+              }
+              type="button"
+              phx-click="set_correction_frame"
+              phx-value-sequence={sequence}
+              phx-value-winner={value}
+              class={[
+                "rounded-full border px-3 py-1.5 text-xs font-semibold",
+                @correction_winners[to_string(sequence)] == value &&
+                  "border-ink-950 bg-ink-950 text-white",
+                @correction_winners[to_string(sequence)] != value &&
+                  "border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
+              ]}
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+        <button
+          :if={Admin.can?(@current_admin, :approve_results)}
+          id="verify-result"
+          type="button"
+          phx-click="verify"
+          class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+        >
+          Verify result
+        </button>
+      </section>
+
+      <section
+        :if={@fixture.status in ["scheduled", "postponed"]}
+        class="grid gap-4 sm:grid-cols-2"
+      >
+        <form
+          :if={@fixture.status == "scheduled" && Admin.can?(@current_admin, :approve_results)}
+          phx-submit="postpone"
+          class="rounded-2xl border border-ink-200 bg-white p-5"
+        >
+          <h2 class="font-bold text-ink-950">Postpone</h2>
+          <input
+            name="reason"
+            required
+            placeholder="Reason required"
+            class="mt-3 w-full rounded-xl border border-ink-300 px-3 py-2 text-sm"
+          />
+          <button class="mt-3 rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+            Postpone fixture
+          </button>
+        </form>
+        <div
+          :if={@fixture.status == "postponed" && Admin.can?(@current_admin, :approve_results)}
+          class="rounded-2xl border border-ink-200 bg-white p-5"
+        >
+          <h2 class="font-bold text-ink-950">Postponed fixture</h2>
+          <button
+            type="button"
+            phx-click="resume"
+            class="mt-3 rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Resume fixture
+          </button>
+        </div>
+        <div
+          :if={@fixture.status == "scheduled"}
+          class="rounded-2xl border border-ink-200 bg-white p-5"
+        >
+          <h2 class="font-bold text-ink-950">Walkover</h2>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              :for={participant <- [@fixture.participant_a, @fixture.participant_b]}
+              type="button"
+              phx-click="record_walkover"
+              phx-value-participant_id={participant.id}
+              class="rounded-full border border-ink-300 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              {participant_label(participant)} present
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</AdminComponents.app_shell>
