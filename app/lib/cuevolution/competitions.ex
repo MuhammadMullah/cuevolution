@@ -670,36 +670,8 @@ defmodule Cuevolution.Competitions do
           random_seed = Ecto.UUID.generate()
           buckets = deal_entrants(seeded_shuffle(entrants, random_seed), sizes)
 
-          result =
-            Multi.new()
-            |> Multi.delete_all(:groups, from(g in Group, where: g.draw_id == ^draw.id))
-            |> Multi.run(:new_groups, fn repo, _changes ->
-              insert_draw_groups(repo, %{draw | random_seed: random_seed}, buckets)
-            end)
-            |> Multi.update(:draw, fn _changes ->
-              Draw.changeset(draw, %{
-                random_seed: random_seed,
-                redraw_count: draw.redraw_count + 1,
-                state: "previewed"
-              })
-            end)
-            |> Repo.transaction()
-
-          case result do
-            {:ok, %{draw: reshuffled}} ->
-              reshuffled = Repo.preload(reshuffled, venue: :region)
-
-              with {:ok, _log} <-
-                     Accounts.log_admin_action("redraw_preview", admin, reshuffled,
-                       prior_value: %{"redraw_count" => draw.redraw_count},
-                       new_value: %{"redraw_count" => reshuffled.redraw_count}
-                     ) do
-                {:ok, reshuffled}
-              end
-
-            error ->
-              error
-          end
+          result = persist_reshuffle(draw, buckets, random_seed)
+          finalize_reshuffle(result, draw, admin)
         end
     end
   end
@@ -708,6 +680,36 @@ defmodule Cuevolution.Competitions do
 
   defp error_result(:ok), do: {:error, :invalid_transition}
   defp error_result(error), do: error
+
+  defp finalize_reshuffle({:ok, %{draw: reshuffled}}, draw, admin) do
+    reshuffled = Repo.preload(reshuffled, venue: :region)
+
+    with {:ok, _log} <-
+           Accounts.log_admin_action("redraw_preview", admin, reshuffled,
+             prior_value: %{"redraw_count" => draw.redraw_count},
+             new_value: %{"redraw_count" => reshuffled.redraw_count}
+           ) do
+      {:ok, reshuffled}
+    end
+  end
+
+  defp finalize_reshuffle(error, _draw, _admin), do: error
+
+  defp persist_reshuffle(draw, buckets, random_seed) do
+    Multi.new()
+    |> Multi.delete_all(:groups, from(g in Group, where: g.draw_id == ^draw.id))
+    |> Multi.run(:new_groups, fn repo, _changes ->
+      insert_draw_groups(repo, %{draw | random_seed: random_seed}, buckets)
+    end)
+    |> Multi.update(:draw, fn _changes ->
+      Draw.changeset(draw, %{
+        random_seed: random_seed,
+        redraw_count: draw.redraw_count + 1,
+        state: "previewed"
+      })
+    end)
+    |> Repo.transaction()
+  end
 
   defp maybe_log_group_count_override(_draw, nil, nil), do: :ok
   defp maybe_log_group_count_override(_draw, nil, _override), do: {:error, :admin_required}
