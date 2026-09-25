@@ -86,6 +86,35 @@ defmodule Cuevolution.Release do
     :ok
   end
 
+  @doc """
+  Re-queues up to `limit` failed/stuck "draw_published" email
+  notifications for another delivery attempt (2026-09 incident: Gmail
+  SMTP's sending cap exhausted by a large draw-publish batch — see
+  `Cuevolution.Notifications.redrive_failed/3`). Defaults to 400, comfortably
+  under a personal Gmail account's ~500/day cap — run it again for the
+  next batch once you're confident there's send quota available, rather
+  than draining the whole backlog in one shot and re-triggering the same
+  throttling. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.redrive_draw_published_emails()'
+      bin/cuevolution eval 'Cuevolution.Release.redrive_draw_published_emails(100)'
+  """
+  def redrive_draw_published_emails(limit \\ 400) do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    {requeued, remaining} =
+      Cuevolution.Notifications.redrive_failed("draw_published", "email", limit)
+
+    IO.puts("Re-queued #{requeued} email notification(s) for another attempt.")
+
+    IO.puts(
+      "#{remaining} still failed/stuck — run again once you're sure there's send quota left."
+    )
+
+    :ok
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end

@@ -10,6 +10,8 @@ defmodule Cuevolution.Notifications do
   directly (FR-008).
   """
 
+  import Ecto.Query
+
   require Logger
 
   alias Cuevolution.Accounts.Player
@@ -54,6 +56,46 @@ defmodule Cuevolution.Notifications do
     recipient
     |> channels_for()
     |> Enum.map(&enqueue(recipient, event_type, &1, safe_payload, opts))
+  end
+
+  @doc """
+  Re-queues up to `limit` `event_type`/`channel` notifications stuck in
+  "failed" or "sending" (a crashed/restarted worker can leave a row
+  claimed but never resolved) for another delivery attempt — resets each
+  to "pending" and inserts a fresh Oban job.
+
+  `limit` exists because a mass failure is often the *provider* throttling
+  under a big burst (e.g. Gmail SMTP's ~500/day cap on a single account,
+  see the 2026-09 draw-published incident) — re-queuing everything at once
+  would immediately re-trigger the same throttling. Call this again for
+  the next batch once you're confident there's send quota available,
+  rather than draining the whole backlog in one shot.
+
+  Returns `{requeued_count, still_failed_or_stuck_count}`.
+  """
+  def redrive_failed(event_type, channel, limit \\ 400) when channel in ["email", "sms"] do
+    worker = if channel == "email", do: SendEmailWorker, else: SendSmsWorker
+
+    candidates =
+      Notification
+      |> where([n], n.event_type == ^event_type and n.channel == ^channel)
+      |> where([n], n.status in ["failed", "sending"])
+      |> order_by([n], asc: n.inserted_at)
+      |> limit(^limit)
+      |> Repo.all()
+
+    Enum.each(candidates, fn notification ->
+      notification |> Ecto.Changeset.change(status: "pending") |> Repo.update!()
+      %{"notification_id" => notification.id} |> worker.new() |> Oban.insert!()
+    end)
+
+    remaining =
+      Notification
+      |> where([n], n.event_type == ^event_type and n.channel == ^channel)
+      |> where([n], n.status in ["failed", "sending"])
+      |> Repo.aggregate(:count)
+
+    {length(candidates), remaining}
   end
 
   defp channels_for(%Player{notification_preference: "email"}), do: ["email"]

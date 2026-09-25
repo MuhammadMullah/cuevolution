@@ -4,6 +4,7 @@ defmodule Cuevolution.NotificationsTest do
   import ExUnit.CaptureLog
 
   alias Cuevolution.Notifications
+  alias Cuevolution.Notifications.Notification
   alias Cuevolution.Notifications.Workers.SendEmailWorker
   alias Cuevolution.Notifications.Workers.SendSmsWorker
 
@@ -135,5 +136,60 @@ defmodule Cuevolution.NotificationsTest do
     [second] = Notifications.dispatch(player, :registration_confirmation, %{})
 
     refute first.idempotency_key == second.idempotency_key
+  end
+
+  describe "redrive_failed/3" do
+    test "resets failed and stuck-sending notifications to pending and re-enqueues them" do
+      player = insert(:player, notification_preference: "email")
+      [failed] = Notifications.dispatch(player, :draw_published, %{fixtures: []})
+      failed |> Ecto.Changeset.change(status: "failed", error: "boom") |> Repo.update!()
+
+      other_player = insert(:player, notification_preference: "email")
+      [stuck] = Notifications.dispatch(other_player, :draw_published, %{fixtures: []})
+      stuck |> Ecto.Changeset.change(status: "sending") |> Repo.update!()
+
+      assert {2, 0} = Notifications.redrive_failed("draw_published", "email")
+
+      assert Repo.get!(Notification, failed.id).status == "pending"
+      assert Repo.get!(Notification, stuck.id).status == "pending"
+      assert_enqueued(worker: SendEmailWorker, args: %{"notification_id" => failed.id})
+      assert_enqueued(worker: SendEmailWorker, args: %{"notification_id" => stuck.id})
+    end
+
+    test "leaves sent notifications untouched" do
+      player = insert(:player, notification_preference: "email")
+      [sent] = Notifications.dispatch(player, :draw_published, %{fixtures: []})
+      sent |> Ecto.Changeset.change(status: "sent") |> Repo.update!()
+
+      assert {0, 0} = Notifications.redrive_failed("draw_published", "email")
+      assert Repo.get!(Notification, sent.id).status == "sent"
+    end
+
+    test "only re-queues up to the given limit, reporting how many are still left" do
+      for _ <- 1..3 do
+        player = insert(:player, notification_preference: "email")
+        [notification] = Notifications.dispatch(player, :draw_published, %{fixtures: []})
+        notification |> Ecto.Changeset.change(status: "failed") |> Repo.update!()
+      end
+
+      assert {1, 2} = Notifications.redrive_failed("draw_published", "email", 1)
+    end
+
+    test "scopes to the given event_type/channel, ignoring other failed notifications" do
+      player = insert(:player, notification_preference: "both")
+      [email, sms] = Notifications.dispatch(player, :draw_published, %{fixtures: []})
+      email |> Ecto.Changeset.change(status: "failed") |> Repo.update!()
+      sms |> Ecto.Changeset.change(status: "failed") |> Repo.update!()
+
+      other_player = insert(:player, notification_preference: "email")
+      [other_event] = Notifications.dispatch(other_player, :registration_confirmation, %{})
+      other_event |> Ecto.Changeset.change(status: "failed") |> Repo.update!()
+
+      assert {1, 0} = Notifications.redrive_failed("draw_published", "email")
+
+      assert Repo.get!(Notification, email.id).status == "pending"
+      assert Repo.get!(Notification, sms.id).status == "failed"
+      assert Repo.get!(Notification, other_event.id).status == "failed"
+    end
   end
 end
