@@ -76,6 +76,76 @@ defmodule Cuevolution.Competitions.DrawsTest do
     assert Repo.get!(Draw, draw.id).state == "previewed"
   end
 
+  test "draw entrants include a late registrant granted tournament_eligibility_override" do
+    admin = insert(:admin, role: "regional_coordinator")
+    stage = Repo.get_by!(Stage, name: "Grassroots")
+    venue = insert(:venue)
+
+    for _ <- 1..7 do
+      player = insert(:player, region_id: venue.region_id, preferred_venue_id: venue.id)
+
+      insert(:stage_participation,
+        stage_id: stage.id,
+        region_id: venue.region_id,
+        category: "male",
+        player_id: player.id,
+        team_id: nil
+      )
+    end
+
+    overridden_late_player =
+      insert(:player,
+        region_id: venue.region_id,
+        preferred_venue_id: venue.id,
+        inserted_at: ~N[2026-09-21 08:00:00],
+        tournament_eligibility_override: true
+      )
+
+    overridden_participation =
+      insert(:stage_participation,
+        stage_id: stage.id,
+        region_id: venue.region_id,
+        category: "male",
+        player_id: overridden_late_player.id,
+        team_id: nil
+      )
+
+    excluded_late_player =
+      insert(:player,
+        region_id: venue.region_id,
+        preferred_venue_id: venue.id,
+        inserted_at: ~N[2026-09-21 08:00:00]
+      )
+
+    excluded_participation =
+      insert(:stage_participation,
+        stage_id: stage.id,
+        region_id: venue.region_id,
+        category: "male",
+        player_id: excluded_late_player.id,
+        team_id: nil
+      )
+
+    assert {:ok, draw} =
+             Competitions.create_draw(
+               %{stage_id: stage.id, venue_id: venue.id, category: "male"},
+               admin
+             )
+
+    assert {:ok, _groups} = Competitions.deal_draw(draw, admin, nil)
+
+    entrant_participation_ids =
+      draw.id
+      |> Competitions.list_groups_for_draw()
+      |> Enum.flat_map(& &1.group_memberships)
+      |> Enum.map(& &1.stage_participation_id)
+      |> MapSet.new()
+
+    assert MapSet.size(entrant_participation_ids) == 8
+    assert overridden_participation.id in entrant_participation_ids
+    refute excluded_participation.id in entrant_participation_ids
+  end
+
   test "previewed draws can be reshuffled three times before approval" do
     admin = insert(:admin, role: "regional_coordinator")
     {draw, _players} = create_draw_with_players(admin, 8)

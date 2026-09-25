@@ -33,9 +33,45 @@ defmodule Cuevolution.Accounts do
   @doc "Returns the cutoff timestamp for eligibility in the current tournament season."
   def tournament_registration_cutoff, do: @tournament_registration_cutoff
 
-  @doc "Whether a player registered before the current tournament season cutoff."
+  @doc """
+  Whether a player registered before the current tournament season cutoff,
+  or was individually granted `:tournament_eligibility_override` afterward.
+  """
+  def tournament_eligible?(%Player{tournament_eligibility_override: true}), do: true
+
   def tournament_eligible?(%Player{inserted_at: inserted_at}) do
     NaiveDateTime.compare(inserted_at, @tournament_registration_cutoff) == :lt
+  end
+
+  @doc """
+  Grants `:tournament_eligibility_override` to every player who registered
+  in `[from, to)` (UTC-naive, matching `inserted_at`) — the tournament
+  committee's one-off decision to admit specific late registrants into this
+  season without moving `tournament_registration_cutoff/0` itself, which
+  stays in force for anyone registering late from here on. Idempotent
+  (skips players who already have the override) and logs each grant as a
+  system `AdminActionLog` entry. Returns the granted players' usernames.
+  """
+  def grant_tournament_eligibility_override(%NaiveDateTime{} = from, %NaiveDateTime{} = to) do
+    Repo.transaction(fn ->
+      Player
+      |> where([p], p.inserted_at >= ^from and p.inserted_at < ^to)
+      |> where([p], p.tournament_eligibility_override == false)
+      |> Repo.all()
+      |> Enum.map(fn player ->
+        {:ok, updated} =
+          player
+          |> Ecto.Changeset.change(tournament_eligibility_override: true)
+          |> Repo.update()
+
+        log_system_action("grant_tournament_eligibility_override", updated,
+          prior_value: %{"tournament_eligibility_override" => false},
+          new_value: %{"tournament_eligibility_override" => true}
+        )
+
+        updated.username
+      end)
+    end)
   end
 
   @doc """
@@ -842,15 +878,16 @@ defmodule Cuevolution.Accounts do
   @doc """
   Filterable, index-backed player directory query (spec 010 US1).
 
-  Supported filters: `:region_id`, `:category` (gender), `:username`
-  (case-insensitive substring search), `:stage_id` (current
-  `Competitions.StageParticipation`, via an indexed `EXISTS` subquery rather
-  than loading every participation into memory — see the admin Directory,
-  which used to do exactly that).
+  Supported filters: `:region_id`, `:venue_id` (`preferred_venue_id`),
+  `:category` (gender), `:username` (case-insensitive substring search),
+  `:stage_id` (current `Competitions.StageParticipation`, via an indexed
+  `EXISTS` subquery rather than loading every participation into memory —
+  see the admin Directory, which used to do exactly that).
   """
   def list_players_filtered(filters) do
     Player
     |> filter_by_region(filters[:region_id])
+    |> filter_by_venue(filters[:venue_id])
     |> filter_by_category(filters[:category])
     |> filter_by_username(filters[:username])
     |> filter_by_stage(filters[:stage_id])
@@ -864,6 +901,7 @@ defmodule Cuevolution.Accounts do
   def count_players_filtered(filters) do
     Player
     |> filter_by_region(filters[:region_id])
+    |> filter_by_venue(filters[:venue_id])
     |> filter_by_category(filters[:category])
     |> filter_by_username(filters[:username])
     |> filter_by_stage(filters[:stage_id])
@@ -878,6 +916,9 @@ defmodule Cuevolution.Accounts do
 
   defp filter_by_region(query, nil), do: query
   defp filter_by_region(query, region_id), do: where(query, region_id: ^region_id)
+
+  defp filter_by_venue(query, nil), do: query
+  defp filter_by_venue(query, venue_id), do: where(query, preferred_venue_id: ^venue_id)
 
   defp filter_by_category(query, nil), do: query
   defp filter_by_category(query, category), do: where(query, gender: ^category)

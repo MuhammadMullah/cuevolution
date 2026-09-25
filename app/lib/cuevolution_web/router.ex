@@ -119,6 +119,9 @@ defmodule CuevolutionWeb.Router do
       live "/venues/:id/players", VenuePlayersLive, :show
     end
 
+    get "/directory/export.csv", AdminDirectoryExportController, :csv
+    get "/directory/export.xlsx", AdminDirectoryExportController, :xlsx
+
     live_session :admin_team_management,
       on_mount: [
         {CuevolutionWeb.AdminAuth, :ensure_admin},

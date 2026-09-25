@@ -366,7 +366,10 @@ defmodule Cuevolution.Competitions do
   defp eligible_for_tournament?(repo, %StageParticipation{player_id: player_id, team_id: nil}) do
     repo.exists?(
       from p in Player,
-        where: p.id == ^player_id and p.inserted_at < ^Accounts.tournament_registration_cutoff()
+        where:
+          p.id == ^player_id and
+            (p.inserted_at < ^Accounts.tournament_registration_cutoff() or
+               p.tournament_eligibility_override)
     )
   end
 
@@ -375,7 +378,8 @@ defmodule Cuevolution.Competitions do
       from p in Player,
         where:
           p.team_id == ^team_id and
-            p.inserted_at >= ^Accounts.tournament_registration_cutoff()
+            p.inserted_at >= ^Accounts.tournament_registration_cutoff() and
+            not p.tournament_eligibility_override
     )
   end
 
@@ -966,7 +970,8 @@ defmodule Cuevolution.Competitions do
       where:
         sp.stage_id == ^stage_id and sp.category == ^category and
           p.preferred_venue_id == ^venue_id and is_nil(p.anonymized_at) and
-          p.inserted_at < ^Accounts.tournament_registration_cutoff() and
+          (p.inserted_at < ^Accounts.tournament_registration_cutoff() or
+             p.tournament_eligibility_override) and
           sp.id not in subquery(grouped_ids),
       preload: [player: :team]
     )

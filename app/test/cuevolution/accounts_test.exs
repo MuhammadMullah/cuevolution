@@ -362,6 +362,62 @@ defmodule Cuevolution.AccountsTest do
       refute Accounts.tournament_eligible?(%Player{inserted_at: ~N[2026-09-20 21:00:00]})
       refute Accounts.tournament_eligible?(%Player{inserted_at: ~N[2026-09-21 08:00:00]})
     end
+
+    test "a late registrant with tournament_eligibility_override is eligible anyway" do
+      assert Accounts.tournament_eligible?(%Player{
+               inserted_at: ~N[2026-09-21 08:00:00],
+               tournament_eligibility_override: true
+             })
+    end
+  end
+
+  describe "grant_tournament_eligibility_override/2" do
+    test "overrides only players registered within the given range, logging each as a system action" do
+      before_range = insert(:player, inserted_at: ~N[2026-09-20 20:00:00])
+      in_range = insert(:player, inserted_at: ~N[2026-09-22 12:00:00])
+      after_range = insert(:player, inserted_at: ~N[2026-09-26 00:00:00])
+
+      assert {:ok, usernames} =
+               Accounts.grant_tournament_eligibility_override(
+                 ~N[2026-09-20 21:00:00],
+                 ~N[2026-09-25 21:00:00]
+               )
+
+      assert usernames == [in_range.username]
+
+      assert Repo.get!(Player, in_range.id).tournament_eligibility_override
+      refute Repo.get!(Player, before_range.id).tournament_eligibility_override
+      refute Repo.get!(Player, after_range.id).tournament_eligibility_override
+
+      log =
+        Repo.get_by!(AdminActionLog,
+          entity_id: in_range.id,
+          action_type: "grant_tournament_eligibility_override"
+        )
+
+      assert log.actor_type == "system"
+      assert log.admin_id == nil
+      assert log.new_value == %{"tournament_eligibility_override" => true}
+    end
+
+    test "is idempotent — a player already granted the override isn't re-granted or re-logged" do
+      player =
+        insert(:player,
+          inserted_at: ~N[2026-09-22 12:00:00],
+          tournament_eligibility_override: true
+        )
+
+      assert {:ok, []} =
+               Accounts.grant_tournament_eligibility_override(
+                 ~N[2026-09-20 21:00:00],
+                 ~N[2026-09-25 21:00:00]
+               )
+
+      refute Repo.get_by(AdminActionLog,
+               entity_id: player.id,
+               action_type: "grant_tournament_eligibility_override"
+             )
+    end
   end
 
   describe "update_notification_preference/2" do

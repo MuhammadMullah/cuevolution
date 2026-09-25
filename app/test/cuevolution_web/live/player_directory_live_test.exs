@@ -129,4 +129,42 @@ defmodule CuevolutionWeb.PlayerDirectoryLiveTest do
     assert html =~ "Showing 1 of 51 results"
     assert has_element?(view, "#directory-previous-page")
   end
+
+  test "filters players and teams by venue", %{conn: conn} do
+    venue_a = insert(:venue)
+    venue_b = insert(:venue)
+
+    player_a = insert(:player, preferred_venue_id: venue_a.id, username: "venueaplayer")
+    player_b = insert(:player, preferred_venue_id: venue_b.id, username: "venuebplayer")
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/players")
+
+    html =
+      view
+      |> form("#player-filter-form", filter: %{"venue_id" => venue_a.id})
+      |> render_change()
+
+    assert html =~ player_a.username
+    refute html =~ player_b.username
+  end
+
+  test "export buttons submit the live filter form directly, instead of a computed link", %{
+    conn: conn
+  } do
+    conn = log_in_admin(conn)
+    {:ok, _view, html} = live(conn, ~p"/admin/players")
+
+    # Deliberately not a `href="...?region_id=..."` computed from the
+    # LiveView's last-patched assigns (see AdminDirectoryExportController's
+    # moduledoc): that lags a step behind whatever's actually selected in
+    # the form until the next phx-change round-trip lands, so two quick,
+    # different filter picks could both export the same, stale result.
+    # Native `formaction`/`form` submission always uses the form's current,
+    # in-DOM values with no server round-trip involved.
+    assert html =~ ~s(formaction="/admin/directory/export.csv")
+    assert html =~ ~s(formaction="/admin/directory/export.xlsx")
+    assert html =~ ~s(form="player-filter-form")
+    assert html =~ ~s(formmethod="get")
+  end
 end

@@ -763,7 +763,8 @@ defmodule Cuevolution.Teams do
         from(p in Player,
           where:
             p.team_id == ^team.id and
-              p.inserted_at < ^Accounts.tournament_registration_cutoff()
+              (p.inserted_at < ^Accounts.tournament_registration_cutoff() or
+                 p.tournament_eligibility_override)
         ),
         :count
       )
@@ -777,7 +778,8 @@ defmodule Cuevolution.Teams do
       from p in Player,
         where:
           p.team_id == ^team_id and
-            p.inserted_at >= ^Accounts.tournament_registration_cutoff()
+            p.inserted_at >= ^Accounts.tournament_registration_cutoff() and
+            not p.tournament_eligibility_override
     )
   end
 
@@ -791,15 +793,17 @@ defmodule Cuevolution.Teams do
   @doc """
   Filterable team directory query — the Teams-context counterpart of
   `Accounts.list_players_filtered/1`, backing the admin Directory's "Teams"
-  kind. Supported filters: `:region_id`, `:name` (case-insensitive
-  substring search), `:stage_id` (via an indexed `EXISTS` subquery, same
-  approach as `Accounts.list_players_filtered/1`). Preloads `:roster` only
-  (no caller needs `:captain` — dropped to save a query) since callers use
-  it just for `length/1`, not the roster's contents.
+  kind. Supported filters: `:region_id`, `:venue_id` (`match_venue_id`),
+  `:name` (case-insensitive substring search), `:stage_id` (via an indexed
+  `EXISTS` subquery, same approach as `Accounts.list_players_filtered/1`).
+  Preloads `:roster` only (no caller needs `:captain` — dropped to save a
+  query) since callers use it just for `length/1`, not the roster's
+  contents.
   """
   def list_teams_filtered(filters \\ %{}) do
     Team
     |> filter_by_region(filters[:region_id])
+    |> filter_by_venue(filters[:venue_id])
     |> filter_by_name(filters[:name])
     |> filter_by_stage(filters[:stage_id])
     |> order_by(asc: :name)
@@ -812,6 +816,7 @@ defmodule Cuevolution.Teams do
   def count_teams_filtered(filters \\ %{}) do
     Team
     |> filter_by_region(filters[:region_id])
+    |> filter_by_venue(filters[:venue_id])
     |> filter_by_name(filters[:name])
     |> filter_by_stage(filters[:stage_id])
     |> Repo.aggregate(:count, :id)
@@ -825,6 +830,9 @@ defmodule Cuevolution.Teams do
 
   defp filter_by_region(query, nil), do: query
   defp filter_by_region(query, region_id), do: where(query, region_id: ^region_id)
+
+  defp filter_by_venue(query, nil), do: query
+  defp filter_by_venue(query, venue_id), do: where(query, match_venue_id: ^venue_id)
 
   defp filter_by_name(query, nil), do: query
 

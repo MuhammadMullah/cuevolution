@@ -61,6 +61,31 @@ defmodule Cuevolution.Release do
     :ok
   end
 
+  @doc """
+  One-off: grants `:tournament_eligibility_override` to every player who
+  registered between 21 and 25 September 2026 (UTC-naive, matching the
+  existing `Accounts.tournament_registration_cutoff/0` EAT-midnight
+  convention) — the tournament committee's decision to admit these late
+  registrants into this season's draw. Idempotent — safe to re-run. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.grant_late_registrant_override()'
+  """
+  def grant_late_registrant_override do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    {:ok, usernames} =
+      Cuevolution.Accounts.grant_tournament_eligibility_override(
+        ~N[2026-09-20 21:00:00],
+        ~N[2026-09-25 21:00:00]
+      )
+
+    IO.puts("Granted tournament_eligibility_override to #{length(usernames)} player(s):")
+    Enum.each(usernames, &IO.puts("  @#{&1}"))
+
+    :ok
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end

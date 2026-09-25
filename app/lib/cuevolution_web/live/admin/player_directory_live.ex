@@ -9,7 +9,8 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
   alias Cuevolution.Accounts
   alias Cuevolution.Accounts.ProfilePicture
   alias Cuevolution.Competitions
-  alias Cuevolution.Teams
+  alias Cuevolution.Directory
+  alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
   alias CuevolutionWeb.PlayerComponents
 
@@ -22,7 +23,7 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
   @page_size 50
 
   def mount(params, _session, socket) do
-    filters = build_filters(params)
+    filters = Directory.build_filters(params)
     page = page_number(params["page"])
 
     {:ok,
@@ -33,24 +34,28 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
        stages: Competitions.list_stages(),
        kinds: @kinds,
        filter_form: to_form(params, as: :filter),
+       filters: filters,
+       venues: list_venues(filters[:region_id]),
        page: page
      )
      |> assign_directory(filters, page)}
   end
 
   def handle_event("filter", %{"filter" => params}, socket) do
-    filters = build_filters(params)
+    filters = Directory.build_filters(params)
 
     {:noreply,
      socket
      |> assign(:filter_form, to_form(params, as: :filter))
+     |> assign(:filters, filters)
+     |> assign(:venues, list_venues(filters[:region_id]))
      |> assign(:page, 1)
      |> assign_directory(filters, 1)}
   end
 
   def handle_event("page", %{"page" => page}, socket) do
     page = page_number(page)
-    filters = build_filters(socket.assigns.filter_form.params)
+    filters = socket.assigns.filters
 
     {:noreply,
      socket
@@ -58,20 +63,8 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
      |> assign_directory(filters, page)}
   end
 
-  defp build_filters(params) do
-    %{}
-    |> maybe_put_filter(:region_id, blank_to_nil(params["region_id"]))
-    |> maybe_put_filter(:kind, blank_to_nil(params["kind"]))
-    |> maybe_put_filter(:stage_id, blank_to_nil(params["stage_id"]))
-    |> maybe_put_filter(:search, blank_to_nil(params["search"]))
-  end
-
-  defp blank_to_nil(nil), do: nil
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(value), do: value
-
-  defp maybe_put_filter(filters, _key, nil), do: filters
-  defp maybe_put_filter(filters, key, value), do: Map.put(filters, key, value)
+  defp list_venues(nil), do: Venues.list_venues(%{})
+  defp list_venues(region_id), do: Venues.list_venues(%{region_id: region_id})
 
   defp assign_directory(socket, filters, page) do
     {rows, total_count} = build_rows(filters, page)
@@ -84,43 +77,11 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
   end
 
   defp build_rows(filters, page) do
-    kind = filters[:kind] || "all"
-    stage_id = filters[:stage_id]
-    query_filters = Map.merge(filters, %{limit: @page_size, offset: (page - 1) * @page_size})
+    query_filters =
+      Map.merge(filters, %{limit: @page_size, offset: (page - 1) * @page_size})
 
-    players =
-      if kind in ["all", "male", "female"] do
-        Accounts.list_players_filtered(%{
-          limit: query_filters.limit,
-          offset: query_filters.offset,
-          region_id: filters[:region_id],
-          category: (kind != "all" && kind) || nil,
-          username: filters[:search],
-          stage_id: stage_id
-        })
-      else
-        []
-      end
-
-    teams =
-      if kind in ["all", "team"] do
-        Teams.list_teams_filtered(%{
-          limit: query_filters.limit,
-          offset: query_filters.offset,
-          region_id: filters[:region_id],
-          name: filters[:search],
-          stage_id: stage_id
-        })
-      else
-        []
-      end
-
-    total_count =
-      if(kind in ["all", "male", "female"],
-        do: Accounts.count_players_filtered(filters),
-        else: 0
-      ) +
-        if kind in ["all", "team"], do: Teams.count_teams_filtered(filters), else: 0
+    {players, teams} = Directory.list_players_and_teams(query_filters)
+    total_count = Directory.count_players_and_teams(filters)
 
     stage_lookup =
       Competitions.stages_by_participant(Enum.map(players, & &1.id), Enum.map(teams, & &1.id))
@@ -141,6 +102,12 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
   end
 
   defp page_number(_page), do: 1
+
+  # Venue options are already region-scoped once a region filter is chosen,
+  # so the region name would be redundant there — it only earns its place
+  # in the "All regions" list, where several venues can share a name.
+  defp venue_option_label(venue, nil), do: "#{venue.name} (#{venue.region.name})"
+  defp venue_option_label(venue, _region_id), do: venue.name
 
   defp player_row(player, stage_lookup) do
     %{

@@ -35,6 +35,10 @@ defmodule Cuevolution.Accounts.Player do
     field :password_confirmation, :string, virtual: true
     field :current_password, :string, virtual: true
     field :anonymized_at, :utc_datetime
+    # Per-player exception to `Accounts.tournament_registration_cutoff/0`,
+    # granted after the fact by the tournament committee — see the
+    # migration that added this column.
+    field :tournament_eligibility_override, :boolean, default: false
 
     belongs_to :region, Cuevolution.Accounts.Region
     belongs_to :preferred_venue, Cuevolution.Venues.Venue

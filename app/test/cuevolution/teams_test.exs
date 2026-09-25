@@ -54,6 +54,20 @@ defmodule Cuevolution.TeamsTest do
       assert Repo.get!(Player, late_player.id).team_id == nil
     end
 
+    test "admits a late registrant granted tournament_eligibility_override" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+
+      overridden_late_player =
+        insert(:player,
+          inserted_at: ~N[2026-09-21 08:00:00],
+          tournament_eligibility_override: true
+        )
+
+      assert {:ok, updated_player} = Teams.add_player_to_roster(team, overridden_late_player)
+      assert updated_player.team_id == team.id
+    end
+
     test "adds a registered player with no team to the roster" do
       team = insert(:team)
       player = insert(:player, region_id: team.region_id, notification_preference: "email")
