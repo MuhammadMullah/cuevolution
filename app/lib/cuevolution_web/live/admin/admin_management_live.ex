@@ -7,6 +7,7 @@ defmodule CuevolutionWeb.AdminManagementLive do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
 
   def mount(_params, _session, socket) do
@@ -14,7 +15,8 @@ defmodule CuevolutionWeb.AdminManagementLive do
      socket
      |> assign(
        page_title: "Admins",
-       role_options: Enum.map(Admin.invitable_roles(), &{Admin.role_label(&1), &1})
+       role_options: Enum.map(Admin.invitable_roles(), &{Admin.role_label(&1), &1}),
+       venue_options: venue_options()
      )
      |> assign_form(Admin.invite_changeset(%Admin{}, %{}))
      |> load_admins()}
@@ -70,6 +72,27 @@ defmodule CuevolutionWeb.AdminManagementLive do
     end
   end
 
+  def handle_event(
+        "change_venue",
+        %{"target_id" => id, "venue" => %{"venue_id" => venue_id}},
+        socket
+      ) do
+    with %Admin{} = target <- find_admin(socket, id),
+         {:ok, _target} <-
+           Accounts.update_admin_venue(socket.assigns.current_admin, target, venue_id) do
+      {:noreply, socket |> put_flash(:info, "Venue assignment updated.") |> load_admins()}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "That admin no longer exists.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You can't change that venue assignment.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update that venue assignment.")}
+    end
+  end
+
   def handle_event("toggle_suspend", %{"id" => id}, socket) do
     with %Admin{} = target <- find_admin(socket, id),
          result <-
@@ -111,6 +134,10 @@ defmodule CuevolutionWeb.AdminManagementLive do
 
   defp load_admins(socket) do
     assign(socket, :admins, Accounts.list_admins())
+  end
+
+  defp venue_options do
+    Venues.list_venues(%{active: true}) |> Enum.map(&{&1.name, &1.id})
   end
 
   defp find_admin(socket, id), do: Enum.find(socket.assigns.admins, &(&1.id == id))

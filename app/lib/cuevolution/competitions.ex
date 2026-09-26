@@ -1544,8 +1544,43 @@ defmodule Cuevolution.Competitions do
     |> preload([
       :venue,
       round: [group: :stage],
+      participant_a: [:player, :stage, team: :captain],
+      participant_b: [:player, :stage, team: :captain]
+    ])
+    |> Repo.all()
+  end
+
+  @doc "Upcoming Grassroots fixtures in a player's preferred venue, excluding their own fixtures."
+  def upcoming_fixtures_for_venue(venue_id, player_id) do
+    own_fixture_ids = fixture_ids_for_player_query(player_id)
+
+    Fixture
+    |> join(:inner, [f], r in Round, on: r.id == f.round_id)
+    |> join(:inner, [f, r], g in Group, on: g.id == r.group_id)
+    |> where([f, _r, g], is_nil(f.result_id) and g.venue_id == ^venue_id)
+    |> where([f], f.id not in subquery(own_fixture_ids))
+    |> order_by([f], asc: f.scheduled_at, asc: f.match_id)
+    |> preload([
+      :venue,
+      participant_a: [:player, :stage, team: :captain],
+      participant_b: [:player, :stage, team: :captain],
+      round: [group: [:venue, :stage], stage: []]
+    ])
+    |> Repo.all()
+  end
+
+  @doc "All fixtures associated with a venue, including fixtures from every Grassroots group there."
+  def list_fixtures_for_venue(venue_id) do
+    Fixture
+    |> join(:left, [f], r in Round, on: r.id == f.round_id)
+    |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
+    |> where([f, _r, g], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
+    |> order_by([f], asc: f.scheduled_at, asc: f.inserted_at)
+    |> preload([
+      :venue,
       participant_a: [:player, :team, :stage],
-      participant_b: [:player, :team, :stage]
+      participant_b: [:player, :team, :stage],
+      round: [group: [:venue, :stage], stage: []]
     ])
     |> Repo.all()
   end

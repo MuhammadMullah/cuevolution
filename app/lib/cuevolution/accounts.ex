@@ -100,7 +100,12 @@ defmodule Cuevolution.Accounts do
 
   @doc "Lists all active and suspended admins for the admin-management page, most recently invited first."
   def list_admins do
-    Repo.all(from a in Admin, where: is_nil(a.removed_at), order_by: [desc: a.inserted_at])
+    Repo.all(
+      from a in Admin,
+        where: is_nil(a.removed_at),
+        order_by: [desc: a.inserted_at],
+        preload: :venue
+    )
   end
 
   @doc """
@@ -152,6 +157,17 @@ defmodule Cuevolution.Accounts do
       |> Ecto.Changeset.change(role: role)
       |> Repo.update()
       |> log_admin_change(actor, target, "update_admin_role", role)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def update_admin_venue(%Admin{} = actor, %Admin{} = target, venue_id) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         target.role == "venue_representative" do
+      target
+      |> Admin.venue_changeset(%{venue_id: venue_id})
+      |> Repo.update()
     else
       {:error, :unauthorized}
     end

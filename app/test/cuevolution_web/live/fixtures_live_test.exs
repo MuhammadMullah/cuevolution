@@ -57,7 +57,14 @@ defmodule CuevolutionWeb.FixturesLiveTest do
     grassroots = Repo.get_by!(Competitions.Stage, name: "Grassroots")
     region = build(:region)
     player = insert(:player, region_id: region.id, gender: "male")
-    opponent = insert(:player, region_id: region.id, gender: "male", first_name: "Kevin")
+
+    opponent =
+      insert(:player,
+        region_id: region.id,
+        gender: "male",
+        first_name: "Kevin",
+        mobile_number: "+254711223344"
+      )
 
     mine =
       insert(:stage_participation,
@@ -76,6 +83,7 @@ defmodule CuevolutionWeb.FixturesLiveTest do
       )
 
     venue = insert(:venue, name: "Nairobi Sports Club", region_id: region.id)
+    player = Repo.update!(Ecto.Changeset.change(player, preferred_venue_id: venue.id))
 
     {:ok, group} =
       Competitions.create_group(%{
@@ -111,7 +119,108 @@ defmodule CuevolutionWeb.FixturesLiveTest do
 
     assert html =~ "A new draw has been published"
     assert html =~ "Kevin"
+    assert html =~ "+254711223344"
+    assert html =~ ~s(href="tel:+254711223344")
     assert html =~ "Nairobi Sports Club"
+    refute html =~ "Other fixtures at"
     refute html =~ "No upcoming fixtures"
+  end
+
+  test "shows upcoming fixtures from other groups at the player's venue", %{conn: conn} do
+    grassroots = Repo.get_by!(Competitions.Stage, name: "Grassroots")
+    region = build(:region)
+    venue = insert(:venue, name: "Westlands Club", region_id: region.id)
+    player = insert(:player, region_id: region.id, gender: "male", preferred_venue_id: venue.id)
+    opponent = insert(:player, region_id: region.id, gender: "male", first_name: "Kevin")
+    other_a = insert(:player, region_id: region.id, gender: "male", first_name: "Amina")
+    other_b = insert(:player, region_id: region.id, gender: "male", first_name: "Brian")
+
+    player_participation =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player.id
+      )
+
+    opponent_participation =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: opponent.id
+      )
+
+    other_a_participation =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: other_a.id
+      )
+
+    other_b_participation =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: other_b.id
+      )
+
+    {:ok, group_a} =
+      Competitions.create_group(%{
+        stage_id: grassroots.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Group A"
+      })
+
+    {:ok, group_b} =
+      Competitions.create_group(%{
+        stage_id: grassroots.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Group B"
+      })
+
+    Competitions.assign_to_group(player_participation, group_a)
+    Competitions.assign_to_group(opponent_participation, group_a)
+    Competitions.assign_to_group(other_a_participation, group_b)
+    Competitions.assign_to_group(other_b_participation, group_b)
+
+    {:ok, round_a} =
+      Competitions.create_round(%{stage_id: grassroots.id, group_id: group_a.id, name: "Round 1"})
+
+    {:ok, round_b} =
+      Competitions.create_round(%{stage_id: grassroots.id, group_id: group_b.id, name: "Round 1"})
+
+    assert [{:ok, _fixture}] =
+             Competitions.enter_fixtures(round_a, [fixture_row(player.id, opponent.id, venue.id)])
+
+    assert [{:ok, _fixture}] =
+             Competitions.enter_fixtures(round_b, [fixture_row(other_a.id, other_b.id, venue.id)])
+
+    conn = log_in_player(conn, player)
+    {:ok, _view, html} = live(conn, ~p"/fixtures")
+
+    assert html =~ "Other fixtures at Westlands Club"
+    assert html =~ "Group B"
+    assert html =~ "Amina"
+    assert html =~ "Brian"
+  end
+
+  defp fixture_row(player_a_id, player_b_id, venue_id) do
+    %{
+      "category" => "male",
+      "a_kind" => "player",
+      "a_id" => player_a_id,
+      "b_kind" => "player",
+      "b_id" => player_b_id,
+      "venue_id" => venue_id,
+      "date" => "2026-09-01",
+      "time" => "15:00"
+    }
   end
 end

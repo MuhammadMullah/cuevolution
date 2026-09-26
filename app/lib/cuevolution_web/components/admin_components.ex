@@ -66,6 +66,7 @@ defmodule CuevolutionWeb.AdminComponents do
     {"Stages", "◆", "/admin/stages"},
     {"Groups", "▤", "/admin/groups"},
     {"Draws", "⚏", "/admin/draws"},
+    {"Venue fixtures", "☎", "/admin/venue-fixtures"},
     {"Results & Points", "◔", "/admin/results"},
     {"Directory", "☰", "/admin/players"},
     {"Audit Log", "◷", "/admin/audit-log"},
@@ -82,7 +83,7 @@ defmodule CuevolutionWeb.AdminComponents do
   attr :active, :atom,
     required: true,
     doc:
-      "one of :dashboard, :stages, :groups, :draws, :results, :directory, :venues, :notifications, :admins"
+      "one of :dashboard, :stages, :groups, :draws, :venue_fixtures, :results, :directory, :venues, :notifications, :admins"
 
   attr :flash, :map, required: true
   slot :inner_block, required: true
@@ -235,6 +236,7 @@ defmodule CuevolutionWeb.AdminComponents do
   defp nav_active?(active, "/admin/stages"), do: active == :stages
   defp nav_active?(active, "/admin/groups"), do: active == :groups
   defp nav_active?(active, "/admin/draws"), do: active == :draws
+  defp nav_active?(active, "/admin/venue-fixtures"), do: active == :venue_fixtures
   defp nav_active?(active, "/admin/results"), do: active == :results
   defp nav_active?(active, "/admin/players"), do: active == :directory
   defp nav_active?(active, "/admin/venues"), do: active == :venues
@@ -250,6 +252,7 @@ defmodule CuevolutionWeb.AdminComponents do
   defp permitted_nav_items(admin) do
     Enum.filter(@nav_items, fn
       {_, _, "/admin/draws"} -> Admin.can?(admin, :manage_fixtures)
+      {_, _, "/admin/venue-fixtures"} -> Admin.can?(admin, :manage_fixtures)
       {_, _, "/admin/results"} -> Admin.can?(admin, :record_results)
       {_, _, "/admin/stages"} -> Admin.can?(admin, :manage_stages)
       {_, _, "/admin/groups"} -> Admin.can?(admin, :manage_groups)

@@ -89,6 +89,7 @@ defmodule CuevolutionWeb.Router do
         {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_fixtures}}
       ] do
       live "/draws", AdminDrawsLive, :index
+      live "/venue-fixtures", VenueFixturesLive, :index
     end
 
     live_session :admin_result_operations,
@@ -121,6 +122,7 @@ defmodule CuevolutionWeb.Router do
 
     get "/directory/export.csv", AdminDirectoryExportController, :csv
     get "/directory/export.xlsx", AdminDirectoryExportController, :xlsx
+    get "/venue-fixtures/export.csv", VenueFixturesExportController, :csv
 
     live_session :admin_team_management,
       on_mount: [

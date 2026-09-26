@@ -35,6 +35,8 @@ defmodule Cuevolution.Accounts.Admin do
     field :password, :string, virtual: true
     field :password_confirmation, :string, virtual: true
 
+    belongs_to :venue, Cuevolution.Venues.Venue
+
     timestamps()
   end
 
@@ -97,11 +99,19 @@ defmodule Cuevolution.Accounts.Admin do
   """
   def invite_changeset(admin, attrs) do
     admin
-    |> cast(attrs, [:email, :role])
+    |> cast(attrs, [:email, :role, :venue_id])
     |> validate_required([:email, :role])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_inclusion(:role, @invitable_roles)
+    |> validate_venue_assignment()
     |> unique_constraint(:email)
+  end
+
+  def venue_changeset(admin, attrs) do
+    admin
+    |> cast(attrs, [:venue_id])
+    |> validate_required(:venue_id)
+    |> foreign_key_constraint(:venue_id)
   end
 
   @doc "Completes an invited admin's account setup: sets password and mobile number."
@@ -126,6 +136,19 @@ defmodule Cuevolution.Accounts.Admin do
           {:ok, e164} -> put_change(changeset, :mobile_number, e164)
           :error -> add_error(changeset, :mobile_number, "is not a valid mobile number")
         end
+    end
+  end
+
+  defp validate_venue_assignment(changeset) do
+    case {get_field(changeset, :role), get_field(changeset, :venue_id)} do
+      {"venue_representative", nil} ->
+        add_error(changeset, :venue_id, "must be assigned to a venue")
+
+      {role, venue_id} when role != "venue_representative" and not is_nil(venue_id) ->
+        add_error(changeset, :venue_id, "is only used for venue representatives")
+
+      _ ->
+        changeset
     end
   end
 

@@ -31,6 +31,15 @@
           class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
         />
       </div>
+      <div class="min-w-[220px]">
+        <.input
+          field={@form[:venue_id]}
+          type="select"
+          options={@venue_options}
+          prompt="Venue (for venue reps)"
+          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+        />
+      </div>
       <button
         type="submit"
         class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
@@ -78,6 +87,24 @@
         >
           Protected — Super Admin accounts cannot be managed by Tournament Directors.
         </div>
+      </div>
+      <div :if={admin.role == "venue_representative"} class="w-full sm:w-[240px]">
+        <.form
+          for={to_form(%{"venue_id" => admin.venue_id}, as: :venue)}
+          id={"venue-form-#{admin.id}"}
+          phx-change="change_venue"
+        >
+          <input type="hidden" name="target_id" value={admin.id} />
+          <.input
+            field={to_form(%{"venue_id" => admin.venue_id}, as: :venue)[:venue_id]}
+            type="select"
+            options={@venue_options}
+            prompt="Assign venue"
+            disabled={!Admin.manageable_by?(@current_admin, admin)}
+            aria-label={"Venue for #{admin.email}"}
+            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </.form>
       </div>
       <div
         :if={admin.id != @current_admin.id and Admin.manageable_by?(@current_admin, admin)}

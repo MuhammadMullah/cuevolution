@@ -10,15 +10,18 @@ defmodule CuevolutionWeb.FixturesLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Competitions
+  alias Cuevolution.Repo
   alias CuevolutionWeb.PlayerComponents
 
   def mount(_params, _session, socket) do
-    player = socket.assigns.current_player
+    player = Repo.preload(socket.assigns.current_player, :preferred_venue)
 
     {:ok,
      assign(socket,
        page_title: "Fixtures",
        upcoming: upcoming_fixtures(player),
+       venue_fixtures: venue_fixtures(player),
+       venue_name: player.preferred_venue && player.preferred_venue.name,
        results: recent_results(player)
      )}
   end
@@ -30,6 +33,14 @@ defmodule CuevolutionWeb.FixturesLive do
     player.id
     |> Competitions.upcoming_fixtures_for_player()
     |> Enum.map(&present_fixture(&1, player))
+  end
+
+  defp venue_fixtures(%{preferred_venue_id: nil}), do: []
+
+  defp venue_fixtures(player) do
+    player.preferred_venue_id
+    |> Competitions.upcoming_fixtures_for_venue(player.id)
+    |> Enum.map(&present_venue_fixture/1)
   end
 
   # Grassroots auto-generated fixtures carry no `scheduled_at`/`venue_id` at
@@ -45,6 +56,7 @@ defmodule CuevolutionWeb.FixturesLive do
       type: if(mine.category == "team", do: "Team", else: "Individual"),
       stage: String.downcase(mine.stage.name),
       opponent: Competitions.participant_name(opponent),
+      opponent_phone: participant_phone(opponent),
       match_id: fixture.match_id,
       deadline: grassroots_deadline_label(fixture)
     }
@@ -59,6 +71,7 @@ defmodule CuevolutionWeb.FixturesLive do
       type: if(mine.category == "team", do: "Team", else: "Individual"),
       stage: String.downcase(mine.stage.name),
       opponent: Competitions.participant_name(opponent),
+      opponent_phone: participant_phone(opponent),
       date: Calendar.strftime(eat, "%b %-d, %Y"),
       time: Calendar.strftime(eat, "%H:%M"),
       venue: fixture.venue.name
@@ -83,6 +96,37 @@ defmodule CuevolutionWeb.FixturesLive do
 
   defp mine?(%{player_id: nil, team_id: team_id}, player), do: team_id == player.team_id
   defp mine?(%{player_id: player_id}, player), do: player_id == player.id
+
+  defp participant_phone(%{player: %{mobile_number: mobile_number}}), do: mobile_number
+  defp participant_phone(%{team: %{captain: %{mobile_number: mobile_number}}}), do: mobile_number
+
+  defp present_venue_fixture(fixture) do
+    group = fixture.round.group
+
+    %{
+      group: group.name,
+      match_id: fixture.match_id,
+      participant_a: Competitions.participant_name(fixture.participant_a),
+      participant_b: Competitions.participant_name(fixture.participant_b),
+      scheduled?: not is_nil(fixture.scheduled_at),
+      date: fixture_date(fixture),
+      time: fixture_time(fixture),
+      deadline: venue_fixture_deadline(group)
+    }
+  end
+
+  defp fixture_date(%{scheduled_at: nil}), do: nil
+
+  defp fixture_date(%{scheduled_at: scheduled_at}),
+    do: Calendar.strftime(scheduled_at, "%b %-d, %Y")
+
+  defp fixture_time(%{scheduled_at: nil}), do: nil
+  defp fixture_time(%{scheduled_at: scheduled_at}), do: Calendar.strftime(scheduled_at, "%H:%M")
+
+  defp venue_fixture_deadline(%{stage: %{completion_deadline: nil}}), do: "Not set yet"
+
+  defp venue_fixture_deadline(%{stage: %{completion_deadline: deadline}}),
+    do: Calendar.strftime(deadline, "%b %-d, %Y")
 
   defp recent_results(player) do
     player.id
