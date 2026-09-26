@@ -83,6 +83,15 @@ defmodule CuevolutionWeb.FixturesLiveTest do
       )
 
     venue = insert(:venue, name: "Nairobi Sports Club", region_id: region.id)
+
+    venue_rep =
+      insert(:admin,
+        role: "venue_representative",
+        venue_id: venue.id,
+        email: "venue.rep@cuevolution.test",
+        mobile_number: "+254700123456"
+      )
+
     player = Repo.update!(Ecto.Changeset.change(player, preferred_venue_id: venue.id))
 
     {:ok, group} =
@@ -122,6 +131,9 @@ defmodule CuevolutionWeb.FixturesLiveTest do
     assert html =~ "+254711223344"
     assert html =~ ~s(href="tel:+254711223344")
     assert html =~ "Nairobi Sports Club"
+    assert html =~ venue_rep.email
+    assert html =~ venue_rep.mobile_number
+    assert html =~ ~s(href="tel:#{venue_rep.mobile_number}")
     refute html =~ "Other fixtures at"
     refute html =~ "No upcoming fixtures"
   end

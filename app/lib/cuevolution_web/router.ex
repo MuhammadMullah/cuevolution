@@ -122,7 +122,7 @@ defmodule CuevolutionWeb.Router do
 
     get "/directory/export.csv", AdminDirectoryExportController, :csv
     get "/directory/export.xlsx", AdminDirectoryExportController, :xlsx
-    get "/venue-fixtures/export.csv", VenueFixturesExportController, :csv
+    get "/venue-fixtures/export.pdf", VenueFixturesExportController, :pdf
 
     live_session :admin_team_management,
       on_mount: [

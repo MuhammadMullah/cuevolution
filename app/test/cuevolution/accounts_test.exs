@@ -6,6 +6,7 @@ defmodule Cuevolution.AccountsTest do
   alias Cuevolution.Accounts.AdminActionLog
   alias Cuevolution.Accounts.AdminToken
   alias Cuevolution.Accounts.Player
+  alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
   alias Cuevolution.Teams
 
@@ -119,11 +120,16 @@ defmodule Cuevolution.AccountsTest do
 
     test "logs the invite against the inviting admin" do
       inviter = insert(:admin, role: "super_admin")
+      region = hd(Repo.all(Region))
 
       {:ok, invited} =
         Accounts.invite_admin(
           inviter,
-          %{"email" => "logged@cuevolution.test", "role" => "regional_coordinator"},
+          %{
+            "email" => "logged@cuevolution.test",
+            "role" => "regional_coordinator",
+            "region_id" => region.id
+          },
           &"https://cuevolution.test/admin/setup/#{&1}"
         )
 

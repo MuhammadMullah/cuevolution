@@ -104,7 +104,7 @@ defmodule Cuevolution.Accounts do
       from a in Admin,
         where: is_nil(a.removed_at),
         order_by: [desc: a.inserted_at],
-        preload: :venue
+        preload: [:venue, :region]
     )
   end
 
@@ -171,6 +171,41 @@ defmodule Cuevolution.Accounts do
     else
       {:error, :unauthorized}
     end
+  end
+
+  def update_admin_region(%Admin{} = actor, %Admin{} = target, region_id) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         target.role == "regional_coordinator" do
+      target
+      |> Admin.region_changeset(%{region_id: region_id})
+      |> Repo.update()
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def update_admin_mobile(%Admin{} = actor, %Admin{} = target, mobile_number) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) do
+      target
+      |> Admin.mobile_changeset(%{mobile_number: mobile_number})
+      |> Repo.update()
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  @doc "Returns the active venue representative responsible for a venue, if one is assigned."
+  def venue_representative_for_venue(nil), do: nil
+
+  def venue_representative_for_venue(venue_id) do
+    Repo.one(
+      from a in Admin,
+        where:
+          a.role == "venue_representative" and a.venue_id == ^venue_id and
+            is_nil(a.suspended_at) and is_nil(a.removed_at),
+        order_by: [asc: a.inserted_at],
+        limit: 1
+    )
   end
 
   def suspend_admin(%Admin{} = actor, %Admin{} = target) do

@@ -4,6 +4,7 @@ defmodule CuevolutionWeb.VenueFixturesLiveTest do
   import Phoenix.LiveViewTest
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions.{Fixture, Stage, StageParticipation}
   alias Cuevolution.Repo
 
@@ -57,39 +58,148 @@ defmodule CuevolutionWeb.VenueFixturesLiveTest do
     assert render(view) =~ "not assigned to a venue yet"
   end
 
-  test "venue representatives can download only their venue fixtures as csv", %{conn: conn} do
+  test "regional representatives see all regional fixtures and can filter by venue", %{conn: conn} do
+    [region | regions] = Repo.all(Region)
+    outside_region = Enum.find(regions, &(&1.id != region.id))
+    venue = insert(:venue, region_id: region.id)
+    other_venue = insert(:venue, region_id: region.id)
+    outside_venue = insert(:venue, region_id: outside_region.id)
+    stage = Cuevolution.Repo.get_by!(Stage, order: 1)
+
+    {_fixture, searchable_player, _other_player} =
+      venue_fixture(venue, stage, "Regional A", "REGIONAL-A", "+254700000011", "+254700000012")
+
+    venue_fixture(
+      other_venue,
+      stage,
+      "Regional B",
+      "REGIONAL-B",
+      "+254700000013",
+      "+254700000014"
+    )
+
+    venue_fixture(
+      outside_venue,
+      stage,
+      "Outside region",
+      "OUTSIDE-REGION",
+      "+254700000015",
+      "+254700000016"
+    )
+
+    admin = insert(:admin, role: "regional_coordinator", region_id: region.id)
+    conn = log_in_admin(conn, admin)
+
+    {:ok, view, _html} = live(conn, ~p"/admin/venue-fixtures")
+
+    assert has_element?(view, "#venue-filter-form")
+    assert render(view) =~ "REGIONAL-A"
+    assert render(view) =~ "REGIONAL-B"
+    refute render(view) =~ "OUTSIDE-REGION"
+
+    view
+    |> element("#venue-filter-form")
+    |> render_change(%{"venue_id" => venue.id})
+
+    assert render(view) =~ "REGIONAL-A"
+    refute render(view) =~ "REGIONAL-B"
+    refute render(view) =~ "OUTSIDE-REGION"
+
+    view
+    |> element("#venue-filter-form")
+    |> render_change(%{
+      "venue_id" => venue.id,
+      "group_name" => "Regional A",
+      "player_search" => searchable_player.username
+    })
+
+    assert render(view) =~ "REGIONAL-A"
+    refute render(view) =~ "REGIONAL-B"
+    assert has_element?(view, "#group-filter")
+    assert has_element?(view, "#player-search")
+  end
+
+  test "venue representatives can download only their venue fixtures as pdf", %{conn: conn} do
     venue = insert(:venue)
     other_venue = insert(:venue)
     stage = Cuevolution.Repo.get_by!(Stage, order: 1)
 
     {_fixture, player_one, player_two} =
-      venue_fixture(venue, stage, "Group A", "A-CSV", "+254799990001", "+254799990002")
+      venue_fixture(venue, stage, "Group A", "A-PDF", "+254799990001", "+254799990002")
 
     {_fixture, other_player_one, other_player_two} =
       venue_fixture(
         other_venue,
         stage,
         "Other group",
-        "OTHER-CSV",
+        "OTHER-PDF",
         "+254799990003",
         "+254799990004"
       )
 
     conn
     |> log_in_admin(insert(:admin, role: "venue_representative", venue_id: venue.id))
-    |> get(~p"/admin/venue-fixtures/export.csv")
+    |> get(~p"/admin/venue-fixtures/export.pdf")
     |> then(fn conn ->
-      assert response(conn, 200) =~ "A-CSV"
-      assert response(conn, 200) =~ player_one.mobile_number
-      assert response(conn, 200) =~ player_two.mobile_number
-      refute response(conn, 200) =~ "OTHER-CSV"
+      assert response(conn, 200) =~ "A-PDF"
+      refute response(conn, 200) =~ player_one.mobile_number
+      refute response(conn, 200) =~ player_two.mobile_number
+      refute response(conn, 200) =~ "OTHER-PDF"
       refute response(conn, 200) =~ other_player_one.mobile_number
       refute response(conn, 200) =~ other_player_two.mobile_number
-      assert response_content_type(conn, :csv) =~ "text/csv"
+      assert response_content_type(conn, :pdf) =~ "application/pdf"
 
       assert get_resp_header(conn, "content-disposition") == [
-               ~s(attachment; filename="venue-fixtures-#{Date.utc_today()}.csv")
+               ~s(attachment; filename="venue-fixtures-#{Date.utc_today()}.pdf")
              ]
+    end)
+  end
+
+  test "regional representatives can download all or one venue in their region as pdf", %{
+    conn: conn
+  } do
+    [region | regions] = Repo.all(Region)
+    outside_region = Enum.find(regions, &(&1.id != region.id))
+    venue = insert(:venue, region_id: region.id)
+    other_venue = insert(:venue, region_id: region.id)
+    outside_venue = insert(:venue, region_id: outside_region.id)
+    stage = Cuevolution.Repo.get_by!(Stage, order: 1)
+
+    venue_fixture(
+      venue,
+      stage,
+      "Regional PDF A",
+      "REGIONAL-PDF-A",
+      "+254700000021",
+      "+254700000022"
+    )
+
+    venue_fixture(
+      other_venue,
+      stage,
+      "Regional PDF B",
+      "REGIONAL-PDF-B",
+      "+254700000023",
+      "+254700000024"
+    )
+
+    venue_fixture(
+      outside_venue,
+      stage,
+      "Outside PDF",
+      "OUTSIDE-PDF",
+      "+254700000025",
+      "+254700000026"
+    )
+
+    conn = log_in_admin(conn, insert(:admin, role: "regional_coordinator", region_id: region.id))
+
+    conn
+    |> get(~p"/admin/venue-fixtures/export.pdf?venue_id=#{other_venue.id}")
+    |> then(fn conn ->
+      assert response(conn, 200) =~ "REGIONAL-PDF-B"
+      refute response(conn, 200) =~ "REGIONAL-PDF-A"
+      refute response(conn, 200) =~ "OUTSIDE-PDF"
     end)
   end
 

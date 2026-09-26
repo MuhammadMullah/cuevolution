@@ -65,8 +65,7 @@ defmodule Cuevolution.Notifications do
   to "pending" and inserts a fresh Oban job.
 
   `limit` exists because a mass failure is often the *provider* throttling
-  under a big burst (e.g. Gmail SMTP's ~500/day cap on a single account,
-  see the 2026-09 draw-published incident) — re-queuing everything at once
+  under a big burst (see the 2026-09 draw-published incident) — re-queuing everything at once
   would immediately re-trigger the same throttling. Call this again for
   the next batch once you're confident there's send quota available,
   rather than draining the whole backlog in one shot.

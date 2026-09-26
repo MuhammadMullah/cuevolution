@@ -16,7 +16,8 @@ defmodule CuevolutionWeb.AdminManagementLive do
      |> assign(
        page_title: "Admins",
        role_options: Enum.map(Admin.invitable_roles(), &{Admin.role_label(&1), &1}),
-       venue_options: venue_options()
+       venue_options: venue_options(),
+       region_options: region_options()
      )
      |> assign_form(Admin.invite_changeset(%Admin{}, %{}))
      |> load_admins()}
@@ -93,6 +94,48 @@ defmodule CuevolutionWeb.AdminManagementLive do
     end
   end
 
+  def handle_event(
+        "change_region",
+        %{"target_id" => id, "region" => %{"region_id" => region_id}},
+        socket
+      ) do
+    with %Admin{} = target <- find_admin(socket, id),
+         {:ok, _target} <-
+           Accounts.update_admin_region(socket.assigns.current_admin, target, region_id) do
+      {:noreply, socket |> put_flash(:info, "Region assignment updated.") |> load_admins()}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "That admin no longer exists.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You can't change that region assignment.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update that region assignment.")}
+    end
+  end
+
+  def handle_event(
+        "change_mobile",
+        %{"target_id" => id, "admin" => %{"mobile_number" => mobile_number}},
+        socket
+      ) do
+    with %Admin{} = target <- find_admin(socket, id),
+         {:ok, _target} <-
+           Accounts.update_admin_mobile(socket.assigns.current_admin, target, mobile_number) do
+      {:noreply, socket |> put_flash(:info, "Mobile number updated.") |> load_admins()}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "That admin no longer exists.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You can't change that mobile number.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update that mobile number.")}
+    end
+  end
+
   def handle_event("toggle_suspend", %{"id" => id}, socket) do
     with %Admin{} = target <- find_admin(socket, id),
          result <-
@@ -138,6 +181,10 @@ defmodule CuevolutionWeb.AdminManagementLive do
 
   defp venue_options do
     Venues.list_venues(%{active: true}) |> Enum.map(&{&1.name, &1.id})
+  end
+
+  defp region_options do
+    Accounts.list_regions() |> Enum.map(&{&1.name, &1.id})
   end
 
   defp find_admin(socket, id), do: Enum.find(socket.assigns.admins, &(&1.id == id))

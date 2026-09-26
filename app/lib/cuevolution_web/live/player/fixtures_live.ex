@@ -10,6 +10,7 @@ defmodule CuevolutionWeb.FixturesLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Competitions
+  alias Cuevolution.Accounts
   alias Cuevolution.Repo
   alias CuevolutionWeb.PlayerComponents
 
@@ -22,6 +23,7 @@ defmodule CuevolutionWeb.FixturesLive do
        upcoming: upcoming_fixtures(player),
        venue_fixtures: venue_fixtures(player),
        venue_name: player.preferred_venue && player.preferred_venue.name,
+       venue_representative: Accounts.venue_representative_for_venue(player.preferred_venue_id),
        results: recent_results(player)
      )}
   end

@@ -36,6 +36,7 @@ defmodule Cuevolution.Accounts.Admin do
     field :password_confirmation, :string, virtual: true
 
     belongs_to :venue, Cuevolution.Venues.Venue
+    belongs_to :region, Cuevolution.Accounts.Region
 
     timestamps()
   end
@@ -99,12 +100,14 @@ defmodule Cuevolution.Accounts.Admin do
   """
   def invite_changeset(admin, attrs) do
     admin
-    |> cast(attrs, [:email, :role, :venue_id])
+    |> cast(attrs, [:email, :role, :venue_id, :region_id, :mobile_number])
     |> validate_required([:email, :role])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_inclusion(:role, @invitable_roles)
-    |> validate_venue_assignment()
+    |> validate_scope_assignment()
+    |> normalize_mobile_number()
     |> unique_constraint(:email)
+    |> unique_constraint(:mobile_number)
   end
 
   def venue_changeset(admin, attrs) do
@@ -112,6 +115,21 @@ defmodule Cuevolution.Accounts.Admin do
     |> cast(attrs, [:venue_id])
     |> validate_required(:venue_id)
     |> foreign_key_constraint(:venue_id)
+  end
+
+  def region_changeset(admin, attrs) do
+    admin
+    |> cast(attrs, [:region_id])
+    |> validate_required(:region_id)
+    |> foreign_key_constraint(:region_id)
+  end
+
+  def mobile_changeset(admin, attrs) do
+    admin
+    |> cast(attrs, [:mobile_number])
+    |> validate_required(:mobile_number)
+    |> normalize_mobile_number()
+    |> unique_constraint(:mobile_number)
   end
 
   @doc "Completes an invited admin's account setup: sets password and mobile number."
@@ -131,6 +149,9 @@ defmodule Cuevolution.Accounts.Admin do
       nil ->
         changeset
 
+      "" ->
+        changeset
+
       raw ->
         case PhoneNumber.normalize(raw) do
           {:ok, e164} -> put_change(changeset, :mobile_number, e164)
@@ -139,15 +160,33 @@ defmodule Cuevolution.Accounts.Admin do
     end
   end
 
-  defp validate_venue_assignment(changeset) do
-    case {get_field(changeset, :role), get_field(changeset, :venue_id)} do
-      {"venue_representative", nil} ->
-        add_error(changeset, :venue_id, "must be assigned to a venue")
+  defp validate_scope_assignment(changeset) do
+    role = get_field(changeset, :role)
+    venue_id = get_field(changeset, :venue_id)
+    region_id = get_field(changeset, :region_id)
 
-      {role, venue_id} when role != "venue_representative" and not is_nil(venue_id) ->
+    changeset
+    |> validate_required_scope(role, venue_id, region_id)
+    |> validate_scope_not_used(role, venue_id, region_id)
+  end
+
+  defp validate_required_scope(changeset, "venue_representative", nil, _region_id),
+    do: add_error(changeset, :venue_id, "must be assigned to a venue")
+
+  defp validate_required_scope(changeset, "regional_coordinator", _venue_id, nil),
+    do: add_error(changeset, :region_id, "must be assigned to a region")
+
+  defp validate_required_scope(changeset, _role, _venue_id, _region_id), do: changeset
+
+  defp validate_scope_not_used(changeset, role, venue_id, region_id) do
+    cond do
+      role != "venue_representative" and not is_nil(venue_id) ->
         add_error(changeset, :venue_id, "is only used for venue representatives")
 
-      _ ->
+      role != "regional_coordinator" and not is_nil(region_id) ->
+        add_error(changeset, :region_id, "is only used for regional coordinators")
+
+      true ->
         changeset
     end
   end

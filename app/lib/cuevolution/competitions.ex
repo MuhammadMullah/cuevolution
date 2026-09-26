@@ -1578,11 +1578,37 @@ defmodule Cuevolution.Competitions do
     |> order_by([f], asc: f.scheduled_at, asc: f.inserted_at)
     |> preload([
       :venue,
+      :result,
       participant_a: [:player, :team, :stage],
       participant_b: [:player, :team, :stage],
       round: [group: [:venue, :stage], stage: []]
     ])
     |> Repo.all()
+  end
+
+  @doc "All fixtures in a region, optionally filtered to one venue in that region."
+  def list_fixtures_for_region(region_id, venue_id \\ nil) do
+    Fixture
+    |> join(:left, [f], r in Round, on: r.id == f.round_id)
+    |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
+    |> join(:left, [f, _r, _g], v in assoc(f, :venue))
+    |> where([_f, _r, g, v], v.region_id == ^region_id or g.region_id == ^region_id)
+    |> filter_fixtures_by_venue(venue_id)
+    |> order_by([f], asc: f.scheduled_at, asc: f.inserted_at)
+    |> preload([
+      :venue,
+      :result,
+      participant_a: [:player, :stage, team: :captain],
+      participant_b: [:player, :stage, team: :captain],
+      round: [group: [:venue, :stage], stage: []]
+    ])
+    |> Repo.all()
+  end
+
+  defp filter_fixtures_by_venue(query, nil), do: query
+
+  defp filter_fixtures_by_venue(query, venue_id) do
+    where(query, [f, _r, g, _v], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
   end
 
   defp fixture_ids_for_player_query(player_id) do

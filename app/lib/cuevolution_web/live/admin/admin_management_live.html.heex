@@ -33,11 +33,28 @@
       </div>
       <div class="min-w-[220px]">
         <.input
+          field={@form[:region_id]}
+          type="select"
+          options={@region_options}
+          prompt="Region (for regional reps)"
+          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+        />
+      </div>
+      <div class="min-w-[220px]">
+        <.input
           field={@form[:venue_id]}
           type="select"
           options={@venue_options}
           prompt="Venue (for venue reps)"
           class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+        />
+      </div>
+      <div class="min-w-[220px]">
+        <.input
+          field={@form[:mobile_number]}
+          type="tel"
+          placeholder="Mobile number"
+          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
         />
       </div>
       <button
@@ -60,10 +77,33 @@
       <div class="min-w-0 flex-1">
         <div class="text-[14.5px] font-semibold text-ink-950">{admin.email}</div>
         <div class="text-[12.5px] text-ink-500">{Admin.role_label(admin.role)}</div>
+        <div class="mt-1 text-[12.5px] text-ink-500">
+          {admin.mobile_number || "Mobile number not provided"}
+        </div>
       </div>
       <span class={["rounded-full px-2.5 py-1 text-xs font-semibold", status_badge_class(admin)]}>
         {status_label(admin)}
       </span>
+      <div class="w-full sm:w-[220px]">
+        <.form
+          :if={Admin.manageable_by?(@current_admin, admin)}
+          for={to_form(%{"mobile_number" => admin.mobile_number || ""}, as: :admin)}
+          id={"mobile-form-#{admin.id}"}
+          phx-submit="change_mobile"
+        >
+          <input type="hidden" name="target_id" value={admin.id} />
+          <.input
+            field={
+              to_form(%{"mobile_number" => admin.mobile_number || ""}, as: :admin)[:mobile_number]
+            }
+            id={"mobile-#{admin.id}"}
+            type="tel"
+            placeholder="Add mobile number"
+            aria-label={"Mobile number for #{admin.email}"}
+            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </.form>
+      </div>
       <div class="w-full sm:w-[220px]">
         <.form
           for={to_form(%{"role" => admin.role}, as: :role)}
@@ -102,6 +142,24 @@
             prompt="Assign venue"
             disabled={!Admin.manageable_by?(@current_admin, admin)}
             aria-label={"Venue for #{admin.email}"}
+            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </.form>
+      </div>
+      <div :if={admin.role == "regional_coordinator"} class="w-full sm:w-[240px]">
+        <.form
+          for={to_form(%{"region_id" => admin.region_id}, as: :region)}
+          id={"region-form-#{admin.id}"}
+          phx-change="change_region"
+        >
+          <input type="hidden" name="target_id" value={admin.id} />
+          <.input
+            field={to_form(%{"region_id" => admin.region_id}, as: :region)[:region_id]}
+            type="select"
+            options={@region_options}
+            prompt="Assign region"
+            disabled={!Admin.manageable_by?(@current_admin, admin)}
+            aria-label={"Region for #{admin.email}"}
             class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
           />
         </.form>
