@@ -187,7 +187,9 @@
               <span class="shrink-0 rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-ink-500">
                 LOCKED
               </span>
-              <span>Your region can't be changed — you've already played a match.</span>
+              <span>
+                Your region and venue can't be changed — you've already been drawn or played a match.
+              </span>
             </div>
             <div class="mb-4 flex flex-col items-start gap-1 border-b border-ink-100 pb-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <span class="text-sm text-ink-500">Region</span>
@@ -195,21 +197,14 @@
                 {@current_player.region.name}
               </span>
             </div>
-            <label class="mb-1.5 block text-sm font-semibold text-ink-700">Preferred venue</label>
-            <form phx-change="change_venue">
-              <select
-                name="venue_id"
-                class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none"
-              >
-                <option
-                  :for={venue <- @region_venues}
-                  value={venue.id}
-                  selected={venue.id == @current_player.preferred_venue_id}
-                >
-                  {venue.name}
-                </option>
-              </select>
-            </form>
+            <div class="flex flex-col items-start gap-1 border-b border-ink-100 pb-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <span class="text-sm text-ink-500">Preferred venue</span>
+              <span class="text-left text-sm font-semibold text-ink-950 sm:text-right">
+                {if @current_player.preferred_venue,
+                  do: @current_player.preferred_venue.name,
+                  else: "No venue selected"}
+              </span>
+            </div>
           </div>
 
           <div :if={not @region_locked?}>

@@ -215,6 +215,15 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
          )
          |> assign(venue_deactivation_assigns(player))}
 
+      {:error, :region_locked} ->
+        {:noreply,
+         socket
+         |> assign(:region_locked?, true)
+         |> put_flash(
+           :error,
+           "Your region and venue are locked — you've already been drawn or played a match."
+         )}
+
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not update your venue.")}
     end

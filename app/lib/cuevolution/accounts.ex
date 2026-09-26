@@ -509,9 +509,9 @@ defmodule Cuevolution.Accounts do
     |> Repo.update()
   end
 
-  @doc "Whether `player` is locked out of changing their region (spec 003 US3/FR-008) — locked once they have a recorded match result, not merely a scheduled fixture."
+  @doc "Whether a player's region and venue are locked after being drawn or playing a match."
   def region_locked?(%Player{} = player) do
-    Competitions.player_has_match_result?(player.id)
+    Competitions.player_has_draw?(player.id) or Competitions.player_has_match_result?(player.id)
   end
 
   @doc "Updates a player's editable personal details: username, date of birth, town."
@@ -528,7 +528,7 @@ defmodule Cuevolution.Accounts do
     |> Repo.update()
   end
 
-  @doc "Updates `player`'s region, rejecting the change once `region_locked?/1` is true (spec 003 US3)."
+  @doc "Updates `player`'s region, rejecting the change once `region_locked?/1` is true."
   def change_region(%Player{} = player, region_id) do
     if region_locked?(player) do
       {:error, :region_locked}
@@ -541,20 +541,24 @@ defmodule Cuevolution.Accounts do
 
   @doc """
   Updates `player`'s preferred venue only, keeping their region unchanged —
-  always allowed, even once `region_locked?/1` is true.
+  rejecting the change once `region_locked?/1` is true.
   """
   def change_venue(%Player{} = player, venue_id) do
-    player
-    |> Player.venue_changeset(%{preferred_venue_id: venue_id})
-    |> Repo.update()
+    if region_locked?(player) do
+      {:error, :region_locked}
+    else
+      player
+      |> Player.venue_changeset(%{preferred_venue_id: venue_id})
+      |> Repo.update()
+    end
   end
 
   @doc """
   Updates `player`'s preferred venue on their behalf, requiring
   `:manage_players` and logging the change via `log_admin_action/4` — the
   admin-initiated counterpart to `change_venue/2`. Like `change_venue/2`,
-  never checks `region_locked?/1`: this only ever changes venue within the
-  player's existing region.
+  This admin operation can correct a player's venue after the player-facing
+  location lock has taken effect.
   """
   def admin_change_venue(%Player{} = player, venue_id, %Admin{} = admin) do
     do_admin_change_location(

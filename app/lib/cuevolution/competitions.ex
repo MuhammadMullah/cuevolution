@@ -2643,6 +2643,20 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
+  Whether `player_id` has been placed into a drawn group. Group membership is
+  created when a draw is dealt, before fixtures or match results exist.
+  """
+  def player_has_draw?(player_id) do
+    participation_ids = participation_ids_for_player_query(player_id)
+
+    GroupMembership
+    |> join(:inner, [gm], g in Group, on: g.id == gm.group_id)
+    |> where([gm, _g], gm.stage_participation_id in subquery(participation_ids))
+    |> where([_gm, g], not is_nil(g.draw_id))
+    |> Repo.exists?()
+  end
+
+  @doc """
   Whether `player_id` (individually, or via their team) has a fixture with
   no recorded result yet (spec 010 US2/FR-007) — the anonymize
   pending-fixture warning.

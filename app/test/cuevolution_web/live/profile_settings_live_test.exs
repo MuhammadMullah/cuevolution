@@ -4,6 +4,8 @@ defmodule CuevolutionWeb.ProfileSettingsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Competitions.{Draw, Group, GroupMembership, Stage, StageParticipation}
+  alias Cuevolution.Repo
 
   test "redirects anonymous visitors to login", %{conn: conn} do
     assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/profile")
@@ -167,6 +169,69 @@ defmodule CuevolutionWeb.ProfileSettingsLiveTest do
     updated = Accounts.get_player_by_session_token(token)
     assert updated.preferred_venue_id == new_venue.id
     assert updated.region_id == region.id
+  end
+
+  test "players cannot change region or venue after being placed in a draw", %{conn: conn} do
+    region = build(:region)
+    old_venue = insert(:venue, region_id: region.id, name: "Old Venue")
+    new_region = Accounts.list_regions() |> Enum.find(&(&1.id != region.id))
+    new_venue = insert(:venue, region_id: new_region.id, name: "New Venue")
+
+    player = insert(:player, region_id: region.id, preferred_venue_id: old_venue.id)
+    stage = Repo.get_by!(Stage, order: 1)
+
+    participation =
+      %StageParticipation{
+        player_id: player.id,
+        region_id: region.id,
+        stage_id: stage.id,
+        category: player.gender,
+        joined_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      }
+      |> Repo.insert!()
+
+    draw =
+      %Draw{
+        stage_id: stage.id,
+        venue_id: old_venue.id,
+        category: player.gender,
+        state: "published",
+        random_seed: Ecto.UUID.generate(),
+        formula_group_count: 1
+      }
+      |> Repo.insert!()
+
+    group =
+      %Group{
+        draw_id: draw.id,
+        stage_id: stage.id,
+        region_id: region.id,
+        venue_id: old_venue.id,
+        category: player.gender,
+        name: "Drawn Group"
+      }
+      |> Repo.insert!()
+
+    Repo.insert!(%GroupMembership{
+      group_id: group.id,
+      stage_participation_id: participation.id
+    })
+
+    assert Accounts.region_locked?(player)
+    assert {:error, :region_locked} = Accounts.change_venue(player, new_venue.id)
+
+    assert {:error, :region_locked} =
+             Accounts.change_region_and_venue(player, new_region.id, new_venue.id)
+
+    token = Accounts.generate_player_session_token(player)
+    conn = conn |> init_test_session(%{}) |> put_session(:player_token, token)
+
+    {:ok, view, html} = live(conn, ~p"/profile")
+
+    assert html =~ "LOCKED"
+    assert html =~ "already been drawn"
+    refute has_element?(view, "form[phx-submit='save_location']")
+    refute has_element?(view, "form[phx-change='change_venue']")
   end
 
   test "changing region requires picking a venue from the new region", %{conn: conn} do
