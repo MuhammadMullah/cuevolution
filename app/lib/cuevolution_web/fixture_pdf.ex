@@ -305,17 +305,18 @@ defmodule CuevolutionWeb.FixturePdf do
         do: :binary.at(previous, index - bpp),
         else: 0
 
-    reconstructed =
-      case filter do
-        0 -> value
-        1 -> rem(value + left, 256)
-        2 -> rem(value + up, 256)
-        3 -> rem(value + div(left + up, 2), 256)
-        4 -> rem(value + paeth(left, up, upper_left), 256)
-      end
+    reconstructed = reconstruct(value, left, up, upper_left, filter)
 
     unfilter(rest, previous, filter, bpp, <<output::binary, reconstructed>>)
   end
+
+  defp reconstruct(value, _left, _up, _upper_left, 0), do: value
+  defp reconstruct(value, left, _up, _upper_left, 1), do: rem(value + left, 256)
+  defp reconstruct(value, _left, up, _upper_left, 2), do: rem(value + up, 256)
+  defp reconstruct(value, left, up, _upper_left, 3), do: rem(value + div(left + up, 2), 256)
+
+  defp reconstruct(value, left, up, upper_left, 4),
+    do: rem(value + paeth(left, up, upper_left), 256)
 
   defp paeth(left, up, upper_left) do
     p = left + up - upper_left

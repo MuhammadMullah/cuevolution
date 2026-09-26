@@ -9,8 +9,8 @@ defmodule CuevolutionWeb.FixturesLive do
   """
   use CuevolutionWeb, :live_view
 
-  alias Cuevolution.Competitions
   alias Cuevolution.Accounts
+  alias Cuevolution.Competitions
   alias Cuevolution.Repo
   alias CuevolutionWeb.PlayerComponents
 
