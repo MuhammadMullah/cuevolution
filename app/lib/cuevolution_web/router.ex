@@ -104,7 +104,7 @@ defmodule CuevolutionWeb.Router do
     live_session :admin_operations,
       on_mount: [
         {CuevolutionWeb.AdminAuth, :ensure_admin},
-        {CuevolutionWeb.AdminAuth, {:ensure_permission, :manage_stages}}
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :view_groups}}
       ] do
       live "/stages", StageManagementLive, :index
       live "/groups", GroupManagementLive, :index

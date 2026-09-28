@@ -37,51 +37,44 @@
         class="rounded-2xl border border-ink-200 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)] sm:p-7"
       >
         <div class="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 class="text-base font-bold text-ink-950">Record five frames</h2>
-          <div class="font-mono text-2xl font-semibold text-ink-950">
-            {score_tally(@frame_winners)}
-          </div>
+          <h2 class="text-base font-bold text-ink-950">Record final score</h2>
+          <div class="font-mono text-2xl font-semibold text-ink-950">0–0</div>
         </div>
         <p class="mt-1 text-sm text-ink-500">
-          Select the winner of every frame. A match result requires a three-frame majority.
+          Enter the final score from the five-frame match. A match result requires a three-frame majority.
         </p>
-        <div class="mt-5 space-y-2">
-          <div
-            :for={sequence <- 1..5}
-            class="flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 p-3"
-          >
-            <span class="w-20 text-sm font-semibold text-ink-600">Frame {sequence}</span>
-            <button
-              :for={
-                {value, label} <- [
-                  {"a", participant_label(@fixture.participant_a)},
-                  {"b", participant_label(@fixture.participant_b)}
-                ]
-              }
-              type="button"
-              phx-click="set_frame"
-              phx-value-sequence={sequence}
-              phx-value-winner={value}
-              class={[
-                "rounded-full border px-3 py-1.5 text-xs font-semibold",
-                @frame_winners[to_string(sequence)] == value &&
-                  "border-ink-950 bg-ink-950 text-white",
-                @frame_winners[to_string(sequence)] != value &&
-                  "border-ink-300 text-ink-700 hover:bg-ink-50"
-              ]}
-            >
-              {label}
-            </button>
-          </div>
-        </div>
-        <button
-          id="record-frames"
-          type="button"
-          phx-click="record_frames"
-          class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+        <.form
+          for={@score_form}
+          id="record-final-score"
+          phx-submit="record_final_score"
+          class="mt-5"
         >
-          Record result
-        </button>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <.input
+              field={@score_form[:participant_a_score]}
+              type="number"
+              min="0"
+              max="5"
+              label={participant_label(@fixture.participant_a)}
+              required
+            />
+            <.input
+              field={@score_form[:participant_b_score]}
+              type="number"
+              min="0"
+              max="5"
+              label={participant_label(@fixture.participant_b)}
+              required
+            />
+          </div>
+          <button
+            id="record-final-score-submit"
+            type="submit"
+            class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+          >
+            Record result
+          </button>
+        </.form>
       </section>
 
       <section
@@ -91,50 +84,49 @@
         <div class="flex flex-wrap items-baseline justify-between gap-3">
           <h2 class="text-base font-bold text-amber-950">Awaiting verification</h2>
           <div class="font-mono text-2xl font-semibold text-amber-950">
-            {score_tally(@correction_winners)}
+            {Map.get(@correction_form.params, "participant_a_score", "0")}–{Map.get(
+              @correction_form.params,
+              "participant_b_score",
+              "0"
+            )}
           </div>
         </div>
         <p class="mt-1 text-sm text-amber-800">
-          Review every frame the rep recorded. Click a name to correct a frame before verifying.
+          Review the final score the representative recorded. Correct it if needed before verifying.
         </p>
-        <div class="mt-4 space-y-2">
-          <div
-            :for={sequence <- 1..5}
-            class="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-white p-3"
-          >
-            <span class="w-20 text-sm font-semibold text-ink-600">Frame {sequence}</span>
-            <button
-              :for={
-                {value, label} <- [
-                  {"a", participant_label(@fixture.participant_a)},
-                  {"b", participant_label(@fixture.participant_b)}
-                ]
-              }
-              type="button"
-              phx-click="set_correction_frame"
-              phx-value-sequence={sequence}
-              phx-value-winner={value}
-              class={[
-                "rounded-full border px-3 py-1.5 text-xs font-semibold",
-                @correction_winners[to_string(sequence)] == value &&
-                  "border-ink-950 bg-ink-950 text-white",
-                @correction_winners[to_string(sequence)] != value &&
-                  "border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
-              ]}
-            >
-              {label}
-            </button>
-          </div>
-        </div>
-        <button
+        <.form
           :if={Admin.can?(@current_admin, :approve_results)}
+          for={@correction_form}
           id="verify-result"
-          type="button"
-          phx-click="verify"
-          class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+          phx-submit="verify"
+          class="mt-4"
         >
-          Verify result
-        </button>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <.input
+              field={@correction_form[:participant_a_score]}
+              type="number"
+              min="0"
+              max="5"
+              label={participant_label(@fixture.participant_a)}
+              required
+            />
+            <.input
+              field={@correction_form[:participant_b_score]}
+              type="number"
+              min="0"
+              max="5"
+              label={participant_label(@fixture.participant_b)}
+              required
+            />
+          </div>
+          <button
+            id="verify-result-submit"
+            type="submit"
+            class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+          >
+            Verify result
+          </button>
+        </.form>
       </section>
 
       <section

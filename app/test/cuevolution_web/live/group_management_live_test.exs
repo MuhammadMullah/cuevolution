@@ -38,6 +38,41 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     assert {:error, {:redirect, %{to: "/admin/login"}}} = live(conn, ~p"/admin/groups")
   end
 
+  test "venue representatives can view their published groups without draw controls", %{
+    conn: conn
+  } do
+    {grassroots, venue} = create_draw_with_players(4)
+    coordinator = insert(:admin, role: "regional_coordinator")
+
+    {:ok, draw} =
+      Competitions.create_draw(
+        %{stage_id: grassroots.id, venue_id: venue.id, category: "male"},
+        coordinator
+      )
+
+    {:ok, _groups} = Competitions.deal_draw(draw, coordinator, nil)
+    draw = Repo.reload!(draw)
+    {:ok, _approved} = Competitions.advance_draw_state(draw, coordinator, "approved")
+    draw = Repo.reload!(draw)
+    {:ok, _published} = Competitions.advance_draw_state(draw, coordinator, "published")
+
+    representative = insert(:admin, role: "venue_representative", venue_id: venue.id)
+    token = Accounts.generate_admin_session_token(representative)
+    conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+
+    group = Repo.get_by!(Group, draw_id: draw.id)
+    {:ok, view, html} = live(conn, ~p"/admin/groups")
+
+    assert html =~ "Groups"
+    assert html =~ "view groups for your venue"
+    refute html =~ "Propose draw"
+    refute html =~ "Deal draw"
+    refute html =~ "Create group"
+
+    html = view |> element("button[phx-value-id='#{group.id}']") |> render_click()
+    assert html =~ "SP26-"
+  end
+
   describe "manual flow (Team category, and Regional stage — untouched by the auto-draw)" do
     test "creating a Team group doesn't require a venue and never creates a bracket",
          %{conn: conn} do

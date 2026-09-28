@@ -1712,6 +1712,45 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc "Records a singles result from the final best-of-five score."
+  def record_final_score(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :record_results) do
+      do_record_final_score(fixture, admin, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_record_final_score(%Fixture{status: status}, _admin, _attrs)
+       when status not in ["scheduled", nil],
+       do: {:error, :invalid_fixture_state}
+
+  defp do_record_final_score(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    fixture = Repo.preload(fixture, [:participant_a, :participant_b])
+
+    with {:ok, score} <- normalize_final_score(attrs),
+         {:ok, winner_id} <- final_score_winner(fixture, score) do
+      result_attrs = %{
+        fixture_id: fixture.id,
+        winner_participation_id: winner_id,
+        score: score,
+        recorded_by_admin_id: admin.id
+      }
+
+      Multi.new()
+      |> Multi.insert(:result, MatchResult.create_changeset(%MatchResult{}, result_attrs))
+      |> Multi.update(:fixture, fn %{result: result} ->
+        Ecto.Changeset.change(fixture, %{result_id: result.id, status: "completed"})
+      end)
+      |> Multi.run(:roster_lock, fn _repo, _changes -> lock_rosters_if_team(fixture) end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{result: result}} -> {:ok, result}
+        {:error, :result, changeset, _changes} -> {:error, changeset}
+      end
+    end
+  end
+
   defp do_record_frames(%Fixture{status: status}, _admin, _frame_winners)
        when status not in ["scheduled", nil],
        do: {:error, :invalid_fixture_state}
@@ -1763,6 +1802,38 @@ defmodule Cuevolution.Competitions do
       {:error, :unauthorized}
     end
   end
+
+  @doc "Verifies a completed result from its final best-of-five score."
+  def verify_final_score(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    if Admin.can?(admin, :approve_results) do
+      do_verify_final_score(fixture, admin, attrs)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_verify_final_score(%Fixture{status: "completed"} = fixture, %Admin{} = admin, attrs) do
+    fixture = Repo.preload(fixture, [:result, :participant_a, :participant_b])
+
+    with {:ok, score} <- normalize_final_score(attrs),
+         {:ok, winner_id} <- final_score_winner(fixture, score),
+         correction_attrs <- %{winner_participation_id: winner_id, score: score} do
+      Multi.new()
+      |> Multi.update(:result, MatchResult.correction_changeset(fixture.result, correction_attrs))
+      |> Multi.update(:fixture, Ecto.Changeset.change(fixture, status: "verified"))
+      |> Multi.run(:log, fn _repo, %{fixture: verified} ->
+        Accounts.log_admin_action("verify_result", admin, verified)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{fixture: verified}} -> {:ok, Repo.preload(verified, :result)}
+        {:error, _step, changeset, _changes} -> {:error, changeset}
+      end
+    end
+  end
+
+  defp do_verify_final_score(%Fixture{}, _admin, _attrs),
+    do: {:error, :invalid_fixture_state}
 
   defp do_verify_result(%Fixture{status: "completed"} = fixture, %Admin{} = admin, corrections) do
     fixture = Repo.preload(fixture, [:result, participant_a: :player, participant_b: :player])
@@ -1968,6 +2039,64 @@ defmodule Cuevolution.Competitions do
   defp normalize_frame_winner(%{"winner" => value}), do: normalize_frame_winner(value)
   defp normalize_frame_winner(%{winner: value}), do: normalize_frame_winner(value)
   defp normalize_frame_winner(_value), do: nil
+
+  defp normalize_final_score(attrs) do
+    with {:ok, participant_a_score} <-
+           parse_final_score_value(attrs["participant_a_score"] || attrs["participant_a_frames"]),
+         {:ok, participant_b_score} <-
+           parse_final_score_value(attrs["participant_b_score"] || attrs["participant_b_frames"]) do
+      validate_final_score(participant_a_score, participant_b_score)
+    end
+  end
+
+  defp validate_final_score(participant_a_score, participant_b_score)
+       when participant_a_score > 5 or participant_b_score > 5,
+       do: {:error, :invalid_final_score}
+
+  defp validate_final_score(participant_a_score, participant_b_score)
+       when participant_a_score >= 3 and participant_b_score >= 3,
+       do: {:error, :no_majority}
+
+  defp validate_final_score(participant_a_score, participant_b_score)
+       when participant_a_score < 3 and participant_b_score < 3,
+       do: {:error, :no_majority}
+
+  defp validate_final_score(participant_a_score, participant_b_score) do
+    {:ok,
+     %{
+       "participant_a_frames" => participant_a_score,
+       "participant_b_frames" => participant_b_score,
+       "points_a" => points_for_frames(participant_a_score, participant_b_score),
+       "points_b" => points_for_frames(participant_b_score, participant_a_score)
+     }}
+  end
+
+  defp parse_final_score_value(nil), do: {:error, :final_score_required}
+  defp parse_final_score_value(""), do: {:error, :final_score_required}
+  defp parse_final_score_value(value) when is_integer(value), do: {:ok, value}
+
+  defp parse_final_score_value(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {score, ""} when score >= 0 -> {:ok, score}
+      _ -> {:error, :invalid_final_score}
+    end
+  end
+
+  defp parse_final_score_value(_value), do: {:error, :invalid_final_score}
+
+  defp final_score_winner(
+         %Fixture{participant_a_id: participant_a_id, participant_b_id: participant_b_id},
+         %{
+           "participant_a_frames" => participant_a_score,
+           "participant_b_frames" => participant_b_score
+         }
+       ) do
+    cond do
+      participant_a_score >= 3 -> {:ok, participant_a_id}
+      participant_b_score >= 3 -> {:ok, participant_b_id}
+      true -> {:error, :no_majority}
+    end
+  end
 
   defp majority_winner(
          %Fixture{participant_a_id: participant_a_id, participant_b_id: participant_b_id},

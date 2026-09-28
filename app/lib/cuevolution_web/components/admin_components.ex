@@ -255,7 +255,7 @@ defmodule CuevolutionWeb.AdminComponents do
       {_, _, "/admin/venue-fixtures"} -> Admin.can?(admin, :manage_fixtures)
       {_, _, "/admin/results"} -> Admin.can?(admin, :record_results)
       {_, _, "/admin/stages"} -> Admin.can?(admin, :manage_stages)
-      {_, _, "/admin/groups"} -> Admin.can?(admin, :manage_groups)
+      {_, _, "/admin/groups"} -> Admin.can?(admin, :view_groups)
       {_, _, "/admin/players"} -> Admin.can?(admin, :view_directory)
       {_, _, "/admin/audit-log"} -> Admin.can?(admin, :view_directory)
       {_, _, "/admin/venues"} -> Admin.can?(admin, :manage_venues)

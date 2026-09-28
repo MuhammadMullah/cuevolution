@@ -23,6 +23,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   import Ecto.Query
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.{Draw, StageParticipation}
   alias Cuevolution.Repo
@@ -33,10 +34,20 @@ defmodule CuevolutionWeb.GroupManagementLive do
   @draw_states ~w(draft previewed approved published)
 
   def mount(_params, _session, socket) do
-    stages =
-      Competitions.list_stages() |> Enum.filter(&(&1.name in ["Grassroots", "Regional"]))
+    current_admin = Repo.preload(socket.assigns.current_admin, venue: :region)
+    venue_rep? = current_admin.role == "venue_representative"
 
-    regions = Accounts.list_regions()
+    stages =
+      Competitions.list_stages()
+      |> Enum.filter(&(&1.name in ["Grassroots", "Regional"]))
+
+    stages = if venue_rep?, do: Enum.filter(stages, &(&1.name == "Grassroots")), else: stages
+
+    regions =
+      if venue_rep? && current_admin.venue && current_admin.venue.region,
+        do: [current_admin.venue.region],
+        else: Accounts.list_regions()
+
     stage = List.first(stages)
     region = List.first(regions)
 
@@ -44,6 +55,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
      socket
      |> assign(
        page_title: "Groups",
+       current_admin: current_admin,
+       venue_rep?: venue_rep?,
+       can_manage_groups?: Admin.can?(current_admin, :manage_groups),
        stages: stages,
        regions: regions,
        categories: @categories,
@@ -73,32 +87,44 @@ defmodule CuevolutionWeb.GroupManagementLive do
   ## Shared stage/region/venue/category navigation (used by both experiences)
 
   def handle_event("select_stage", %{"id" => id}, socket) do
-    stage = Enum.find(socket.assigns.stages, &(&1.id == id))
+    case Enum.find(socket.assigns.stages, &(&1.id == id)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That stage is not available.")}
 
-    {:noreply,
-     socket
-     |> assign(:stage, stage)
-     |> load_venues()
-     |> load_scope()}
+      stage ->
+        {:noreply,
+         socket
+         |> assign(:stage, stage)
+         |> load_venues()
+         |> load_scope()}
+    end
   end
 
   def handle_event("select_region", %{"id" => id}, socket) do
-    region = Enum.find(socket.assigns.regions, &(&1.id == id))
+    case Enum.find(socket.assigns.regions, &(&1.id == id)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That region is not available.")}
 
-    {:noreply,
-     socket
-     |> assign(:region, region)
-     |> load_venues()
-     |> load_scope()}
+      region ->
+        {:noreply,
+         socket
+         |> assign(:region, region)
+         |> load_venues()
+         |> load_scope()}
+    end
   end
 
   def handle_event("select_category", %{"category" => category}, socket) do
-    {:noreply, socket |> assign(:category, category) |> load_scope()}
+    if category in socket.assigns.categories,
+      do: {:noreply, socket |> assign(:category, category) |> load_scope()},
+      else: {:noreply, put_flash(socket, :error, "That category is not available.")}
   end
 
   def handle_event("select_venue", %{"id" => id}, socket) do
-    venue = Enum.find(socket.assigns.venues, &(&1.id == id))
-    {:noreply, socket |> assign(:venue, venue) |> load_scope()}
+    case Enum.find(socket.assigns.venues, &(&1.id == id)) do
+      nil -> {:noreply, put_flash(socket, :error, "That venue is not available.")}
+      venue -> {:noreply, socket |> assign(:venue, venue) |> load_scope()}
+    end
   end
 
   def handle_event("select_gr_view", %{"view" => view}, socket) do
@@ -109,25 +135,29 @@ defmodule CuevolutionWeb.GroupManagementLive do
   ## grOff: manual create-group / assign-member flow (unchanged behavior)
 
   def handle_event("create_group", %{"group" => %{"name" => name}}, socket) do
-    attrs = %{
-      stage_id: socket.assigns.stage.id,
-      region_id: socket.assigns.region.id,
-      venue_id:
-        if(grassroots?(socket.assigns) && socket.assigns.venue, do: socket.assigns.venue.id),
-      category: socket.assigns.category,
-      name: name
-    }
+    if socket.assigns.can_manage_groups? do
+      attrs = %{
+        stage_id: socket.assigns.stage.id,
+        region_id: socket.assigns.region.id,
+        venue_id:
+          if(grassroots?(socket.assigns) && socket.assigns.venue, do: socket.assigns.venue.id),
+        category: socket.assigns.category,
+        name: name
+      }
 
-    case Competitions.create_group(attrs) do
-      {:ok, group} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "\"#{group.name}\" created.")
-         |> assign(:form, to_form(%{}, as: :group))
-         |> load_groups()}
+      case Competitions.create_group(attrs) do
+        {:ok, group} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "\"#{group.name}\" created.")
+           |> assign(:form, to_form(%{}, as: :group))
+           |> load_groups()}
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :group))}
+        {:error, changeset} ->
+          {:noreply, assign(socket, :form, to_form(changeset, as: :group))}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to manage groups.")}
     end
   end
 
@@ -147,25 +177,29 @@ defmodule CuevolutionWeb.GroupManagementLive do
         %{"group_id" => group_id, "participation_id" => pid},
         socket
       ) do
-    group = Enum.find(socket.assigns.groups, &(&1.id == group_id))
-    participation = Enum.find(socket.assigns.unassigned, &(&1.id == pid))
+    if socket.assigns.can_manage_groups? do
+      group = Enum.find(socket.assigns.groups, &(&1.id == group_id))
+      participation = Enum.find(socket.assigns.unassigned, &(&1.id == pid))
 
-    socket =
-      case Competitions.assign_to_group(participation, group) do
-        {:ok, _membership} ->
-          socket
-          |> put_flash(:info, "Added to #{group.name}.")
-          |> load_groups()
-          |> load_unassigned()
+      socket =
+        case Competitions.assign_to_group(participation, group) do
+          {:ok, _membership} ->
+            socket
+            |> put_flash(:info, "Added to #{group.name}.")
+            |> load_groups()
+            |> load_unassigned()
 
-        {:error, :category_mismatch} ->
-          put_flash(socket, :error, "Couldn't add — category mismatch.")
+          {:error, :category_mismatch} ->
+            put_flash(socket, :error, "Couldn't add — category mismatch.")
 
-        {:error, _changeset} ->
-          put_flash(socket, :error, "Couldn't add — already in this group?")
-      end
+          {:error, _changeset} ->
+            put_flash(socket, :error, "Couldn't add — already in this group?")
+        end
 
-    {:noreply, socket}
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to manage groups.")}
+    end
   end
 
   ## grOn: formula-driven draw lifecycle
@@ -392,11 +426,18 @@ defmodule CuevolutionWeb.GroupManagementLive do
     do: grassroots?(assigns) and assigns.category in ~w(male female) and !!assigns.venue
 
   defp load_venues(socket) do
-    if grassroots?(socket.assigns) do
-      venues = Venues.list_active_for_region(socket.assigns.region.id)
-      assign(socket, venues: venues, venue: List.first(venues))
+    if socket.assigns.venue_rep? do
+      assign(socket,
+        venues: List.wrap(socket.assigns.current_admin.venue),
+        venue: socket.assigns.current_admin.venue
+      )
     else
-      assign(socket, venues: [], venue: nil)
+      if grassroots?(socket.assigns) do
+        venues = Venues.list_active_for_region(socket.assigns.region.id)
+        assign(socket, venues: venues, venue: List.first(venues))
+      else
+        assign(socket, venues: [], venue: nil)
+      end
     end
   end
 
