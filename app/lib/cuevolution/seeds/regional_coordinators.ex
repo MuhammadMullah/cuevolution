@@ -122,17 +122,18 @@ defmodule Cuevolution.Seeds.RegionalCoordinators do
   end
 
   defp find_inviter! do
-    Repo.one!(
+    query =
       from admin in Admin,
         where:
           admin.role == "super_admin" and is_nil(admin.suspended_at) and
             is_nil(admin.removed_at),
         order_by: [asc: admin.inserted_at],
         limit: 1
-    )
-  rescue
-    Ecto.NoResultsError ->
-      raise "Could not find an active super admin; run the admin seeds first."
+
+    case Repo.one(query) do
+      %Admin{} = admin -> admin
+      nil -> raise "Could not find an active super admin; run the admin seeds first."
+    end
   end
 
   defp regions_by_name! do
