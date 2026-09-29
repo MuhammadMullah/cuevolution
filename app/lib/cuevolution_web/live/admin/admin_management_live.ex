@@ -29,7 +29,10 @@ defmodule CuevolutionWeb.AdminManagementLive do
       |> Admin.invite_changeset(params)
       |> Map.put(:action, :validate)
 
-    {:noreply, assign_form(socket, changeset)}
+    {:noreply,
+     socket
+     |> assign(:venue_options, venue_options(params["region_id"]))
+     |> assign_form(changeset)}
   end
 
   def handle_event("invite", %{"admin" => params}, socket) do
@@ -43,6 +46,7 @@ defmodule CuevolutionWeb.AdminManagementLive do
            :info,
            "Invitation sent to #{admin.email} as #{Admin.role_label(admin.role)}."
          )
+         |> assign(:venue_options, venue_options())
          |> assign_form(Admin.invite_changeset(%Admin{}, %{}))
          |> load_admins()}
 
@@ -182,6 +186,12 @@ defmodule CuevolutionWeb.AdminManagementLive do
   defp venue_options do
     Venues.list_venues(%{active: true}) |> Enum.map(&{&1.name, &1.id})
   end
+
+  defp venue_options(region_id) when is_binary(region_id) and region_id != "" do
+    Venues.list_active_for_region(region_id) |> Enum.map(&{&1.name, &1.id})
+  end
+
+  defp venue_options(_region_id), do: venue_options()
 
   defp region_options do
     Accounts.list_regions() |> Enum.map(&{&1.name, &1.id})

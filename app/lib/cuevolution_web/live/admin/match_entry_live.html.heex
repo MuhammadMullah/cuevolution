@@ -33,7 +33,7 @@
       </section>
 
       <section
-        :if={@fixture.status == "scheduled"}
+        :if={@fixture.status == "scheduled" && Admin.can?(@current_admin, :record_results)}
         class="rounded-2xl border border-ink-200 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)] sm:p-7"
       >
         <div class="flex flex-wrap items-baseline justify-between gap-3">
@@ -56,6 +56,7 @@
               min="0"
               max="5"
               label={participant_label(@fixture.participant_a)}
+              class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
             />
             <.input
@@ -64,6 +65,7 @@
               min="0"
               max="5"
               label={participant_label(@fixture.participant_b)}
+              class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
             />
           </div>
@@ -108,6 +110,7 @@
               min="0"
               max="5"
               label={participant_label(@fixture.participant_a)}
+              class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
             />
             <.input
@@ -116,6 +119,7 @@
               min="0"
               max="5"
               label={participant_label(@fixture.participant_b)}
+              class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
             />
           </div>

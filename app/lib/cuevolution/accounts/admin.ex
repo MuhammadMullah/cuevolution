@@ -11,8 +11,14 @@ defmodule Cuevolution.Accounts.Admin do
     manage_admins: ["super_admin", "tournament_director"],
     manage_super_admins: ["super_admin"],
     manage_fixtures: ["super_admin", "regional_coordinator", "venue_representative"],
+    access_results: [
+      "super_admin",
+      "tournament_director",
+      "regional_coordinator",
+      "venue_representative"
+    ],
     record_results: ["super_admin", "regional_coordinator", "venue_representative"],
-    approve_results: ["super_admin", "regional_coordinator"],
+    approve_results: ["super_admin", "tournament_director"],
     manage_stages: ["super_admin", "tournament_director", "regional_coordinator"],
     manage_groups: ["super_admin", "tournament_director", "regional_coordinator"],
     view_groups: [

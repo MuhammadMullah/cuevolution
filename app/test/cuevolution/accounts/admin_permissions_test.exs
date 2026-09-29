@@ -21,18 +21,18 @@ defmodule Cuevolution.Accounts.AdminPermissionsTest do
     refute Admin.can?(coordinator, :manage_admins)
     refute Admin.can?(venue_rep, :manage_venues)
 
-    assert Admin.can?(coordinator, :approve_results)
+    assert Admin.can?(director, :approve_results)
     assert Admin.can?(super_admin, :manage_teams)
     assert Admin.can?(director, :manage_teams)
     assert Admin.can?(coordinator, :manage_teams)
     refute Admin.can?(venue_rep, :manage_teams)
     refute Admin.can?(coordinator, :anonymize_users)
+    refute Admin.can?(coordinator, :approve_results)
     refute Admin.can?(venue_rep, :approve_results)
     assert Admin.can?(venue_rep, :manage_fixtures)
     assert Admin.can?(venue_rep, :record_results)
     refute Admin.can?(director, :manage_fixtures)
     refute Admin.can?(director, :record_results)
-    refute Admin.can?(director, :approve_results)
   end
 
   test "tournament directors cannot manage super admins" do

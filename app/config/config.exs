@@ -41,13 +41,12 @@ config :cuevolution, CuevolutionWeb.Endpoint,
 # By default it uses the "Local" adapter which stores the emails
 # locally. You can see the emails in your browser, at "/dev/mailbox".
 #
-# For production it's recommended to configure a different adapter
-# at the `config/runtime.exs`.
+# Production overrides this with Postmark at runtime.
 config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Local
 
 # The "from" address baked into every outgoing email (see
 # Cuevolution.Notifications.Emails) — overridden in config/runtime.exs for
-# production to a Google Workspace sending identity.
+# the production Postmark sending identity.
 config :cuevolution, :mail_from, {"Cuevolution", "notifications@cuevolution.test"}
 
 # SMS provider selection is deferred (spec 002 Assumptions) — the stub

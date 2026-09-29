@@ -57,7 +57,7 @@ defmodule CuevolutionWeb.Admin.MatchEntryLiveTest do
     rep = insert(:admin, role: "venue_representative")
     {:ok, _result} = Competitions.record_frames(fixture, rep, [:a, :a, :a, :b, :b])
 
-    conn = log_in_admin(conn, "regional_coordinator")
+    conn = log_in_admin(conn, "tournament_director")
     {:ok, view, html} = live(conn, ~p"/admin/matches/#{fixture.id}")
 
     assert html =~ "Awaiting verification"

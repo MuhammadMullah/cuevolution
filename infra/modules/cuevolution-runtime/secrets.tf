@@ -11,11 +11,17 @@ resource "google_secret_manager_secret" "application" {
   depends_on = [google_project_service.required["secretmanager.googleapis.com"]]
 }
 
-# The VM (compute.tf) fetches this same secret at deploy time — same content
-# (SECRET_KEY_BASE, SMTP_USERNAME/PASSWORD, AFRICASTALKING_*, added out of
-# band same as for web/worker), same Secret Manager entry, just read by
-# `gcloud secrets versions access` over SSH instead of Cloud Run's
-# --set-secrets.
+# The VM (compute.tf) fetches this same secret at deploy time. When
+# application_secrets_json is supplied, Terraform publishes it through the
+# write-only secret_data_wo argument so the payload is not stored in state.
+resource "google_secret_manager_secret_version" "application" {
+  count = var.application_secrets_json == null ? 0 : 1
+
+  secret                 = google_secret_manager_secret.application[var.application_secrets_secret_id].id
+  secret_data_wo         = var.application_secrets_json
+  secret_data_wo_version = var.application_secrets_version
+}
+
 resource "google_secret_manager_secret_iam_member" "vm_accessor" {
   for_each = google_secret_manager_secret.application
 

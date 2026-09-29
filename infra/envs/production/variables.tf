@@ -14,6 +14,20 @@ variable "mail_from_address" {
   type        = string
 }
 
+variable "application_secrets_json" {
+  description = "Complete JSON payload for the application Secret Manager secret. Keep this in an untracked sensitive tfvars file."
+  type        = string
+  sensitive   = true
+  nullable    = true
+  default     = null
+}
+
+variable "application_secrets_version" {
+  description = "Monotonic version used to publish application_secrets_json."
+  type        = number
+  default     = 1
+}
+
 variable "africastalking_sender_id" {
   description = "Africa's Talking sender ID."
   type        = string

@@ -95,7 +95,7 @@ defmodule CuevolutionWeb.Router do
     live_session :admin_result_operations,
       on_mount: [
         {CuevolutionWeb.AdminAuth, :ensure_admin},
-        {CuevolutionWeb.AdminAuth, {:ensure_permission, :record_results}}
+        {CuevolutionWeb.AdminAuth, {:ensure_permission, :access_results}}
       ] do
       live "/results", AdminResultsLive, :index
       live "/matches/:id", Admin.MatchEntryLive, :show

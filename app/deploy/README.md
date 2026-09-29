@@ -48,7 +48,7 @@ GitHub only ever looks for workflows at the repository root.
   failures — drop it back to ~3 if Cloud Run is ever temporarily
   resurrected for a rollback.
 - `DATABASE_URL` and `CUEVOLUTION_SECRETS_JSON` (`SECRET_KEY_BASE`,
-  `SMTP_USERNAME`/`PASSWORD`, `AFRICASTALKING_API_KEY`/`USERNAME`) are never
+  `POSTMARK_SERVER_TOKEN`, `AFRICASTALKING_API_KEY`/`USERNAME`) are never
   written to `.env` on disk. `deploy.sh` fetches them fresh from Secret
   Manager on every deploy — the exact same secrets Cloud Run's
   `--set-secrets` already reads (`secrets.tf`'s `application` and
@@ -112,12 +112,11 @@ All of this happens once, on the VM Terraform created.
    docker compose logs caddy   # confirm it obtained the certificate, no errors
    ```
 
-5. **Mail credentials.** Production uses `MAIL_PROVIDER=smtp_auth`
-   (`config/runtime.exs`), which relays through `smtp.gmail.com:587` with a
-   Gmail account/app-password. Nothing to do here — `SMTP_USERNAME`/
-   `SMTP_PASSWORD` already live inside the `application` Secret Manager
-   secret Cloud Run reads from, and `deploy.sh` (step 7) fetches that same
-   secret. No new credentials, no copy-paste.
+5. **Mail credentials.** Production uses `MAIL_PROVIDER=postmark`
+   (`config/runtime.exs`) and sends through Postmark's HTTP API. Add the
+   Postmark server token as `POSTMARK_SERVER_TOKEN` inside the `application`
+   Secret Manager secret. `deploy.sh` (step 7) fetches that secret for the
+   app and worker containers.
 
 6. **Create the app directory and copy the compose file + deploy script:**
 

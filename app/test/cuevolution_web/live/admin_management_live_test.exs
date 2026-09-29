@@ -72,6 +72,23 @@ defmodule CuevolutionWeb.AdminManagementLiveTest do
     assert html =~ "must have the @ sign"
   end
 
+  test "filters invite venue options to the selected region", %{conn: conn} do
+    [region_a, region_b | _] = Cuevolution.Accounts.list_regions()
+    venue_a = insert(:venue, region_id: region_a.id, name: "Region A Venue")
+    venue_b = insert(:venue, region_id: region_b.id, name: "Region B Venue")
+    conn = log_in_admin(conn, insert(:admin, role: "super_admin"))
+
+    {:ok, view, _html} = live(conn, ~p"/admin/admins")
+
+    html =
+      view
+      |> form("#invite-admin-form", %{"admin" => %{"region_id" => region_a.id}})
+      |> render_change()
+
+    assert html =~ venue_a.name
+    refute html =~ venue_b.name
+  end
+
   defp log_in_admin(conn, admin) do
     token = Accounts.generate_admin_session_token(admin)
     conn |> init_test_session(%{}) |> put_session(:admin_token, token)

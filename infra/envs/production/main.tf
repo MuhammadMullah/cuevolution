@@ -7,9 +7,11 @@ module "cuevolution" {
   application_secrets_secret_id = "cuevolution-production-application-secrets"
   profile_pictures_bucket       = "cuevolution-production-profile-pictures-ew4"
   phx_host                      = "sportpesapool.ke"
-  mail_provider                 = "smtp_auth"
+  mail_provider                 = "postmark"
   sms_provider                  = "africastalking"
   mail_from_address             = var.mail_from_address
+  application_secrets_json      = var.application_secrets_json
+  application_secrets_version   = var.application_secrets_version
   africastalking_sender_id      = var.africastalking_sender_id
   db_tier                       = "db-f1-micro"
   db_version                    = var.db_version

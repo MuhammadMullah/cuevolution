@@ -11,7 +11,7 @@
 # authenticates to GCS.
 #
 # DATABASE_URL and CUEVOLUTION_SECRETS_JSON (SECRET_KEY_BASE,
-# SMTP_USERNAME/PASSWORD, AFRICASTALKING_API_KEY/USERNAME) are NOT set here —
+# POSTMARK_SERVER_TOKEN, AFRICASTALKING_API_KEY/USERNAME) are NOT set here —
 # deploy.sh exports them into the shell environment right before `docker
 # compose up`, fetched fresh from Secret Manager each time, the same secrets
 # Cloud Run's --set-secrets already reads. They're deliberately absent from
@@ -24,7 +24,7 @@ x-app-env: &app_env
   PROFILE_PICTURE_STORAGE: ${PROFILE_PICTURE_STORAGE:-gcs}
   GCS_BUCKET: ${GCS_BUCKET}
   GCS_SIGNING_SERVICE_ACCOUNT: ${GCS_SIGNING_SERVICE_ACCOUNT}
-  MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp_auth}
+  MAIL_PROVIDER: ${MAIL_PROVIDER:-postmark}
   MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
   AFRICASTALKING_SENDER_ID: ${AFRICASTALKING_SENDER_ID}
   DATABASE_URL: ${DATABASE_URL}

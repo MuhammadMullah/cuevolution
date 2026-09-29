@@ -34,13 +34,13 @@ variable "phx_host" {
 }
 
 variable "mail_provider" {
-  description = "App mail provider. smtp_relay is not supported: it needs a static egress IP."
+  description = "App mail provider. Production uses Postmark's HTTP API."
   type        = string
-  default     = "smtp_auth"
+  default     = "postmark"
 
   validation {
-    condition     = contains(["smtp_auth", "local"], var.mail_provider)
-    error_message = "mail_provider must be smtp_auth or local."
+    condition     = contains(["postmark", "local"], var.mail_provider)
+    error_message = "mail_provider must be postmark or local."
   }
 }
 
@@ -58,6 +58,20 @@ variable "sms_provider" {
 variable "mail_from_address" {
   description = "Sender address for outgoing mail."
   type        = string
+}
+
+variable "application_secrets_json" {
+  description = "Complete JSON payload for the application Secret Manager secret. Supplied out of band and written with a write-only secret version."
+  type        = string
+  sensitive   = true
+  nullable    = true
+  default     = null
+}
+
+variable "application_secrets_version" {
+  description = "Monotonic version used to publish application_secrets_json."
+  type        = number
+  default     = 1
 }
 
 variable "africastalking_sender_id" {

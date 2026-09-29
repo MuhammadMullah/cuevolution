@@ -49,23 +49,27 @@ in `app/deploy/README.md` for exactly how this played out removing Cloud Run).
 
 ## Secrets
 
-`cuevolution-production-application-secrets` holds one JSON version with the
-values below; Terraform never writes it. Add a version outside the repository:
+`cuevolution-production-application-secrets` holds one JSON version. Terraform
+can publish it from a sensitive, write-only `application_secrets_json` input;
+do not commit the value or put it in a normal `.tfvars` file.
 
-```bash
-gcloud secrets versions add cuevolution-production-application-secrets \
-  --project=cuevolution-app --data-file=production-secrets.json
-```
+Pass the complete JSON payload through an untracked `production.tfvars` file
+and bump `application_secrets_version` for each update:
 
-```json
+```hcl
+application_secrets_version = 2
+application_secrets_json = <<-JSON
 {
   "SECRET_KEY_BASE": "...",
-  "SMTP_USERNAME": "admin@cuevolutionke.com",
-  "SMTP_PASSWORD": "<Google app password>",
+  "POSTMARK_SERVER_TOKEN": "...",
   "AFRICASTALKING_API_KEY": "...",
   "AFRICASTALKING_USERNAME": "..."
 }
+JSON
 ```
+
+Then apply the production workspace with that tfvars file. Terraform sends the
+payload using Secret Manager's write-only field, so it is not stored in state.
 
 `DATABASE_URL` comes from `cuevolution-production-vm-database-url`, generated
 with the database password (same password as the SQL user, just a
@@ -74,8 +78,8 @@ env var overrides the same key in the JSON blob. To rotate the database
 password, bump `db_password_version` and apply, then redeploy so the VM
 fetches the new secret version.
 
-Mail must use `smtp_auth`: there is no static egress IP, so the IP-allowlisted
-`smtp_relay` mode cannot work.
+Mail uses `postmark` through Postmark's HTTP API. The sender address is
+`admin@cuevolutionke.com` and must be verified in Postmark.
 
 ## Deploys
 

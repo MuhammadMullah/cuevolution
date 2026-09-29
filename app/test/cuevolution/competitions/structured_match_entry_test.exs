@@ -11,7 +11,7 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
         |> Repo.preload([:participant_a, :participant_b])
 
       recorder = insert(:admin, role: "venue_representative")
-      verifier = insert(:admin, role: "regional_coordinator")
+      verifier = insert(:admin, role: "tournament_director")
 
       assert {:ok, result} =
                Competitions.record_frames(fixture, recorder, ["a", "a", "a", "b", "b"])
@@ -91,7 +91,7 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
 
     test "requires a reason to postpone and can resume with approval permission" do
       fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M4")
-      admin = insert(:admin, role: "regional_coordinator")
+      admin = insert(:admin, role: "tournament_director")
 
       assert {:error, :reason_required} = Competitions.postpone_fixture(fixture, admin, " ")
       assert {:ok, postponed} = Competitions.postpone_fixture(fixture, admin, "Venue unavailable")
@@ -117,7 +117,7 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
           match_id: "SP26-NBO-MS-A-R1-M9"
         )
 
-      admin = insert(:admin, role: "regional_coordinator")
+      admin = insert(:admin, role: "tournament_director")
       recorder = insert(:admin, role: "venue_representative")
 
       assert {:ok, _result} = Competitions.record_frames(fixture, recorder, [:a, :a, :a, :b, :b])
@@ -152,7 +152,7 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
           match_id: "SP26-NBO-MS-A-R1-M12"
         )
 
-      admin = insert(:admin, role: "regional_coordinator")
+      admin = insert(:admin, role: "tournament_director")
       recorder = insert(:admin, role: "venue_representative")
 
       assert {:ok, _result} = Competitions.record_frames(fixture, recorder, [:a, :a, :a, :b, :b])
