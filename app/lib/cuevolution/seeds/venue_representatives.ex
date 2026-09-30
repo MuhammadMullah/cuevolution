@@ -359,11 +359,7 @@ defmodule Cuevolution.Seeds.VenueRepresentatives do
       nil ->
         with {:ok, venue, venue_status} <- find_or_create_venue(contact.venue, region_id),
              {:ok, admin} <-
-               Accounts.invite_admin(
-                 inviter,
-                 invite_attrs(contact, region_id, venue.id),
-                 &setup_url/1
-               ) do
+               Accounts.invite_admin(inviter, invite_attrs(contact, venue.id), &setup_url/1) do
           IO.puts("Invited #{contact.email} for #{venue.name}")
           {:invited, %{email: admin.email, venue_status: venue_status}}
         else
@@ -400,11 +396,10 @@ defmodule Cuevolution.Seeds.VenueRepresentatives do
       where: fragment("lower(trim(?))", venue.name) == ^String.downcase(name)
   end
 
-  defp invite_attrs(contact, region_id, venue_id) do
+  defp invite_attrs(contact, venue_id) do
     %{
       "email" => contact.email,
       "role" => "venue_representative",
-      "region_id" => region_id,
       "venue_id" => venue_id,
       "mobile_number" => contact.phone
     }
