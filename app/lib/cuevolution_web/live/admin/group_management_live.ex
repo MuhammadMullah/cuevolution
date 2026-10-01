@@ -70,6 +70,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
        gr_open_group_id: nil,
        gr_selected_member_id: nil,
        gr_view: :groups,
+       standings_view: :per_group,
        proposal: nil,
        group_count: nil,
        sizes: nil,
@@ -130,6 +131,11 @@ defmodule CuevolutionWeb.GroupManagementLive do
   def handle_event("select_gr_view", %{"view" => view}, socket) do
     view = if view == "standings", do: :standings, else: :groups
     {:noreply, socket |> assign(:gr_view, view) |> load_gr_standings_if_needed()}
+  end
+
+  def handle_event("select_standings_view", %{"view" => view}, socket) do
+    view = if view == "overall", do: :overall, else: :per_group
+    {:noreply, assign(socket, :standings_view, view)}
   end
 
   ## grOff: manual create-group / assign-member flow (unchanged behavior)
@@ -447,6 +453,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
     socket =
       assign(socket,
         gr_view: :groups,
+        standings_view: :per_group,
         proposal: nil,
         group_count: nil,
         sizes: nil,
@@ -523,6 +530,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
     assign(socket,
       standings_tables: tables,
+      overall_rows: overall_rows(tables),
       standings_names: names,
       config: config,
       best_rest_qualifiers: best_rest,
@@ -568,6 +576,20 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   defp override_value(%{assigns: %{proposal: %{group_count: same}, group_count: same}}), do: nil
   defp override_value(%{assigns: %{group_count: count}}), do: count
+
+  # Cross-group overview for the "Venue overall" standings toggle — ranked
+  # by points (then frame difference, then wins) across every group at this
+  # venue. This is a convenience view only: official qualification is
+  # decided per group above, since group sizes and schedules differ.
+  defp overall_rows(tables) do
+    tables
+    |> Enum.flat_map(fn table ->
+      Enum.map(table.rows, &Map.merge(&1, %{group_name: table.group.name, tied: false}))
+    end)
+    |> Enum.sort_by(&{-&1.points, -&1.frame_diff, -&1.wins}, :asc)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {row, rank} -> Map.put(row, :rank, rank) end)
+  end
 
   defp name_rows(rows) do
     ids = Enum.map(rows, & &1.participant_id)

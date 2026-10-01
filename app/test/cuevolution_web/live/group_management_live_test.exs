@@ -533,5 +533,113 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       html = view |> element("button", "Confirm & advance") |> render_click()
       assert html =~ "Qualifiers advanced."
     end
+
+    test "Venue overall toggle combines every group's standings into one ranked table",
+         %{conn: conn} do
+      grassroots = Repo.get_by!(Stage, name: "Grassroots")
+      region = build(:region)
+      venue = insert(:venue, region_id: region.id)
+
+      draw =
+        Repo.insert!(%Draw{
+          stage_id: grassroots.id,
+          venue_id: venue.id,
+          category: "male",
+          state: "published",
+          random_seed: "test-seed",
+          formula_group_count: 2
+        })
+
+      group_a =
+        Repo.insert!(%Group{
+          stage_id: grassroots.id,
+          region_id: region.id,
+          venue_id: venue.id,
+          draw_id: draw.id,
+          category: "male",
+          name: "Table A"
+        })
+
+      group_b =
+        Repo.insert!(%Group{
+          stage_id: grassroots.id,
+          region_id: region.id,
+          venue_id: venue.id,
+          draw_id: draw.id,
+          category: "male",
+          name: "Table B"
+        })
+
+      member_of = fn participation, group ->
+        Repo.insert!(%Cuevolution.Competitions.GroupMembership{
+          group_id: group.id,
+          stage_participation_id: participation.id
+        })
+
+        participation
+      end
+
+      [a1, a2] =
+        for _ <- 1..2 do
+          insert(:stage_participation,
+            stage_id: grassroots.id,
+            region_id: region.id,
+            category: "male"
+          )
+          |> member_of.(group_a)
+        end
+
+      [b1, b2] =
+        for _ <- 1..2 do
+          insert(:stage_participation,
+            stage_id: grassroots.id,
+            region_id: region.id,
+            category: "male"
+          )
+          |> member_of.(group_b)
+        end
+
+      verified_result(group_a, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 5,
+        "participant_b_frames" => 0,
+        "points_a" => 6,
+        "points_b" => 0,
+        "bonus_a" => 1,
+        "bonus_b" => 0
+      })
+
+      verified_result(group_b, venue, b1, b2, %{
+        "winner_id" => b1.id,
+        "participant_a_frames" => 5,
+        "participant_b_frames" => 0,
+        "points_a" => 6,
+        "points_b" => 0,
+        "bonus_a" => 1,
+        "bonus_b" => 0
+      })
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{region.id}']") |> render_click()
+      view |> element("button[phx-value-id='#{venue.id}']") |> render_click()
+      html = view |> element("button", "Group standings") |> render_click()
+
+      assert html =~ "Table A"
+      assert html =~ "Table B"
+      refute html =~ "all groups combined"
+
+      html = view |> element("button", "Venue overall") |> render_click()
+
+      assert html =~ "all groups combined"
+      assert html =~ "GROUP"
+      assert html =~ "Table A"
+      assert html =~ "Table B"
+      refute html =~ "Provisional"
+
+      html = view |> element("button", "Per group") |> render_click()
+      refute html =~ "all groups combined"
+    end
   end
 end

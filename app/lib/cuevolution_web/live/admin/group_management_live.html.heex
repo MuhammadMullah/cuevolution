@@ -109,6 +109,33 @@
       </button>
     </div>
 
+    <div :if={@gr_view == :standings} class="mb-5 flex gap-2">
+      <button
+        type="button"
+        phx-click="select_standings_view"
+        phx-value-view="per_group"
+        class={[
+          "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
+          @standings_view == :per_group && "bg-ink-950 text-white",
+          @standings_view != :per_group && "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
+        ]}
+      >
+        Per group
+      </button>
+      <button
+        type="button"
+        phx-click="select_standings_view"
+        phx-value-view="overall"
+        class={[
+          "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
+          @standings_view == :overall && "bg-ink-950 text-white",
+          @standings_view != :overall && "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
+        ]}
+      >
+        Venue overall
+      </button>
+    </div>
+
     <%= if @gr_view == :groups do %>
       <div class="mb-4 flex flex-wrap items-center gap-2">
         <%= for index <- 0..3 do %>
@@ -383,45 +410,57 @@
         </div>
       <% end %>
     <% else %>
-      <div :for={table <- @standings_tables} class="mb-6">
-        <div class="mb-2.5 flex flex-wrap items-center gap-2.5">
-          <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{table.group.name}</h2>
-          <span class={[
-            "rounded-full px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide",
-            table.final? && "bg-ink-950 text-white",
-            !table.final? && "bg-ink-100 text-ink-600"
-          ]}>
-            {if table.final?, do: "Final", else: "Provisional"}
-          </span>
-        </div>
-        <AdminComponents.grassroots_standings_table rows={table.rows} />
+      <%= if @standings_view == :per_group do %>
+        <div :for={table <- @standings_tables} class="mb-6">
+          <div class="mb-2.5 flex flex-wrap items-center gap-2.5">
+            <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{table.group.name}</h2>
+            <span class={[
+              "rounded-full px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide",
+              table.final? && "bg-ink-950 text-white",
+              !table.final? && "bg-ink-100 text-ink-600"
+            ]}>
+              {if table.final?, do: "Final", else: "Provisional"}
+            </span>
+          </div>
+          <AdminComponents.grassroots_standings_table rows={table.rows} />
 
-        <div
-          :if={@can_manage_groups? and Enum.any?(table.rows, & &1.tied)}
-          class="mt-3 flex flex-wrap gap-2"
-        >
-          <button
-            :for={row <- Enum.filter(table.rows, & &1.tied)}
-            type="button"
-            phx-click="open_tie"
-            phx-value-participant-a={row.participant_id}
-            phx-value-participant-b={tie_opponent(table.rows, row.participant_id)}
-            class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900"
-          >
-            {row.name} ranks higher
-          </button>
-        </div>
-
-        <div :if={table.top != []} class="mt-3 flex flex-wrap gap-2">
           <div
-            :for={row <- table.top}
-            class="rounded-lg border border-ink-200 border-l-4 border-l-red-500 bg-white px-3.5 py-2"
+            :if={@can_manage_groups? and Enum.any?(table.rows, & &1.tied)}
+            class="mt-3 flex flex-wrap gap-2"
           >
-            <div class="text-[13.5px] font-semibold text-ink-950">{row.name}</div>
-            <div class="font-mono text-[11px] text-ink-400">qualifies from this group</div>
+            <button
+              :for={row <- Enum.filter(table.rows, & &1.tied)}
+              type="button"
+              phx-click="open_tie"
+              phx-value-participant-a={row.participant_id}
+              phx-value-participant-b={tie_opponent(table.rows, row.participant_id)}
+              class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900"
+            >
+              {row.name} ranks higher
+            </button>
+          </div>
+
+          <div :if={table.top != []} class="mt-3 flex flex-wrap gap-2">
+            <div
+              :for={row <- table.top}
+              class="rounded-lg border border-ink-200 border-l-4 border-l-red-500 bg-white px-3.5 py-2"
+            >
+              <div class="text-[13.5px] font-semibold text-ink-950">{row.name}</div>
+              <div class="font-mono text-[11px] text-ink-400">qualifies from this group</div>
+            </div>
           </div>
         </div>
-      </div>
+      <% else %>
+        <div class="mb-6">
+          <h2 class="mb-2.5 text-[15px] font-bold tracking-tight text-ink-950">
+            {@venue.name} · all groups combined
+          </h2>
+          <p class="mb-2.5 text-[12.5px] text-ink-500">
+            A quick cross-group overview, ranked by points — qualification is still decided per group above.
+          </p>
+          <AdminComponents.grassroots_standings_table rows={@overall_rows} show_group />
+        </div>
+      <% end %>
 
       <div :if={@best_rest_qualifiers != []} class="mb-6">
         <h3 class="mb-2 text-[13.5px] font-bold text-ink-950">Best of rest (cross-group)</h3>

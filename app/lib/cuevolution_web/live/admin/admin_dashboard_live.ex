@@ -9,7 +9,9 @@ defmodule CuevolutionWeb.AdminDashboardLive do
   import Ecto.Query
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.Player
+  alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications.Notification
@@ -26,7 +28,7 @@ defmodule CuevolutionWeb.AdminDashboardLive do
       socket
       |> assign(
         page_title: "Dashboard",
-        stat_tiles: stat_tiles(),
+        stat_tiles: stat_tiles(socket.assigns.current_admin),
         region_chart: region_chart(),
         registration_chart: registration_chart(),
         category_mix: category_mix(),
@@ -73,7 +75,72 @@ defmodule CuevolutionWeb.AdminDashboardLive do
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
 
-  defp stat_tiles do
+  # Venue representatives only manage one venue — their stat tiles reflect
+  # that venue's numbers rather than the whole tournament's.
+  defp stat_tiles(%Admin{role: "venue_representative", venue_id: venue_id})
+       when not is_nil(venue_id) do
+    week_ago = DateTime.add(DateTime.utc_now(), -@week_seconds, :second)
+    now = DateTime.utc_now()
+    next_week = DateTime.add(now, @week_seconds, :second)
+
+    players_query = venue_players_query(venue_id)
+    players_total = Repo.aggregate(players_query, :count)
+
+    players_this_week =
+      Repo.aggregate(players_query |> where([p], p.inserted_at >= ^week_ago), :count)
+
+    teams_query = from(t in Team, where: t.match_venue_id == ^venue_id)
+    teams_total = Repo.aggregate(teams_query, :count)
+
+    teams_this_week =
+      Repo.aggregate(teams_query |> where([t], t.inserted_at >= ^week_ago), :count)
+
+    fixtures = Competitions.list_fixtures_for_venue(venue_id)
+
+    fixtures_this_week =
+      Enum.count(fixtures, fn fixture ->
+        fixture.scheduled_at &&
+          DateTime.compare(fixture.scheduled_at, now) != :lt &&
+          DateTime.compare(fixture.scheduled_at, next_week) == :lt
+      end)
+
+    pending_results = Enum.count(fixtures, &is_nil(&1.result_id))
+
+    [
+      %{
+        label: "Registered players",
+        value: to_string(players_total),
+        delta: week_delta(players_this_week),
+        delta_class: "text-green-600"
+      },
+      %{
+        label: "Active teams",
+        value: to_string(teams_total),
+        delta: week_delta(teams_this_week),
+        delta_class: "text-green-600"
+      },
+      %{
+        label: "Regions",
+        value: "1",
+        delta: nil,
+        delta_class: "text-ink-500"
+      },
+      %{
+        label: "Fixtures this week",
+        value: to_string(fixtures_this_week),
+        delta: "scheduled in the next 7 days",
+        delta_class: "text-ink-500"
+      },
+      %{
+        label: "Pending results",
+        value: to_string(pending_results),
+        delta: "fixtures awaiting entry",
+        delta_class: "text-ink-500"
+      }
+    ]
+  end
+
+  defp stat_tiles(_admin) do
     week_ago = DateTime.add(DateTime.utc_now(), -@week_seconds, :second)
 
     players_total = Repo.aggregate(active_players_query(), :count)
@@ -118,6 +185,10 @@ defmodule CuevolutionWeb.AdminDashboardLive do
         delta_class: "text-ink-500"
       }
     ]
+  end
+
+  defp venue_players_query(venue_id) do
+    from(p in Player, where: is_nil(p.anonymized_at) and p.preferred_venue_id == ^venue_id)
   end
 
   defp week_delta(0), do: nil

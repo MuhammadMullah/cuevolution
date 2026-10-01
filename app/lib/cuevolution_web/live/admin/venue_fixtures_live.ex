@@ -208,10 +208,10 @@ defmodule CuevolutionWeb.VenueFixturesLive do
                 {fixture_group(fixture)}
               </span>
               <span class={[
-                "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
+                "rounded-full px-2.5 py-1 text-xs font-semibold",
                 fixture_status_class(fixture)
               ]}>
-                {fixture.status || "scheduled"}
+                {fixture_status_label(fixture)}
               </span>
             </div>
             <span class="font-mono text-xs text-ink-500">{fixture.match_id || "Fixture"}</span>
@@ -305,12 +305,19 @@ defmodule CuevolutionWeb.VenueFixturesLive do
   defp fixture_group(%{round: %{group: %{name: name}}}) when is_binary(name), do: name
   defp fixture_group(_fixture), do: "Knockout"
 
-  defp fixture_status_class(%{status: status}) when status in ["completed", "verified"],
-    do: "bg-green-50 text-green-700"
-
+  defp fixture_status_class(%{status: "verified"}), do: "bg-green-50 text-green-700"
+  defp fixture_status_class(%{status: "completed"}), do: "bg-amber-50 text-amber-700"
   defp fixture_status_class(%{status: "walkover"}), do: "bg-amber-50 text-amber-700"
   defp fixture_status_class(%{status: "postponed"}), do: "bg-red-50 text-red-700"
   defp fixture_status_class(_fixture), do: "bg-ink-100 text-ink-500"
+
+  defp fixture_status_label(%{status: "completed"}), do: "Pending approval"
+  defp fixture_status_label(%{status: "verified"}), do: "Approved"
+
+  defp fixture_status_label(%{status: status}) when is_binary(status),
+    do: String.capitalize(status)
+
+  defp fixture_status_label(_fixture), do: "Scheduled"
 
   defp fixture_score(%{
          result: %{score: %{"participant_a_frames" => a, "participant_b_frames" => b}}

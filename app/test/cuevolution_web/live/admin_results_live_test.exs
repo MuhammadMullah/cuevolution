@@ -162,15 +162,103 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     conn = log_in_admin(conn, id: director.id, role: director.role)
     {:ok, view, html} = live(conn, ~p"/admin/results")
 
-    assert html =~ "Pending approval"
-    view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+    assert html =~ "Provisional results awaiting approval"
+    refute html =~ "Unplayed"
+    refute html =~ "Played / Correct"
 
-    html = view |> element("#approve-result") |> render_click()
+    view |> element("#select-result-#{fixture.id}") |> render_click()
+    html = view |> element("#approve-selected-results") |> render_click()
 
-    assert html =~ "Result approved and finalized."
-    assert html =~ "Approved and final."
+    assert html =~ "1 result approved."
 
     assert Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).status ==
              "verified"
+  end
+
+  test "tournament director filters provisional results and approves multiple selections", %{
+    conn: conn
+  } do
+    region = build(:region)
+    venue_a = insert(:venue, region_id: region.id)
+    venue_b = insert(:venue, region_id: region.id)
+    fixture_a = insert(:fixture, venue_id: venue_a.id)
+    fixture_b = insert(:fixture, venue_id: venue_b.id)
+    admin = insert(:admin)
+
+    {:ok, _result_a} =
+      Competitions.record_result(fixture_a, admin, %{
+        "winner_participation_id" => fixture_a.participant_a_id
+      })
+
+    {:ok, _result_b} =
+      Competitions.record_result(fixture_b, admin, %{
+        "winner_participation_id" => fixture_b.participant_a_id
+      })
+
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
+    {:ok, view, html} = live(conn, ~p"/admin/results")
+
+    assert html =~ "Provisional results awaiting approval"
+    assert has_element?(view, "#select-result-#{fixture_a.id}")
+    assert has_element?(view, "#select-result-#{fixture_b.id}")
+
+    html =
+      view
+      |> form("#result-approval-filters", %{"region_id" => region.id, "venue_id" => venue_a.id})
+      |> render_change()
+
+    assert html =~ "select-result-#{fixture_a.id}"
+    refute html =~ "select-result-#{fixture_b.id}"
+
+    _html =
+      view
+      |> form("#result-approval-filters", %{"region_id" => region.id, "venue_id" => ""})
+      |> render_change()
+
+    view |> element("#select-result-#{fixture_a.id}") |> render_click()
+    view |> element("#select-result-#{fixture_b.id}") |> render_click()
+    assert render(view) =~ "Approve selected (2)"
+
+    html = view |> element("#approve-selected-results") |> render_click()
+
+    assert html =~ "2 results approved."
+
+    assert Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture_a.id).status ==
+             "verified"
+
+    assert Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture_b.id).status ==
+             "verified"
+  end
+
+  test "the approval queue paginates when there are more pending results than one page",
+       %{conn: conn} do
+    admin = insert(:admin)
+    per_page = Competitions.pending_results_per_page()
+
+    for _ <- 1..(per_page + 1) do
+      fixture = insert(:fixture)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+    end
+
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
+    {:ok, view, html} = live(conn, ~p"/admin/results")
+
+    assert html =~ "Page 1 of 2"
+    assert count_occurrences(html, ~s(id="select-result-)) == per_page
+
+    html = view |> element("#approval-next-page") |> render_click()
+
+    assert html =~ "Page 2 of 2"
+    assert count_occurrences(html, ~s(id="select-result-)) == 1
+  end
+
+  defp count_occurrences(html, substring) do
+    html |> String.split(substring) |> length() |> Kernel.-(1)
   end
 end

@@ -16,32 +16,113 @@ defmodule CuevolutionWeb.AdminResultsLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Accounts
   alias Cuevolution.Competitions
+  alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
 
   def mount(_params, _session, socket) do
-    unplayed = Competitions.list_unplayed_fixtures_for_admin(socket.assigns.current_admin)
-    played = Competitions.list_played_fixtures_for_admin(socket.assigns.current_admin)
+    current_admin = socket.assigns.current_admin
+    can_approve_results? = Admin.can?(current_admin, :approve_results)
+    can_record_results? = Admin.can?(current_admin, :record_results)
+    regions = if can_approve_results?, do: Accounts.list_regions(), else: []
+    approval_venues = if can_approve_results?, do: Venues.list_venues(%{active: true}), else: []
 
-    {:ok,
-     socket
-     |> assign(
-       page_title: "Results & Points",
-       tab: "unplayed",
-       selected_unplayed: nil,
-       selected_played: nil,
-       result_form: to_form(%{}, as: :result),
-       correction_form: to_form(%{}, as: :result),
-       points_forms: %{},
-       unplayed_empty?: unplayed == [],
-       played_empty?: played == []
-     )
-     |> stream(:unplayed, unplayed)
-     |> stream(:played, played)}
+    unplayed =
+      if can_record_results?,
+        do: Competitions.list_unplayed_fixtures_for_admin(current_admin),
+        else: []
+
+    played =
+      if can_record_results?,
+        do: Competitions.list_played_fixtures_for_admin(current_admin),
+        else: []
+
+    socket =
+      socket
+      |> assign(
+        page_title: "Results & Points",
+        tab: "unplayed",
+        selected_unplayed: nil,
+        selected_played: nil,
+        result_form: to_form(%{}, as: :result),
+        correction_form: to_form(%{}, as: :result),
+        points_forms: %{},
+        can_approve_results?: can_approve_results?,
+        can_record_results?: can_record_results?,
+        approval_regions: regions,
+        approval_venues: approval_venues,
+        approval_region_id: nil,
+        approval_venue_id: nil,
+        approval_page: 1,
+        selected_result_ids: MapSet.new(),
+        unplayed_empty?: unplayed == [],
+        played_empty?: played == []
+      )
+      |> load_pending_results()
+      |> stream(:unplayed, unplayed)
+      |> stream(:played, played)
+
+    {:ok, socket}
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :tab, tab)}
+  end
+
+  def handle_event("filter_approval", %{"region_id" => region_id, "venue_id" => venue_id}, socket) do
+    region_id = blank_to_nil(region_id)
+    venues = approval_venues_for_region(region_id)
+    venue_id = valid_venue_id(venues, venue_id)
+
+    {:noreply,
+     socket
+     |> assign(:approval_venues, venues)
+     |> assign(:approval_region_id, region_id)
+     |> assign(:approval_venue_id, venue_id)
+     |> assign(:approval_page, 1)
+     |> assign(:selected_result_ids, MapSet.new())
+     |> load_pending_results()}
+  end
+
+  def handle_event("change_approval_page", %{"page" => page}, socket) do
+    page = parse_page(page, socket.assigns.approval_total_pages)
+
+    {:noreply,
+     socket
+     |> assign(:approval_page, page)
+     |> assign(:selected_result_ids, MapSet.new())
+     |> load_pending_results()}
+  end
+
+  def handle_event("toggle_result_selection", %{"id" => id}, socket) do
+    selected_result_ids = socket.assigns.selected_result_ids
+
+    selected_result_ids =
+      if MapSet.member?(selected_result_ids, id),
+        do: MapSet.delete(selected_result_ids, id),
+        else: MapSet.put(selected_result_ids, id)
+
+    {:noreply, assign(socket, :selected_result_ids, selected_result_ids)}
+  end
+
+  def handle_event("approve_selected_results", _params, socket) do
+    fixture_ids = MapSet.to_list(socket.assigns.selected_result_ids)
+
+    case Competitions.approve_pending_results(socket.assigns.current_admin, fixture_ids) do
+      {:ok, count} ->
+        {:noreply,
+         socket
+         |> assign(:selected_result_ids, MapSet.new())
+         |> load_pending_results()
+         |> put_flash(:info, "#{count} result#{if count == 1, do: "", else: "s"} approved.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to approve results.")}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "The selected results could not be approved.")}
+    end
   end
 
   def handle_event("select_fixture", %{"id" => id}, socket) do
@@ -232,6 +313,55 @@ defmodule CuevolutionWeb.AdminResultsLive do
   defp fixture_label(fixture) do
     "#{Competitions.participant_name(fixture.participant_a)} vs #{Competitions.participant_name(fixture.participant_b)}"
   end
+
+  defp approval_venues_for_region(nil), do: Venues.list_venues(%{active: true})
+  defp approval_venues_for_region(region_id), do: Venues.list_active_for_region(region_id)
+
+  defp valid_venue_id(_venues, value) when value in [nil, ""], do: nil
+
+  defp valid_venue_id(venues, value) do
+    if Enum.any?(venues, &(&1.id == value)), do: value, else: nil
+  end
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
+  defp load_pending_results(socket) do
+    if socket.assigns.can_approve_results? do
+      %{approval_region_id: region_id, approval_venue_id: venue_id, approval_page: page} =
+        socket.assigns
+
+      per_page = Competitions.pending_results_per_page()
+      total_count = Competitions.count_pending_result_fixtures(region_id, venue_id)
+      total_pages = max(1, ceil(total_count / per_page))
+      page = page |> max(1) |> min(total_pages)
+      pending_results = Competitions.list_pending_result_fixtures(region_id, venue_id, page)
+
+      socket
+      |> assign(:approval_page, page)
+      |> assign(:approval_total_pages, total_pages)
+      |> assign(:pending_results_empty?, pending_results == [])
+      |> stream(:pending_results, pending_results, reset: true)
+    else
+      socket
+      |> assign(:approval_page, 1)
+      |> assign(:approval_total_pages, 1)
+      |> assign(:pending_results_empty?, true)
+      |> stream(:pending_results, [], reset: true)
+    end
+  end
+
+  defp parse_page(page, total_pages) when is_binary(page) do
+    case Integer.parse(page) do
+      {page, ""} -> parse_page(page, total_pages)
+      _ -> 1
+    end
+  end
+
+  defp parse_page(page, total_pages) when is_integer(page),
+    do: page |> max(1) |> min(max(total_pages, 1))
+
+  defp parse_page(_page, _total_pages), do: 1
 
   defp fixture_venue_label(%{venue: %{name: name}}), do: name
 

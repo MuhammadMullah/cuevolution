@@ -44,6 +44,50 @@ defmodule CuevolutionWeb.AdminDashboardLiveTest do
     assert html =~ ~s(name="filter[region_id]")
   end
 
+  test "tournament directors see Results & Points but not Audit Log in the sidebar", %{
+    conn: conn
+  } do
+    admin = insert(:admin, role: "tournament_director")
+    token = Accounts.generate_admin_session_token(admin)
+
+    conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+    {:ok, _view, html} = live(conn, ~p"/admin/dashboard")
+
+    assert html =~ "Results &amp; Points"
+    refute html =~ "Audit Log"
+  end
+
+  test "other roles with directory access still see Audit Log in the sidebar", %{conn: conn} do
+    admin = insert(:admin, role: "regional_coordinator")
+    token = Accounts.generate_admin_session_token(admin)
+
+    conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+    {:ok, _view, html} = live(conn, ~p"/admin/dashboard")
+
+    assert html =~ "Audit Log"
+  end
+
+  describe "stat tiles for venue representatives" do
+    test "reflect only their own venue's numbers", %{conn: conn} do
+      region = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "nairobi-a")
+      venue = insert(:venue, region_id: region.id, name: "My Venue")
+      other_venue = insert(:venue, region_id: region.id, name: "Other Venue")
+
+      insert(:player, region_id: region.id, preferred_venue_id: venue.id)
+      insert(:player, region_id: region.id, preferred_venue_id: venue.id)
+      insert(:player, region_id: region.id, preferred_venue_id: other_venue.id)
+
+      admin = insert(:admin, role: "venue_representative", venue_id: venue.id)
+      token = Accounts.generate_admin_session_token(admin)
+
+      conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+      {:ok, _view, html} = live(conn, ~p"/admin/dashboard")
+
+      assert html =~
+               ~r{Registered players</div>\s*<div class="font-mono text-\[26px\] font-semibold text-ink-950">2</div>}
+    end
+  end
+
   describe "Players per venue" do
     test "lists active venues with their player counts", %{conn: conn} do
       admin = insert(:admin)

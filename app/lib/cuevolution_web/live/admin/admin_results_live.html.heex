@@ -4,7 +4,143 @@
     Match results
   </h1>
 
-  <div class="mb-4 flex gap-2 border-b border-ink-200">
+  <section
+    :if={@can_approve_results?}
+    id="result-approval-queue"
+    class="mb-6 rounded-2xl border border-ink-200 bg-white p-4 shadow-[0_1px_2px_rgba(13,12,34,0.05)] sm:p-5"
+  >
+    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <AdminComponents.eyebrow class="mb-1">Tournament director</AdminComponents.eyebrow>
+        <h2 class="text-lg font-bold text-ink-950">Provisional results awaiting approval</h2>
+        <p class="mt-1 text-sm text-ink-500">
+          Filter by region and venue, select one or more results, then approve them as final.
+        </p>
+      </div>
+      <button
+        id="approve-selected-results"
+        type="button"
+        phx-click="approve_selected_results"
+        disabled={MapSet.size(@selected_result_ids) == 0}
+        class="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+      >
+        Approve selected ({MapSet.size(@selected_result_ids)})
+      </button>
+    </div>
+
+    <form id="result-approval-filters" phx-change="filter_approval" class="mb-4">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label
+            for="approval-region-filter"
+            class="mb-1.5 block text-sm font-semibold text-ink-800"
+          >
+            Region
+          </label>
+          <select
+            id="approval-region-filter"
+            name="region_id"
+            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          >
+            <option value="">All regions</option>
+            <option
+              :for={region <- @approval_regions}
+              value={region.id}
+              selected={@approval_region_id == region.id}
+            >
+              {region.name}
+            </option>
+          </select>
+        </div>
+        <div>
+          <label
+            for="approval-venue-filter"
+            class="mb-1.5 block text-sm font-semibold text-ink-800"
+          >
+            Venue
+          </label>
+          <select
+            id="approval-venue-filter"
+            name="venue_id"
+            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          >
+            <option value="">All venues</option>
+            <option
+              :for={venue <- @approval_venues}
+              value={venue.id}
+              selected={@approval_venue_id == venue.id}
+            >
+              {venue.name}
+            </option>
+          </select>
+        </div>
+      </div>
+    </form>
+
+    <div
+      id="pending-results"
+      phx-update="stream"
+      class="overflow-hidden rounded-xl border border-ink-200"
+    >
+      <div
+        id="pending-results-empty"
+        class="hidden only:block px-4 py-8 text-center text-sm text-ink-400"
+      >
+        No provisional results match these filters.
+      </div>
+      <div
+        :for={{dom_id, fixture} <- @streams.pending_results}
+        id={dom_id}
+        class="flex items-start gap-3 border-b border-ink-100 px-3 py-3 last:border-0 sm:items-center sm:px-4"
+      >
+        <input
+          id={"select-result-#{fixture.id}"}
+          type="checkbox"
+          phx-click="toggle_result_selection"
+          phx-value-id={fixture.id}
+          checked={MapSet.member?(@selected_result_ids, fixture.id)}
+          class="mt-1 size-4 rounded border-ink-300 text-ink-950 focus:ring-red-500 sm:mt-0"
+        />
+        <label for={"select-result-#{fixture.id}"} class="min-w-0 flex-1 cursor-pointer">
+          <div class="font-semibold text-[13.5px] text-ink-950">{fixture_label(fixture)}</div>
+          <div class="mt-0.5 text-[12.5px] text-ink-500">
+            {fixture_venue_label(fixture)} · Provisional
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <nav
+      :if={@approval_total_pages > 1}
+      id="approval-pagination"
+      aria-label="Approval queue pages"
+      class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 sm:flex-row"
+    >
+      <button
+        id="approval-previous-page"
+        type="button"
+        phx-click="change_approval_page"
+        phx-value-page={@approval_page - 1}
+        disabled={@approval_page == 1}
+        class="min-h-10 w-full rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+      >
+        Previous
+      </button>
+      <span class="text-sm text-ink-500">Page {@approval_page} of {@approval_total_pages}</span>
+      <button
+        id="approval-next-page"
+        type="button"
+        phx-click="change_approval_page"
+        phx-value-page={@approval_page + 1}
+        disabled={@approval_page == @approval_total_pages}
+        class="min-h-10 w-full rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+      >
+        Next
+      </button>
+    </nav>
+  </section>
+
+  <div :if={@can_record_results?} class="mb-4 flex gap-2 border-b border-ink-200">
     <button
       type="button"
       phx-click="switch_tab"
@@ -31,7 +167,10 @@
     </button>
   </div>
 
-  <div class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]", @tab != "unplayed" && "hidden"]}>
+  <div
+    :if={@can_record_results?}
+    class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]", @tab != "unplayed" && "hidden"]}
+  >
     <div
       id="unplayed-fixtures"
       phx-update="stream"
@@ -102,7 +241,10 @@
     </div>
   </div>
 
-  <div class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_400px]", @tab != "played" && "hidden"]}>
+  <div
+    :if={@can_record_results?}
+    class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_400px]", @tab != "played" && "hidden"]}
+  >
     <div
       id="played-fixtures"
       phx-update="stream"

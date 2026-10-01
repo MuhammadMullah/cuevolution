@@ -2673,6 +2673,85 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
+  @pending_results_per_page 20
+
+  @doc "How many provisional results are shown per page in the approval queue."
+  def pending_results_per_page, do: @pending_results_per_page
+
+  @doc "Provisional result fixtures, optionally filtered by region and venue, one page at a time."
+  def list_pending_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1) do
+    Fixture
+    |> pending_results_query(region_id, venue_id)
+    |> order_by([f, _r, _g, _v], asc: f.scheduled_at, asc: f.inserted_at)
+    |> limit(^@pending_results_per_page)
+    |> offset(^((max(page, 1) - 1) * @pending_results_per_page))
+    |> preload([
+      :venue,
+      [result: :winner_participation],
+      participant_a: [:player, :team, :stage],
+      participant_b: [:player, :team, :stage]
+    ])
+    |> Repo.all()
+  end
+
+  @doc "Total count of provisional results matching the same region/venue filters, for pagination."
+  def count_pending_result_fixtures(region_id \\ nil, venue_id \\ nil) do
+    Fixture
+    |> pending_results_query(region_id, venue_id)
+    |> Repo.aggregate(:count, :id)
+  end
+
+  defp pending_results_query(query, region_id, venue_id) do
+    query
+    |> join(:left, [f], r in Round, on: r.id == f.round_id)
+    |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
+    |> join(:left, [f, _r, _g], v in assoc(f, :venue))
+    |> where([f, _r, _g, _v], f.status == "completed" and not is_nil(f.result_id))
+    |> filter_pending_results_by_region(region_id)
+    |> filter_pending_results_by_venue(venue_id)
+  end
+
+  @doc "Approves a set of provisional results atomically for a results approver."
+  def approve_pending_results(%Admin{} = admin, fixture_ids) when is_list(fixture_ids) do
+    if Admin.can?(admin, :approve_results) do
+      fixtures =
+        Fixture
+        |> where([f], f.id in ^fixture_ids and f.status == "completed")
+        |> Repo.all()
+
+      multi =
+        Enum.reduce(fixtures, Multi.new(), fn fixture, multi ->
+          multi
+          |> Multi.update(
+            {:fixture, fixture.id},
+            Ecto.Changeset.change(fixture, status: "verified")
+          )
+          |> Multi.run({:log, fixture.id}, fn _repo, changes ->
+            Accounts.log_admin_action("verify_result", admin, changes[{:fixture, fixture.id}])
+          end)
+        end)
+
+      case Repo.transaction(multi) do
+        {:ok, _changes} -> {:ok, length(fixtures)}
+        {:error, _step, reason, _changes} -> {:error, reason}
+      end
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp filter_pending_results_by_region(query, nil), do: query
+
+  defp filter_pending_results_by_region(query, region_id) do
+    where(query, [_f, _r, g, v], v.region_id == ^region_id or g.region_id == ^region_id)
+  end
+
+  defp filter_pending_results_by_venue(query, nil), do: query
+
+  defp filter_pending_results_by_venue(query, venue_id) do
+    where(query, [f, _r, g, _v], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
+  end
+
   defp fixture_accessible_to_admin?(fixture_id, %Admin{} = admin) do
     Fixture
     |> scope_fixtures_for_admin(admin)

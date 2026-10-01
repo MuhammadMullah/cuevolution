@@ -106,16 +106,44 @@
     :if={@team.roster != []}
     class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <.link
+    <div
       :for={player <- @team.roster}
-      navigate={~p"/admin/players/#{player.id}"}
-      class="flex items-center justify-between gap-3 border-b border-ink-100 px-5 py-3 text-sm last:border-0 hover:bg-ink-50"
+      class="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-5 py-3 text-sm last:border-0"
     >
-      <span class="font-semibold text-ink-950">{player.first_name} {player.last_name}</span>
-      <span class="text-ink-500">
-        {if player.id == @team.captain_id, do: "Captain", else: "Player"}
-      </span>
-    </.link>
+      <.link
+        navigate={~p"/admin/players/#{player.id}"}
+        class="font-semibold text-ink-950 hover:text-red-600"
+      >
+        {player.first_name} {player.last_name}
+      </.link>
+      <div class="flex items-center gap-2">
+        <span class="text-ink-500">
+          {if player.id == @team.captain_id, do: "Captain", else: "Player"}
+        </span>
+        <button
+          :if={player.id != @team.captain_id}
+          id={"make-captain-#{player.id}"}
+          type="button"
+          phx-click="change_captain"
+          phx-value-id={player.id}
+          data-confirm={"Make #{player.first_name} #{player.last_name} the team captain?"}
+          class="cursor-pointer rounded-full border border-ink-300 px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          Make captain
+        </button>
+        <button
+          :if={player.id != @team.captain_id}
+          id={"remove-player-#{player.id}"}
+          type="button"
+          phx-click="remove_player"
+          phx-value-id={player.id}
+          data-confirm={"Remove #{player.first_name} #{player.last_name} from this team?"}
+          class="cursor-pointer rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
   </div>
   <div
     :if={@team.roster == []}

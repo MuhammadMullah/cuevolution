@@ -203,6 +203,40 @@ defmodule CuevolutionWeb.VenueFixturesLiveTest do
     end)
   end
 
+  test "distinguishes a result pending tournament director approval from an approved one", %{
+    conn: conn
+  } do
+    venue = insert(:venue)
+    stage = Cuevolution.Repo.get_by!(Stage, order: 1)
+
+    {pending_fixture, _p1, _p2} =
+      venue_fixture(venue, stage, "Group A", "PENDING-001", "+254700000031", "+254700000032")
+
+    {approved_fixture, _p3, _p4} =
+      venue_fixture(venue, stage, "Group B", "APPROVED-001", "+254700000033", "+254700000034")
+
+    admin = insert(:admin)
+
+    {:ok, _result} =
+      Cuevolution.Competitions.record_result(pending_fixture, admin, %{
+        "winner_participation_id" => pending_fixture.participant_a_id
+      })
+
+    {:ok, _result} =
+      Cuevolution.Competitions.record_result(approved_fixture, admin, %{
+        "winner_participation_id" => approved_fixture.participant_a_id
+      })
+
+    {:ok, _verified} =
+      Cuevolution.Competitions.verify_result(Repo.reload(approved_fixture), admin)
+
+    conn = log_in_admin(conn, insert(:admin, role: "venue_representative", venue_id: venue.id))
+    {:ok, _view, html} = live(conn, ~p"/admin/venue-fixtures")
+
+    assert html =~ "Pending approval"
+    assert html =~ "Approved"
+  end
+
   defp venue_fixture(venue, stage, group_name, match_id, mobile_one, mobile_two) do
     player_one = insert(:player, region_id: venue.region_id, mobile_number: mobile_one)
     player_two = insert(:player, region_id: venue.region_id, mobile_number: mobile_two)

@@ -82,6 +82,74 @@ defmodule CuevolutionWeb.TeamDetailLive do
     end
   end
 
+  def handle_event("remove_player", %{"id" => id}, socket) do
+    case fetch_player(id) do
+      %Player{} = player ->
+        case Teams.admin_remove_player_from_team(
+               socket.assigns.current_admin,
+               socket.assigns.team,
+               player
+             ) do
+          {:ok, _player} ->
+            {:noreply,
+             socket
+             |> put_flash(
+               :info,
+               "#{player.first_name} #{player.last_name} removed from the team."
+             )
+             |> reload_team()}
+
+          {:error, :unauthorized} ->
+            {:noreply, put_flash(socket, :error, "You don't have permission to manage teams.")}
+
+          {:error, :cannot_remove_captain} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Make someone else captain first before removing the current captain."
+             )}
+
+          {:error, :not_on_this_team} ->
+            {:noreply, put_flash(socket, :error, "That player isn't on this team.")}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Couldn't remove that player.")}
+        end
+
+      nil ->
+        {:noreply, put_flash(socket, :error, "That player is no longer available.")}
+    end
+  end
+
+  def handle_event("change_captain", %{"id" => id}, socket) do
+    case fetch_player(id) do
+      %Player{} = player ->
+        case Teams.admin_change_captain(socket.assigns.current_admin, socket.assigns.team, player) do
+          {:ok, _team} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "#{player.first_name} #{player.last_name} is now the captain.")
+             |> reload_team()}
+
+          {:error, :unauthorized} ->
+            {:noreply, put_flash(socket, :error, "You don't have permission to manage teams.")}
+
+          {:error, :not_on_this_team} ->
+            {:noreply, put_flash(socket, :error, "That player isn't on this team.")}
+
+          {:error, :already_captain} ->
+            {:noreply, put_flash(socket, :error, "That player is already the captain.")}
+
+          {:error, _reason} ->
+            {:noreply, put_flash(socket, :error, "Couldn't change the captain.")}
+        end
+
+      nil ->
+        {:noreply, put_flash(socket, :error, "That player is no longer available.")}
+    end
+  end
+
   def handle_event("delete_team", _params, socket) do
     case Teams.admin_delete_team(socket.assigns.current_admin, socket.assigns.team) do
       :ok ->

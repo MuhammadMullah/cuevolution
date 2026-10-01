@@ -395,6 +395,102 @@ defmodule Cuevolution.TeamsTest do
     end
   end
 
+  describe "admin_remove_player_from_team/3" do
+    test "removes a non-captain player and logs the admin action" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:ok, removed} = Teams.admin_remove_player_from_team(admin, team, member)
+      assert is_nil(removed.team_id)
+
+      assert Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+               entity_id: member.id,
+               action_type: "override_roster_remove"
+             )
+    end
+
+    test "rejects removing the current captain" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:error, :cannot_remove_captain} =
+               Teams.admin_remove_player_from_team(admin, team, captain)
+
+      assert Repo.get!(Player, captain.id).team_id == team.id
+    end
+
+    test "bypasses the roster freeze" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:ok, removed} = Teams.admin_remove_player_from_team(admin, team, member)
+      assert is_nil(removed.team_id)
+    end
+
+    test "rejects an admin without team-management permission" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:error, :unauthorized} = Teams.admin_remove_player_from_team(admin, team, member)
+      assert Repo.get!(Player, member.id).team_id == team.id
+    end
+  end
+
+  describe "admin_change_captain/3" do
+    test "reassigns the captain to another roster member and logs the admin action" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:ok, updated_team} = Teams.admin_change_captain(admin, team, member)
+      assert updated_team.captain_id == member.id
+
+      assert Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+               entity_id: team.id,
+               action_type: "admin_change_captain"
+             )
+    end
+
+    test "rejects a player who isn't on the team's roster" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      outsider = insert(:player)
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:error, :not_on_this_team} = Teams.admin_change_captain(admin, team, outsider)
+      assert Repo.get!(Cuevolution.Teams.Team, team.id).captain_id == captain.id
+    end
+
+    test "rejects reassigning to the current captain" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      captain = Repo.get!(Player, captain.id)
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:error, :already_captain} = Teams.admin_change_captain(admin, team, captain)
+    end
+
+    test "rejects an admin without team-management permission" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      {:ok, member} = Teams.add_player_to_roster(team, insert(:player, region_id: team.region_id))
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:error, :unauthorized} = Teams.admin_change_captain(admin, team, member)
+      assert Repo.get!(Cuevolution.Teams.Team, team.id).captain_id == captain.id
+    end
+  end
+
   describe "invite_player/2" do
     test "creates a pending invitation, dispatches a notification, and schedules expiry" do
       team = insert(:team)

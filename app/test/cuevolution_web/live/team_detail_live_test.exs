@@ -115,6 +115,49 @@ defmodule CuevolutionWeb.TeamDetailLiveTest do
     assert Repo.get(Cuevolution.Teams.Team, team.id)
   end
 
+  test "a tournament director can remove a non-captain player from the roster", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Admin Sharks"})
+    teammate = insert(:player, region_id: team.region_id)
+    {:ok, _teammate} = Teams.add_player_to_roster(team, teammate)
+
+    conn = log_in_admin(conn, "tournament_director")
+    {:ok, view, _html} = live(conn, ~p"/admin/teams/#{team.id}")
+
+    html = view |> element("#remove-player-#{teammate.id}") |> render_click()
+
+    assert html =~ "removed from the team"
+    refute has_element?(view, "#remove-player-#{teammate.id}")
+    assert is_nil(Repo.get!(Player, teammate.id).team_id)
+  end
+
+  test "an admin cannot remove the current captain without reassigning first", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Admin Sharks"})
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/teams/#{team.id}")
+
+    refute has_element?(view, "#remove-player-#{captain.id}")
+  end
+
+  test "an admin can change the team captain to another roster member", %{conn: conn} do
+    captain = insert(:player, first_name: "Cap", last_name: "Tain")
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Admin Sharks"})
+    teammate = insert(:player, first_name: "New", last_name: "Captain", region_id: team.region_id)
+    {:ok, _teammate} = Teams.add_player_to_roster(team, teammate)
+
+    conn = log_in_admin(conn, "tournament_director")
+    {:ok, view, _html} = live(conn, ~p"/admin/teams/#{team.id}")
+
+    html = view |> element("#make-captain-#{teammate.id}") |> render_click()
+
+    assert html =~ "is now the captain"
+    assert Repo.get!(Cuevolution.Teams.Team, team.id).captain_id == teammate.id
+    assert has_element?(view, "#remove-player-#{captain.id}")
+    refute has_element?(view, "#remove-player-#{teammate.id}")
+  end
+
   test "admins without team-management permission cannot open team management", %{conn: conn} do
     conn = log_in_admin(conn, "venue_representative")
     team = insert(:team)

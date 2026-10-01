@@ -101,6 +101,55 @@ defmodule Cuevolution.Teams do
     end
   end
 
+  @doc """
+  Removes a non-captain player from a team's roster on behalf of an
+  authorized admin — same `override_roster_change/4` path as
+  `admin_add_player_to_team/3`, so it bypasses the roster freeze (spec 005
+  FR-009) but not capacity/membership checks. The captain must be
+  reassigned first (`admin_change_captain/3`) before they can be removed —
+  spec 005 has no captain-succession rule, so letting an admin strip a
+  team's only captain would leave `captain_id` dangling.
+  """
+  def admin_remove_player_from_team(%Admin{} = admin, %Team{} = team, %Player{} = player) do
+    cond do
+      not Admin.can?(admin, :manage_teams) -> {:error, :unauthorized}
+      player.id == team.captain_id -> {:error, :cannot_remove_captain}
+      true -> override_roster_change(:remove, team, player, admin)
+    end
+  end
+
+  @doc """
+  Reassigns `team`'s captain to `new_captain` on behalf of an authorized
+  admin. `new_captain` must already be on the team's roster — this is an
+  admin override of team leadership, not exposed to captains/players
+  themselves (spec 005 explicitly leaves captain succession unresolved).
+  """
+  def admin_change_captain(%Admin{} = admin, %Team{} = team, %Player{} = new_captain) do
+    cond do
+      not Admin.can?(admin, :manage_teams) -> {:error, :unauthorized}
+      new_captain.team_id != team.id -> {:error, :not_on_this_team}
+      team.captain_id == new_captain.id -> {:error, :already_captain}
+      true -> do_admin_change_captain(admin, team, new_captain)
+    end
+  end
+
+  defp do_admin_change_captain(admin, team, new_captain) do
+    team
+    |> Team.changeset(%{captain_id: new_captain.id})
+    |> Repo.update()
+    |> case do
+      {:ok, updated_team} ->
+        Accounts.log_admin_action("admin_change_captain", admin, updated_team,
+          new_value: %{"captain_id" => new_captain.id}
+        )
+
+        {:ok, updated_team}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
   @doc "Deletes a team on behalf of an authorized admin and releases its roster."
   def admin_delete_team(%Admin{} = admin, %Team{} = team) do
     if Admin.can?(admin, :manage_teams) do
