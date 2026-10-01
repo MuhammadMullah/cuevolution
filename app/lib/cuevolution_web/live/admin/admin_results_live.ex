@@ -20,8 +20,8 @@ defmodule CuevolutionWeb.AdminResultsLive do
   alias CuevolutionWeb.AdminComponents
 
   def mount(_params, _session, socket) do
-    unplayed = Competitions.list_unplayed_fixtures()
-    played = Competitions.list_played_fixtures()
+    unplayed = Competitions.list_unplayed_fixtures_for_admin(socket.assigns.current_admin)
+    played = Competitions.list_played_fixtures_for_admin(socket.assigns.current_admin)
 
     {:ok,
      socket
@@ -45,7 +45,10 @@ defmodule CuevolutionWeb.AdminResultsLive do
   end
 
   def handle_event("select_fixture", %{"id" => id}, socket) do
-    fixture = Enum.find(Competitions.list_unplayed_fixtures(), &(&1.id == id))
+    fixture =
+      socket.assigns.current_admin
+      |> Competitions.list_unplayed_fixtures_for_admin()
+      |> Enum.find(&(&1.id == id))
 
     {:noreply,
      socket
@@ -63,14 +66,20 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
     case Competitions.record_result(fixture, socket.assigns.current_admin, attrs) do
       {:ok, _result} ->
-        played = Enum.find(Competitions.list_played_fixtures(), &(&1.id == fixture.id))
+        played =
+          socket.assigns.current_admin
+          |> Competitions.list_played_fixtures_for_admin()
+          |> Enum.find(&(&1.id == fixture.id))
 
         {:noreply,
          socket
          |> stream_delete(:unplayed, fixture)
          |> stream_insert(:played, played, at: 0)
          |> assign(:selected_unplayed, nil)
-         |> assign(:unplayed_empty?, Competitions.list_unplayed_fixtures() == [])
+         |> assign(
+           :unplayed_empty?,
+           Competitions.list_unplayed_fixtures_for_admin(socket.assigns.current_admin) == []
+         )
          |> assign(:played_empty?, false)
          |> put_flash(:info, "Result recorded.")}
 
@@ -83,7 +92,10 @@ defmodule CuevolutionWeb.AdminResultsLive do
   end
 
   def handle_event("select_played", %{"id" => id}, socket) do
-    fixture = Enum.find(Competitions.list_played_fixtures(), &(&1.id == id))
+    fixture =
+      socket.assigns.current_admin
+      |> Competitions.list_played_fixtures_for_admin()
+      |> Enum.find(&(&1.id == id))
 
     {:noreply,
      socket
@@ -95,6 +107,30 @@ defmodule CuevolutionWeb.AdminResultsLive do
        )
      )
      |> assign(:points_forms, build_points_forms(fixture))}
+  end
+
+  def handle_event("approve_result", _params, socket) do
+    fixture = socket.assigns.selected_played
+
+    case Competitions.verify_result(fixture, socket.assigns.current_admin) do
+      {:ok, _verified} ->
+        updated =
+          socket.assigns.current_admin
+          |> Competitions.list_played_fixtures_for_admin()
+          |> Enum.find(&(&1.id == fixture.id))
+
+        {:noreply,
+         socket
+         |> stream_insert(:played, updated, at: 0)
+         |> assign(:selected_played, updated)
+         |> put_flash(:info, "Result approved and finalized.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to approve results.")}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "This result could not be approved.")}
+    end
   end
 
   def handle_event("correct_result", %{"result" => params}, socket) do
@@ -206,7 +242,19 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
   defp played_fixture_summary(%{walkover_kind: "double"}), do: "NO RESULT — DEADLINE"
 
+  defp played_fixture_summary(%{status: "completed"} = fixture) do
+    "Pending approval · #{winner_label(fixture)}"
+  end
+
+  defp played_fixture_summary(%{status: "verified"} = fixture) do
+    "Final · #{winner_label(fixture)}"
+  end
+
   defp played_fixture_summary(fixture) do
+    winner_label(fixture)
+  end
+
+  defp winner_label(fixture) do
     "Winner: #{Competitions.participant_name(fixture.result.winner_participation)}"
   end
 end

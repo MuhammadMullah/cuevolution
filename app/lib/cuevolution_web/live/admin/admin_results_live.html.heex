@@ -83,13 +83,13 @@
             type="number"
             name="result[participant_a_frames]"
             placeholder="A frames (optional)"
-            class="w-1/2 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+            class="w-1/2 rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950 placeholder:text-ink-400"
           />
           <input
             type="number"
             name="result[participant_b_frames]"
             placeholder="B frames (optional)"
-            class="w-1/2 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
+            class="w-1/2 rounded-lg border border-ink-300 bg-white px-2.5 py-2 text-[13px] text-ink-950 placeholder:text-ink-400"
           />
         </div>
         <button
@@ -133,6 +133,29 @@
       class="flex flex-col gap-4 rounded-2xl border border-ink-200 bg-white p-4.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
     >
       <div>
+        <div
+          :if={@selected_played.status == "completed"}
+          class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800"
+        >
+          Awaiting tournament director approval. This result is not final yet.
+        </div>
+        <div
+          :if={@selected_played.status == "verified"}
+          class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800"
+        >
+          Approved and final.
+        </div>
+        <button
+          :if={
+            @selected_played.status == "completed" && Admin.can?(@current_admin, :approve_results)
+          }
+          id="approve-result"
+          type="button"
+          phx-click="approve_result"
+          class="mb-3 w-full rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-800"
+        >
+          Approve and finalize result
+        </button>
         <h2
           :if={Admin.can?(@current_admin, :approve_results)}
           class="mb-2 text-[14.5px] font-bold text-ink-950"

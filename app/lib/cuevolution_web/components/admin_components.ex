@@ -65,7 +65,7 @@ defmodule CuevolutionWeb.AdminComponents do
     {"Dashboard", "▦", "/admin/dashboard"},
     {"Stages", "◆", "/admin/stages"},
     {"Groups", "▤", "/admin/groups"},
-    {"Draws", "⚏", "/admin/draws"},
+    # {"Draws", "⚏", "/admin/draws"},
     {"Venue fixtures", "☎", "/admin/venue-fixtures"},
     {"Results & Points", "◔", "/admin/results"},
     {"Directory", "☰", "/admin/players"},

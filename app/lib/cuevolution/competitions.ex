@@ -1648,7 +1648,7 @@ defmodule Cuevolution.Competitions do
   `attrs`: `%{"winner_participation_id" => id, "score" => map | nil}`.
   """
   def record_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
-    if Admin.can?(admin, :record_results) do
+    if Admin.can?(admin, :record_results) and fixture_accessible_to_admin?(fixture.id, admin) do
       do_record_result(fixture, admin, attrs)
     else
       {:error, :unauthorized}
@@ -1669,7 +1669,9 @@ defmodule Cuevolution.Competitions do
     Multi.new()
     |> Multi.insert(:result, MatchResult.create_changeset(%MatchResult{}, result_attrs))
     |> Multi.update(:fixture, fn %{result: result} ->
-      Fixture.result_changeset(fixture, result.id)
+      fixture
+      |> Fixture.result_changeset(result.id)
+      |> Ecto.Changeset.put_change(:status, "completed")
     end)
     |> Multi.run(:roster_lock, fn _repo, _changes -> lock_rosters_if_team(fixture) end)
     |> Repo.transaction()
@@ -2632,6 +2634,16 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
+  @doc "Unplayed fixtures visible to an admin's venue or region scope."
+  def list_unplayed_fixtures_for_admin(%Admin{} = admin) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], is_nil(f.result_id))
+    |> order_by([f, _r, _g, _v], asc: f.scheduled_at)
+    |> preload([:venue, participant_a: [:player, :team], participant_b: [:player, :team]])
+    |> Repo.all()
+  end
+
   @doc "Fixtures with a recorded result, most recently played first — PointsEntryLive's Played tab."
   def list_played_fixtures do
     Fixture
@@ -2644,6 +2656,58 @@ defmodule Cuevolution.Competitions do
       participant_b: [:player, :team, :stage]
     ])
     |> Repo.all()
+  end
+
+  @doc "Played fixtures visible to an admin's venue or region scope."
+  def list_played_fixtures_for_admin(%Admin{} = admin) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], not is_nil(f.result_id))
+    |> order_by([f, _r, _g, _v], desc: f.scheduled_at)
+    |> preload([
+      :venue,
+      [result: :winner_participation],
+      participant_a: [:player, :team, :stage],
+      participant_b: [:player, :team, :stage]
+    ])
+    |> Repo.all()
+  end
+
+  defp fixture_accessible_to_admin?(fixture_id, %Admin{} = admin) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], f.id == ^fixture_id)
+    |> Repo.exists?()
+  end
+
+  defp scope_fixtures_for_admin(query, %Admin{role: "venue_representative", venue_id: venue_id})
+       when not is_nil(venue_id) do
+    query
+    |> join(:left, [f], r in Round, on: r.id == f.round_id)
+    |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
+    |> join(:left, [f, _r, _g], v in assoc(f, :venue))
+    |> where([f, _r, g, _v], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
+  end
+
+  defp scope_fixtures_for_admin(query, %Admin{role: "regional_coordinator", region_id: region_id})
+       when not is_nil(region_id) do
+    query
+    |> join(:left, [f], r in Round, on: r.id == f.round_id)
+    |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
+    |> join(:left, [f, _r, _g], v in assoc(f, :venue))
+    |> where([_f, _r, g, v], v.region_id == ^region_id or g.region_id == ^region_id)
+  end
+
+  defp scope_fixtures_for_admin(query, %Admin{role: role})
+       when role in ["venue_representative", "regional_coordinator"] do
+    where(query, [f], is_nil(f.id))
+  end
+
+  defp scope_fixtures_for_admin(query, _admin) do
+    query
+    |> join(:left, [f], r in Round, on: r.id == f.round_id)
+    |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
+    |> join(:left, [f, _r, _g], v in assoc(f, :venue))
   end
 
   @doc "Cuevo Points entries already recorded against `match_result_id` — the points-entry form's pre-fill."
