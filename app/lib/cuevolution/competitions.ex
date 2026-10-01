@@ -2714,30 +2714,35 @@ defmodule Cuevolution.Competitions do
   @doc "Approves a set of provisional results atomically for a results approver."
   def approve_pending_results(%Admin{} = admin, fixture_ids) when is_list(fixture_ids) do
     if Admin.can?(admin, :approve_results) do
-      fixtures =
-        Fixture
-        |> where([f], f.id in ^fixture_ids and f.status == "completed")
-        |> Repo.all()
-
-      multi =
-        Enum.reduce(fixtures, Multi.new(), fn fixture, multi ->
-          multi
-          |> Multi.update(
-            {:fixture, fixture.id},
-            Ecto.Changeset.change(fixture, status: "verified")
-          )
-          |> Multi.run({:log, fixture.id}, fn _repo, changes ->
-            Accounts.log_admin_action("verify_result", admin, changes[{:fixture, fixture.id}])
-          end)
-        end)
-
-      case Repo.transaction(multi) do
-        {:ok, _changes} -> {:ok, length(fixtures)}
-        {:error, _step, reason, _changes} -> {:error, reason}
-      end
+      do_approve_pending_results(admin, fixture_ids)
     else
       {:error, :unauthorized}
     end
+  end
+
+  defp do_approve_pending_results(admin, fixture_ids) do
+    fixtures =
+      Fixture
+      |> where([f], f.id in ^fixture_ids and f.status == "completed")
+      |> Repo.all()
+
+    multi = Enum.reduce(fixtures, Multi.new(), &approve_pending_result_step(&1, &2, admin))
+
+    case Repo.transaction(multi) do
+      {:ok, _changes} -> {:ok, length(fixtures)}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  defp approve_pending_result_step(fixture, multi, admin) do
+    multi
+    |> Multi.update(
+      {:fixture, fixture.id},
+      Ecto.Changeset.change(fixture, status: "verified")
+    )
+    |> Multi.run({:log, fixture.id}, fn _repo, changes ->
+      Accounts.log_admin_action("verify_result", admin, changes[{:fixture, fixture.id}])
+    end)
   end
 
   defp filter_pending_results_by_region(query, nil), do: query

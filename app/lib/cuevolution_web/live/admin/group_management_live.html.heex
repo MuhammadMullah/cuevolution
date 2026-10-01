@@ -117,7 +117,8 @@
         class={[
           "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
           @standings_view == :per_group && "bg-ink-950 text-white",
-          @standings_view != :per_group && "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
+          @standings_view != :per_group &&
+            "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
         ]}
       >
         Per group
@@ -129,7 +130,8 @@
         class={[
           "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
           @standings_view == :overall && "bg-ink-950 text-white",
-          @standings_view != :overall && "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
+          @standings_view != :overall &&
+            "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
         ]}
       >
         Venue overall

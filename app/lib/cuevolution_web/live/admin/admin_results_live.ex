@@ -15,8 +15,8 @@ defmodule CuevolutionWeb.AdminResultsLive do
   """
   use CuevolutionWeb, :live_view
 
-  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
   alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
