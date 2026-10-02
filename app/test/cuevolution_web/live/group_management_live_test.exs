@@ -73,28 +73,26 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     assert html =~ "SP26-"
   end
 
-  describe "manual flow (Team category, and Regional stage — untouched by the auto-draw)" do
-    test "creating a Team group doesn't require a venue and never creates a bracket",
+  describe "manual flow (Regional Male — deliberately kept manual, not unified onto the auto-draw)" do
+    test "creating a group doesn't require a venue and never creates a bracket",
          %{conn: conn} do
       regional = Repo.get_by!(Stage, name: "Regional")
       region = List.first(Accounts.list_regions())
-      player = insert(:player, region_id: region.id)
-      team = insert(:team, region_id: region.id, captain_id: player.id)
+      player = insert(:player, region_id: region.id, gender: "male")
 
       insert(:stage_participation,
         stage_id: regional.id,
         region_id: region.id,
-        category: "team",
-        team_id: team.id,
-        player_id: nil
+        category: "male",
+        player_id: player.id
       )
 
       conn = log_in_admin(conn)
       {:ok, view, _html} = live(conn, ~p"/admin/groups")
 
       view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
-      html = view |> element("button", "Teams") |> render_click()
-      assert html =~ team.name
+      html = view |> element("button", "Individual Male") |> render_click()
+      assert html =~ "#{player.first_name} #{player.last_name}"
 
       html =
         view
@@ -109,26 +107,24 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       refute Repo.get_by(Cuevolution.Competitions.KnockoutBracket, stage_id: regional.id)
     end
 
-    test "assigning an unassigned Team participant moves them out of the unassigned list",
+    test "assigning an unassigned participant moves them out of the unassigned list",
          %{conn: conn} do
       regional = Repo.get_by!(Stage, name: "Regional")
       region = List.first(Accounts.list_regions())
-      player = insert(:player, region_id: region.id)
-      team = insert(:team, region_id: region.id, captain_id: player.id)
+      player = insert(:player, region_id: region.id, gender: "male")
 
       participation =
         insert(:stage_participation,
           stage_id: regional.id,
           region_id: region.id,
-          category: "team",
-          team_id: team.id,
-          player_id: nil
+          category: "male",
+          player_id: player.id
         )
 
       conn = log_in_admin(conn)
       {:ok, view, _html} = live(conn, ~p"/admin/groups")
       view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
-      view |> element("button", "Teams") |> render_click()
+      view |> element("button", "Individual Male") |> render_click()
 
       view
       |> form("form[phx-submit='create_group']", group: %{"name" => "Pool A"})
@@ -145,6 +141,115 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
 
       assert html =~ "Added to Pool A."
       assert html =~ "Everyone in this stage/region is already grouped."
+    end
+  end
+
+  describe "Regional Individual Female / Team — formula-driven draw, region-scoped (no venue)" do
+    test "a ladies draw proposes, deals, and publishes scoped to the region, not a venue",
+         %{conn: conn} do
+      region = List.first(Accounts.list_regions())
+      regional = Repo.get_by!(Stage, name: "Regional")
+
+      for _ <- 1..4 do
+        player = insert(:player, region_id: region.id, gender: "female")
+
+        insert(:stage_participation,
+          stage_id: regional.id,
+          region_id: region.id,
+          category: "female",
+          player_id: player.id
+        )
+      end
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
+      view |> element("button", "Individual Female") |> render_click()
+
+      html = view |> element("button", "Propose draw") |> render_click()
+      assert html =~ "4 entrants → 1 group"
+
+      html = view |> element("button", "Deal draw") |> render_click()
+      assert html =~ "Draw dealt."
+
+      draw = Repo.one!(Draw)
+      assert draw.category == "female"
+      assert draw.region_id == region.id
+      assert is_nil(draw.venue_id)
+    end
+
+    test "a team draw combines every team in the region into one draw, regardless of gender",
+         %{conn: conn} do
+      region = List.first(Accounts.list_regions())
+      regional = Repo.get_by!(Stage, name: "Regional")
+
+      team_ids =
+        for n <- 1..4 do
+          captain =
+            insert(:player,
+              region_id: region.id,
+              gender: if(rem(n, 2) == 0, do: "female", else: "male")
+            )
+
+          {:ok, team} = Cuevolution.Teams.create_team(captain, %{"name" => "Team #{n}"})
+          team.id
+        end
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
+      view |> element("button", "Teams") |> render_click()
+
+      html = view |> element("button", "Propose draw") |> render_click()
+      assert html =~ "4 entrants → 1 group"
+
+      html = view |> element("button", "Deal draw") |> render_click()
+      assert html =~ "Draw dealt."
+
+      draw = Repo.one!(Draw)
+      assert draw.category == "team"
+      assert draw.region_id == region.id
+
+      group = Repo.get_by!(Group, draw_id: draw.id)
+
+      grouped_team_ids =
+        from(gm in Cuevolution.Competitions.GroupMembership,
+          join: sp in Cuevolution.Competitions.StageParticipation,
+          on: sp.id == gm.stage_participation_id,
+          where: gm.group_id == ^group.id,
+          select: sp.team_id
+        )
+        |> Repo.all()
+
+      assert Enum.sort(grouped_team_ids) == Enum.sort(team_ids)
+    end
+
+    test "publishing a team draw generates fixtures with the TM category code", %{conn: conn} do
+      region = List.first(Accounts.list_regions())
+
+      for n <- 1..4 do
+        captain = insert(:player, region_id: region.id)
+        {:ok, _team} = Cuevolution.Teams.create_team(captain, %{"name" => "Team #{n}"})
+      end
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Regional") |> render_click()
+      view |> element("button", "Teams") |> render_click()
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      draw = Repo.one!(Draw)
+      assert draw.state == "published"
+
+      fixture = Repo.one!(from f in Cuevolution.Competitions.Fixture, limit: 1)
+      assert fixture.match_id =~ "-TM-"
     end
   end
 

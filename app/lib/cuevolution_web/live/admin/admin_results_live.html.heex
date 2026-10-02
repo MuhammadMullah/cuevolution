@@ -4,6 +4,17 @@
     Match results
   </h1>
 
+  <div
+    :if={@missing_scope?}
+    class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-sm text-amber-900"
+  >
+    <%= if @current_admin.role == "regional_coordinator" do %>
+      Your admin account is not assigned to a region yet. Ask a Tournament Director or Super Admin to assign one.
+    <% else %>
+      Your admin account is not assigned to a venue yet. Ask a Tournament Director or Super Admin to assign one.
+    <% end %>
+  </div>
+
   <section
     :if={@can_approve_results?}
     id="result-approval-queue"
@@ -299,19 +310,19 @@
           Approve and finalize result
         </button>
         <h2
-          :if={Admin.can?(@current_admin, :approve_results)}
+          :if={can_correct_result?(@current_admin, @selected_played)}
           class="mb-2 text-[14.5px] font-bold text-ink-950"
         >
           Correct result
         </h2>
         <div
-          :if={Admin.can?(@current_admin, :approve_results)}
+          :if={can_correct_result?(@current_admin, @selected_played)}
           class="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800"
         >
           Correcting this result may affect standings and any stage advancement already made from it — review before saving.
         </div>
         <.form
-          :if={Admin.can?(@current_admin, :approve_results)}
+          :if={can_correct_result?(@current_admin, @selected_played)}
           for={@correction_form}
           phx-submit="correct_result"
           class="flex flex-col gap-2.5"

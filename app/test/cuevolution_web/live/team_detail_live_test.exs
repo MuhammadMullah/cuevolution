@@ -158,6 +158,23 @@ defmodule CuevolutionWeb.TeamDetailLiveTest do
     refute has_element?(view, "#remove-player-#{teammate.id}")
   end
 
+  test "an admin can update the team's region", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Admin Sharks"})
+    new_region = build(:region)
+
+    conn = log_in_admin(conn, "tournament_director")
+    {:ok, view, _html} = live(conn, ~p"/admin/teams/#{team.id}")
+
+    html =
+      view
+      |> form("#admin-team-region-form", %{"region_id" => new_region.id})
+      |> render_submit()
+
+    assert html =~ "Team region updated."
+    assert Repo.get!(Cuevolution.Teams.Team, team.id).region_id == new_region.id
+  end
+
   test "admins without team-management permission cannot open team management", %{conn: conn} do
     conn = log_in_admin(conn, "venue_representative")
     team = insert(:team)

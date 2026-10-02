@@ -24,17 +24,16 @@ defmodule CuevolutionWeb.TeamCreationLiveTest do
     assert {:error, {:live_redirect, %{to: "/team"}}} = live(conn, ~p"/team/new")
   end
 
-  test "creates a team and becomes captain", %{conn: conn} do
+  test "shows an admin-managed explanation instead of a creation form", %{conn: conn} do
     player = insert(:player)
     conn = log_in_player(conn, player)
 
-    {:ok, view, _html} = live(conn, ~p"/team/new")
+    {:ok, view, html} = live(conn, ~p"/team/new")
 
-    {:error, {:live_redirect, %{to: "/team"}}} =
-      view
-      |> form("form", team: %{"name" => "The Sharks"})
-      |> render_submit()
+    assert html =~ "You&#39;re not on a team yet"
+    assert html =~ "set up by tournament admins"
+    refute has_element?(view, "form")
 
-    assert Repo.get!(Cuevolution.Accounts.Player, player.id).team_id
+    refute Repo.get!(Cuevolution.Accounts.Player, player.id).team_id
   end
 end

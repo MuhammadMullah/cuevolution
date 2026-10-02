@@ -63,9 +63,14 @@ defmodule Cuevolution.Competitions do
     Repo.one(from s in Stage, where: s.order == ^(order + 1))
   end
 
-  @doc "The first stage in pipeline order — every new player/team enters here (spec 006)."
+  @doc "The first stage in pipeline order — individual male players enter here (spec 006)."
   def grassroots_stage do
     Repo.one!(from s in Stage, where: s.order == 1)
+  end
+
+  @doc "The second stage in pipeline order — individual ladies and every team enter here directly, never passing through Grassroots."
+  def regional_stage do
+    Repo.one!(from s in Stage, where: s.order == 2)
   end
 
   @doc "Recent verified and walkover fixtures for a player, including Grassroots deadline results."
@@ -97,42 +102,49 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  Enrolls `player` into Grassroots under their gender category — the
-  default entry point for every newly registered player (spec 006).
-  Returns a changeset for composition inside a caller's `Ecto.Multi`.
+  Enrolls `player` into their entry stage under their gender category — the
+  default entry point for every newly registered player. Individual males
+  start at Grassroots; individual ladies start at Regional directly (no
+  venue-scoped Grassroots phase for them). Returns a changeset for
+  composition inside a caller's `Ecto.Multi`.
   """
-  def enroll_player_in_grassroots_changeset(%Player{} = player) do
+  def enroll_player_changeset(%Player{} = player) do
+    stage = if player.gender == "female", do: regional_stage(), else: grassroots_stage()
+
     StageParticipation.changeset(%StageParticipation{}, %{
       player_id: player.id,
       region_id: player.region_id,
-      stage_id: grassroots_stage().id,
+      stage_id: stage.id,
       category: player.gender,
       joined_at: DateTime.utc_now()
     })
   end
 
   @doc """
-  Enrolls `team` into Grassroots under the "team" category — the default
-  entry point for every newly created team (spec 006). Returns a changeset
-  for composition inside a caller's `Ecto.Multi`.
+  Enrolls `team` into Regional under the "team" category — the default
+  entry point for every newly created team. Teams never pass through
+  Grassroots, and aren't split by gender: a region's team draw combines
+  every team registered there. Returns a changeset for composition inside
+  a caller's `Ecto.Multi`.
   """
-  def enroll_team_in_grassroots_changeset(%Team{} = team) do
+  def enroll_team_changeset(%Team{} = team) do
     StageParticipation.changeset(%StageParticipation{}, %{
       team_id: team.id,
       region_id: team.region_id,
-      stage_id: grassroots_stage().id,
+      stage_id: regional_stage().id,
       category: "team",
       joined_at: DateTime.utc_now()
     })
   end
 
   @doc """
-  Enrolls every player/team that predates auto-enrollment into Grassroots
-  (spec 006 migration path). Idempotent — skips anyone who already has a
-  participation for any stage. Shared by `Mix.Tasks.Cuevolution.BackfillGrassroots`
-  (dev/test) and `Cuevolution.Release.backfill_grassroots/0` (production
-  releases, which have no Mix), so the enrollment rule lives in one place.
-  Returns `%{players: {count, errors}, teams: {count, errors}}`.
+  Enrolls every player/team that predates auto-enrollment into their entry
+  stage (spec 006 migration path). Idempotent — skips anyone who already
+  has a participation for any stage. Shared by
+  `Mix.Tasks.Cuevolution.BackfillGrassroots` (dev/test) and
+  `Cuevolution.Release.backfill_grassroots/0` (production releases, which
+  have no Mix), so the enrollment rule lives in one place. Returns
+  `%{players: {count, errors}, teams: {count, errors}}`.
   """
   def backfill_grassroots_enrollments do
     %{players: backfill_player_enrollments(), teams: backfill_team_enrollments()}
@@ -146,7 +158,7 @@ defmodule Cuevolution.Competitions do
     |> Enum.filter(&Accounts.tournament_eligible?/1)
     |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
     |> Enum.reduce({0, []}, fn player, {count, errors} ->
-      case player |> enroll_player_in_grassroots_changeset() |> Repo.insert() do
+      case player |> enroll_player_changeset() |> Repo.insert() do
         {:ok, _} -> {count + 1, errors}
         {:error, changeset} -> {count, [{player.id, changeset} | errors]}
       end
@@ -161,7 +173,7 @@ defmodule Cuevolution.Competitions do
     |> Enum.filter(&Teams.tournament_eligible_team?/1)
     |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
     |> Enum.reduce({0, []}, fn team, {count, errors} ->
-      case team |> enroll_team_in_grassroots_changeset() |> Repo.insert() do
+      case team |> enroll_team_changeset() |> Repo.insert() do
         {:ok, _} -> {count + 1, errors}
         {:error, changeset} -> {count, [{team.id, changeset} | errors]}
       end
@@ -174,6 +186,42 @@ defmodule Cuevolution.Competitions do
     |> select([sp], field(sp, ^field))
     |> Repo.all()
     |> MapSet.new()
+  end
+
+  @doc """
+  One-time data migration: moves every existing female player's and team's
+  current Grassroots `StageParticipation` to Regional (ladies and teams now
+  start at Regional, not Grassroots — see `enroll_player_changeset/1` and
+  `enroll_team_changeset/1`, which already do this for anyone enrolling from
+  now on). `region_id` doesn't need to change — it's already correct from
+  the original enrollment. Idempotent and safe to re-run: only touches rows
+  still at Grassroots with no `GroupMembership` yet; anyone already drawn
+  into a Grassroots group is left alone, since moving them would corrupt
+  that in-progress group rather than help them. Shared by
+  `Mix.Tasks.Cuevolution.MigrateRegionalStart` (dev/test) and
+  `Cuevolution.Release.migrate_regional_start/0` (production). Returns
+  `%{moved: count, skipped_drawn: count}`.
+  """
+  def migrate_regional_start_enrollments do
+    grassroots_id = grassroots_stage().id
+    regional_id = regional_stage().id
+    grouped_ids = from(gm in GroupMembership, select: gm.stage_participation_id)
+
+    base_query =
+      from sp in StageParticipation,
+        where: sp.stage_id == ^grassroots_id and sp.category in ["female", "team"]
+
+    skipped_drawn =
+      base_query
+      |> where([sp], sp.id in subquery(grouped_ids))
+      |> Repo.aggregate(:count)
+
+    {moved, _} =
+      base_query
+      |> where([sp], sp.id not in subquery(grouped_ids))
+      |> Repo.update_all(set: [stage_id: regional_id])
+
+    %{moved: moved, skipped_drawn: skipped_drawn}
   end
 
   @doc "The stage a participation currently sits in (spec 006)."
@@ -554,16 +602,24 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  @doc "Calculates the Grassroots group count and balanced sizes for a venue/category."
-  def propose_draw(stage_id, venue_id, category) do
+  @doc """
+  Calculates the group count and balanced sizes for a draw `scope`
+  (`{:venue_id, id}` for Grassroots, `{:region_id, id}` for Regional) and
+  `category`.
+  """
+  def propose_draw(stage_id, scope, category) do
     config = get_or_create_group_config(stage_id, category)
-    entrants = draw_entrants(stage_id, venue_id, category)
+    entrants = draw_entrants(stage_id, scope, category)
 
     case propose_group_sizes(config, length(entrants)) do
       {:ok, proposal} -> {:ok, Map.put(proposal, :entrants, entrants)}
       error -> error
     end
   end
+
+  @doc "The `{:venue_id, id} | {:region_id, id}` scope a persisted `Draw` belongs to."
+  def draw_scope(%Draw{venue_id: nil, region_id: region_id}), do: {:region_id, region_id}
+  def draw_scope(%Draw{venue_id: venue_id}), do: {:venue_id, venue_id}
 
   @doc "Pure group-size calculation used by `propose_draw/3` and its tests."
   def propose_group_sizes(%StageGroupConfig{} = config, entrant_count)
@@ -595,21 +651,34 @@ defmodule Cuevolution.Competitions do
   def create_draw(_attrs), do: {:error, :unauthorized}
 
   defp do_create_draw(attrs) do
-    with {:ok, proposal} <- propose_draw(attrs.stage_id, attrs.venue_id, attrs.category) do
-      draw_attrs = %{
-        stage_id: attrs.stage_id,
-        venue_id: attrs.venue_id,
-        category: attrs.category,
-        state: "draft",
-        random_seed: Map.get(attrs, :random_seed, Ecto.UUID.generate()),
-        formula_group_count: proposal.group_count
-      }
+    scope = scope_from_attrs(attrs)
+
+    with {:ok, proposal} <- propose_draw(attrs.stage_id, scope, attrs.category) do
+      draw_attrs =
+        %{
+          stage_id: attrs.stage_id,
+          category: attrs.category,
+          state: "draft",
+          random_seed: Map.get(attrs, :random_seed, Ecto.UUID.generate()),
+          formula_group_count: proposal.group_count
+        }
+        |> Map.merge(scope_attrs(scope))
 
       %Draw{}
       |> Draw.changeset(draw_attrs)
       |> Repo.insert()
     end
   end
+
+  defp scope_from_attrs(attrs) do
+    case {Map.get(attrs, :venue_id), Map.get(attrs, :region_id)} do
+      {venue_id, _} when not is_nil(venue_id) -> {:venue_id, venue_id}
+      {_, region_id} -> {:region_id, region_id}
+    end
+  end
+
+  defp scope_attrs({:venue_id, venue_id}), do: %{venue_id: venue_id}
+  defp scope_attrs({:region_id, region_id}), do: %{region_id: region_id}
 
   @doc "Deals venue entrants into groups and moves the draw to Previewed."
   def deal_draw(%Draw{} = draw, group_count_override \\ nil)
@@ -623,10 +692,10 @@ defmodule Cuevolution.Competitions do
   end
 
   defp do_deal_draw(%Draw{} = draw, admin, group_count_override) do
-    draw = Repo.preload(draw, venue: :region)
+    draw = Repo.preload(draw, [:region, venue: :region])
 
     with :ok <- authorize_draw_admin(admin),
-         {:ok, proposal} <- propose_draw(draw.stage_id, draw.venue_id, draw.category),
+         {:ok, proposal} <- propose_draw(draw.stage_id, draw_scope(draw), draw.category),
          :ok <- validate_draw_override(group_count_override, proposal.entrant_count),
          :ok <- ensure_draw_not_dealt(draw.id) do
       group_count = group_count_override || proposal.group_count
@@ -663,7 +732,7 @@ defmodule Cuevolution.Competitions do
         {:error, :redraw_limit_reached}
 
       true ->
-        draw = Repo.preload(draw, venue: :region)
+        draw = Repo.preload(draw, [:region, venue: :region])
 
         entrants = draw_entrants_for_draw(draw.id)
         config = get_or_create_group_config(draw.stage_id, draw.category)
@@ -686,7 +755,7 @@ defmodule Cuevolution.Competitions do
   defp error_result(error), do: error
 
   defp finalize_reshuffle({:ok, %{draw: reshuffled}}, draw, admin) do
-    reshuffled = Repo.preload(reshuffled, venue: :region)
+    reshuffled = Repo.preload(reshuffled, [:region, venue: :region])
 
     with {:ok, _log} <-
            Accounts.log_admin_action("redraw_preview", admin, reshuffled,
@@ -734,7 +803,7 @@ defmodule Cuevolution.Competitions do
 
   @doc "Advances a draw through Draft → Previewed → Approved → Published."
   def advance_draw_state(%Draw{} = draw, %Admin{} = admin, target_state) do
-    draw = Repo.preload(draw, venue: :region)
+    draw = Repo.preload(draw, [:region, venue: :region])
 
     cond do
       not Admin.can?(admin, :manage_groups) ->
@@ -769,6 +838,7 @@ defmodule Cuevolution.Competitions do
         attrs = %{
           stage_id: draw.stage_id,
           venue_id: draw.venue_id,
+          region_id: draw.region_id,
           category: draw.category,
           random_seed: Ecto.UUID.generate(),
           formula_group_count: draw.formula_group_count
@@ -790,20 +860,27 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  The most recently created `Draw` for a stage+venue+category, or `nil` if
-  none exists yet. A redraw inserts a new `Draw` row without touching the
-  superseded one's `state` (it stays `"published"` for history/dispute
-  reproduction), so "most recent" — not "state == published" — is what
-  identifies the one currently in play for this scope.
+  The most recently created `Draw` for a stage+scope+category, or `nil` if
+  none exists yet. `scope` is `{:venue_id, id}` (Grassroots) or
+  `{:region_id, id}` (Regional). A redraw inserts a new `Draw` row without
+  touching the superseded one's `state` (it stays `"published"` for
+  history/dispute reproduction), so "most recent" — not "state ==
+  published" — is what identifies the one currently in play for this scope.
   """
-  def latest_draw(stage_id, venue_id, category) do
-    Repo.one(
-      from d in Draw,
-        where: d.stage_id == ^stage_id and d.venue_id == ^venue_id and d.category == ^category,
-        order_by: [desc: d.inserted_at],
-        limit: 1
-    )
+  def latest_draw(stage_id, scope, category) do
+    Draw
+    |> where([d], d.stage_id == ^stage_id and d.category == ^category)
+    |> filter_by_draw_scope(scope)
+    |> order_by(desc: :inserted_at)
+    |> limit(1)
+    |> Repo.one()
   end
+
+  defp filter_by_draw_scope(query, {:venue_id, venue_id}),
+    do: where(query, [d], d.venue_id == ^venue_id)
+
+  defp filter_by_draw_scope(query, {:region_id, region_id}),
+    do: where(query, [d], d.region_id == ^region_id)
 
   @doc "Generates Berger-method fixtures for all groups in a draw."
   def generate_fixtures_for_draw(%Draw{} = draw) do
@@ -832,7 +909,7 @@ defmodule Cuevolution.Competitions do
       )
       |> Multi.run(:draw, fn repo, %{claim: {count, _}} ->
         if count == 1 do
-          {:ok, repo.get!(Draw, draw.id) |> repo.preload(venue: :region)}
+          {:ok, repo.get!(Draw, draw.id) |> repo.preload([:region, venue: :region])}
         else
           {:error, :draw_already_published}
         end
@@ -897,7 +974,7 @@ defmodule Cuevolution.Competitions do
 
   defp insert_group_fixtures(repo, draw, group, participants, existing_match_ids) do
     rounds = round_robin_rounds(participants)
-    venue_code = venue_code(draw.venue)
+    location_code = location_code(draw)
 
     Enum.reduce_while(Enum.with_index(rounds, 1), {:ok, [], existing_match_ids}, fn
       {pairs, round_number}, {:ok, fixtures, match_ids} ->
@@ -917,7 +994,7 @@ defmodule Cuevolution.Competitions do
                  group,
                  pairs,
                  round_number,
-                 venue_code,
+                 location_code,
                  match_ids
                ) do
           {:cont, {:ok, fixtures ++ new_fixtures, new_match_ids}}
@@ -927,11 +1004,20 @@ defmodule Cuevolution.Competitions do
     end)
   end
 
-  defp insert_round_fixtures(repo, round, draw, group, pairs, round_number, venue_code, match_ids) do
+  defp insert_round_fixtures(
+         repo,
+         round,
+         draw,
+         group,
+         pairs,
+         round_number,
+         location_code,
+         match_ids
+       ) do
     Enum.reduce_while(Enum.with_index(pairs, 1), {:ok, [], match_ids}, fn
       {{participant_a, participant_b}, match_number}, {:ok, fixtures, ids} ->
         match_id =
-          next_match_id(venue_code, draw.category, group.name, round_number, match_number, ids)
+          next_match_id(location_code, draw.category, group.name, round_number, match_number, ids)
 
         changeset =
           Fixture.auto_generate_changeset(
@@ -961,8 +1047,11 @@ defmodule Cuevolution.Competitions do
     |> Oban.insert()
   end
 
-  defp draw_entrants(stage_id, venue_id, category) do
-    grouped_ids = grouped_draw_participation_ids(stage_id, venue_id, category)
+  # Venue-scoped (Grassroots individual male): entrants are resolved off the
+  # *player's* chosen venue, not the participation's region — "which venue
+  # did this player choose" has no analog for region/team scoping below.
+  defp draw_entrants(stage_id, {:venue_id, venue_id}, category) do
+    grouped_ids = grouped_draw_participation_ids(stage_id, {:venue_id, venue_id}, category)
 
     from(sp in StageParticipation,
       join: p in Player,
@@ -974,6 +1063,31 @@ defmodule Cuevolution.Competitions do
              p.tournament_eligibility_override) and
           sp.id not in subquery(grouped_ids),
       preload: [player: :team]
+    )
+    |> Repo.all()
+  end
+
+  # Region-scoped (Regional female/team): entrants are resolved directly off
+  # the participation's own `region_id` — unlike the venue path, this covers
+  # team-owned participations (`player_id: nil`) too, so the join to `Player`
+  # is a LEFT JOIN used only to apply player-specific eligibility checks when
+  # one exists; a team participation was already checked for eligibility at
+  # `Teams.create_team/2` time, so it's included outright.
+  defp draw_entrants(stage_id, {:region_id, region_id}, category) do
+    grouped_ids = grouped_draw_participation_ids(stage_id, {:region_id, region_id}, category)
+
+    from(sp in StageParticipation,
+      left_join: p in Player,
+      on: p.id == sp.player_id,
+      where:
+        sp.stage_id == ^stage_id and sp.category == ^category and
+          sp.region_id == ^region_id and
+          sp.id not in subquery(grouped_ids) and
+          (is_nil(sp.player_id) or
+             (is_nil(p.anonymized_at) and
+                (p.inserted_at < ^Accounts.tournament_registration_cutoff() or
+                   p.tournament_eligibility_override))),
+      preload: [player: :team, team: []]
     )
     |> Repo.all()
   end
@@ -990,17 +1104,25 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
-  defp grouped_draw_participation_ids(stage_id, venue_id, category) do
-    from gm in GroupMembership,
+  defp grouped_draw_participation_ids(stage_id, scope, category) do
+    from(gm in GroupMembership,
       join: g in Group,
       on: g.id == gm.group_id,
       left_join: d in Draw,
       on: d.id == g.draw_id,
       where:
-        g.stage_id == ^stage_id and g.venue_id == ^venue_id and g.category == ^category and
+        g.stage_id == ^stage_id and g.category == ^category and
           (is_nil(g.draw_id) or d.state != "published"),
       select: gm.stage_participation_id
+    )
+    |> filter_by_group_draw_scope(scope)
   end
+
+  defp filter_by_group_draw_scope(query, {:venue_id, venue_id}),
+    do: where(query, [_gm, g], g.venue_id == ^venue_id)
+
+  defp filter_by_group_draw_scope(query, {:region_id, region_id}),
+    do: where(query, [_gm, g], g.region_id == ^region_id)
 
   defp reduce_to_minimum_group_size(1, _entrant_count, _minimum), do: 1
 
@@ -1079,7 +1201,7 @@ defmodule Cuevolution.Competitions do
   defp same_team?(_, _members), do: false
 
   defp insert_draw_groups(repo, draw, buckets) do
-    region_id = draw.venue.region_id
+    region_id = draw.region_id || draw.venue.region_id
 
     Enum.reduce_while(Enum.with_index(buckets), {:ok, []}, fn {members, index}, {:ok, groups} ->
       group_name = "Group #{group_label(index)}"
@@ -1139,12 +1261,16 @@ defmodule Cuevolution.Competitions do
   defp rotate(list, count),
     do: Enum.drop(list, rem(count, length(list))) ++ Enum.take(list, rem(count, length(list)))
 
-  defp next_match_id(venue_code, category, group_name, round_number, match_number, ids) do
-    category_code = if category == "male", do: "MS", else: "FS"
+  defp next_match_id(location_code, category, group_name, round_number, match_number, ids) do
+    category_code = category_code(category)
     group_code = group_code(group_name)
-    base = "SP26-#{venue_code}-#{category_code}-#{group_code}-R#{round_number}-M"
+    base = "SP26-#{location_code}-#{category_code}-#{group_code}-R#{round_number}-M"
     next_match_id(base, match_number, ids)
   end
+
+  defp category_code("male"), do: "MS"
+  defp category_code("female"), do: "FS"
+  defp category_code("team"), do: "TM"
 
   defp group_code(group_name) do
     case Regex.run(~r/^Group ([A-Z])/, group_name) do
@@ -1158,7 +1284,13 @@ defmodule Cuevolution.Competitions do
     if MapSet.member?(ids, id), do: next_match_id(base, number + 1, ids), else: id
   end
 
-  defp venue_code(%{name: name}) do
+  # A region-scoped draw (no venue) falls back to a region-derived code —
+  # same uppercase/strip/slice-5 shape, just keyed off whichever location
+  # dimension this draw actually has.
+  defp location_code(%Draw{venue: nil, region: region}), do: location_name_code(region)
+  defp location_code(%Draw{venue: venue}), do: location_name_code(venue)
+
+  defp location_name_code(%{name: name}) do
     name
     |> String.upcase()
     |> String.replace(~r/[^A-Z0-9]/, "")
@@ -1695,12 +1827,38 @@ defmodule Cuevolution.Competitions do
   admin action log) before applying the new value — the caller (LiveView)
   is responsible for surfacing the downstream-advancement warning (US4
   scenario 3), this function does not block the correction.
+
+  `approve_results` holders (TD/super admin) can correct a result at any
+  time, verified or not. A `record_results`-only holder (e.g. a venue rep)
+  can correct it too, but only for a fixture in their own scope and only
+  while it's still awaiting approval — once a TD verifies it,
+  `:already_approved` takes over and only an approver can touch it further.
   """
   def correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
-    if Admin.can?(admin, :approve_results) do
-      do_correct_result(result, admin, attrs)
-    else
-      {:error, :unauthorized}
+    cond do
+      Admin.can?(admin, :approve_results) ->
+        do_correct_result(result, admin, attrs)
+
+      Admin.can?(admin, :record_results) ->
+        correct_result_as_recorder(result, admin, attrs)
+
+      true ->
+        {:error, :unauthorized}
+    end
+  end
+
+  defp correct_result_as_recorder(%MatchResult{} = result, admin, attrs) do
+    result = Repo.preload(result, :fixture)
+
+    cond do
+      result.fixture.status == "verified" ->
+        {:error, :already_approved}
+
+      not fixture_accessible_to_admin?(result.fixture_id, admin) ->
+        {:error, :unauthorized}
+
+      true ->
+        do_correct_result(result, admin, attrs)
     end
   end
 
@@ -2283,7 +2441,11 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  @doc "Points-first standings for a Grassroots group, including persisted TD tie overrides."
+  @doc """
+  Points-first standings for a round-robin group-stage group (Grassroots or
+  Regional — the only two stages that ever have `Group` rows; Circuit/Finals
+  never do), including persisted TD tie overrides.
+  """
   def grassroots_group_standings(%Group{} = group) do
     participant_ids =
       Repo.all(
@@ -2294,7 +2456,7 @@ defmodule Cuevolution.Competitions do
 
     group = Repo.preload(group, :stage)
 
-    if group.stage.name == "Grassroots" do
+    if group.stage.name in ["Grassroots", "Regional"] do
       StandingsCalculator.rank(participant_ids, group_matches(group.id),
         cascade: :points_first,
         tie_breakers: Enum.chunk_every(group.tie_breakers || [], 2)
@@ -2393,11 +2555,15 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  @doc "Advances the reviewed top-N and best-of-rest qualifiers into the next stage."
-  def close_grassroots_stage(stage_id, category, %Admin{} = admin, confirmed_ids)
+  @doc """
+  Advances the reviewed top-N and best-of-rest qualifiers into the next
+  stage — works for either round-robin group stage (Grassroots or Regional).
+  """
+  def close_group_stage(stage_id, category, %Admin{} = admin, confirmed_ids)
       when is_list(confirmed_ids) do
     with true <- Admin.can?(admin, :manage_groups),
-         %Stage{name: "Grassroots"} = stage <- Repo.get(Stage, stage_id),
+         %Stage{name: name} = stage when name in ["Grassroots", "Regional"] <-
+           Repo.get(Stage, stage_id),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
          groups <- final_groups(stage_id, category),
          config <- get_or_create_group_config(stage_id, category),
@@ -2431,17 +2597,23 @@ defmodule Cuevolution.Competitions do
     end)
   end
 
-  def grassroots_group_for_player(player_id) do
+  @doc """
+  The group `player_id` currently belongs to, scoped to their *current*
+  stage (`g.stage_id == sp.stage_id`) rather than a hard-coded stage name —
+  a player's `StageParticipation` is a single row whose `stage_id` moves
+  forward as they advance, so this naturally follows them from Grassroots
+  into Regional (and would equally show a Circuit/Finals group, if those
+  stages ever had any). `nil` if they aren't currently grouped.
+  """
+  def current_group_for_player(player_id) do
     group_id =
       Repo.one(
         from gm in GroupMembership,
           join: g in Group,
           on: g.id == gm.group_id,
-          join: s in Stage,
-          on: s.id == g.stage_id,
           join: sp in StageParticipation,
           on: sp.id == gm.stage_participation_id,
-          where: sp.player_id == ^player_id and s.name == "Grassroots",
+          where: sp.player_id == ^player_id and g.stage_id == sp.stage_id,
           select: gm.group_id
       )
 

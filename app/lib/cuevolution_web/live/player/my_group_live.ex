@@ -10,7 +10,7 @@ defmodule CuevolutionWeb.Player.MyGroupLive do
 
   def mount(_params, _session, socket) do
     player = socket.assigns.current_player
-    group = Competitions.grassroots_group_for_player(player.id)
+    group = Competitions.current_group_for_player(player.id)
     rows = if group, do: named_rows(Competitions.grassroots_group_standings(group)), else: []
     current_id = current_participation_id(group, player.id)
 
@@ -34,7 +34,9 @@ defmodule CuevolutionWeb.Player.MyGroupLive do
     >
       <div class="mx-auto max-w-5xl space-y-6 px-4 py-8">
         <div>
-          <p class="font-mono text-xs uppercase tracking-widest text-red-600">Grassroots</p>
+          <p class="font-mono text-xs uppercase tracking-widest text-red-600">
+            {if @group, do: @group.stage.name, else: "Grassroots"}
+          </p>
           <h1 class="mt-2 text-3xl font-bold text-ink-950">My group</h1>
           <p :if={@group} class="mt-1 text-sm font-semibold text-ink-500">{@group.name}</p>
         </div>
@@ -48,7 +50,7 @@ defmodule CuevolutionWeb.Player.MyGroupLive do
           </p>
         </div>
         <div :if={!@group} class="rounded-xl border border-ink-200 bg-white p-6 text-ink-500">
-          You have not been assigned to a Grassroots group yet.
+          You have not been assigned to a group yet.
         </div>
       </div>
     </PlayerComponents.app_shell>

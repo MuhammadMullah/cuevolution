@@ -115,6 +115,31 @@ defmodule CuevolutionWeb.TeamDashboardLive do
     end
   end
 
+  def handle_event("update_team_region", %{"team_region" => %{"region_id" => region_id}}, socket) do
+    if socket.assigns.is_captain do
+      case Teams.update_team_region(socket.assigns.team, socket.assigns.current_player, region_id) do
+        {:ok, _team} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Team region updated.")
+           |> load_team()}
+
+        {:error, :team_drawn} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Your team has already been drawn into a group — ask a tournament director to change its region."
+           )}
+
+        {:error, _reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't update the team's region.")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Only the captain can update the team's region.")}
+    end
+  end
+
   def handle_event("update_team_name", %{"team" => params}, socket) do
     if socket.assigns.is_captain do
       case Teams.update_team_name(
@@ -297,6 +322,7 @@ defmodule CuevolutionWeb.TeamDashboardLive do
 
     if is_captain do
       assign(socket,
+        team_region_form: to_form(%{"region_id" => team.region_id}, as: :team_region),
         team_location_form:
           to_form(
             %{

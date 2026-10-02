@@ -18,7 +18,8 @@ defmodule CuevolutionWeb.TeamDetailLive do
        page_title: "Team Detail",
        add_form: to_form(%{}, as: :roster),
        player_suggestions: [],
-       selected_player: nil
+       selected_player: nil,
+       regions: Accounts.list_regions()
      )
      |> assign_team(team)}
   end
@@ -147,6 +148,26 @@ defmodule CuevolutionWeb.TeamDetailLive do
 
       nil ->
         {:noreply, put_flash(socket, :error, "That player is no longer available.")}
+    end
+  end
+
+  def handle_event("update_region", %{"region_id" => region_id}, socket) do
+    case Teams.admin_update_team_region(
+           socket.assigns.current_admin,
+           socket.assigns.team,
+           region_id
+         ) do
+      {:ok, _team} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Team region updated.")
+         |> reload_team()}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You don't have permission to manage teams.")}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update the team's region.")}
     end
   end
 

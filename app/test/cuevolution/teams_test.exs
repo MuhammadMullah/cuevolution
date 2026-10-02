@@ -491,6 +491,83 @@ defmodule Cuevolution.TeamsTest do
     end
   end
 
+  describe "update_team_region/3" do
+    test "the captain can move the team to a new region, syncing its stage participation" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      captain = Repo.get!(Player, captain.id)
+      new_region = build(:region)
+
+      assert {:ok, updated_team} = Teams.update_team_region(team, captain, new_region.id)
+      assert updated_team.region_id == new_region.id
+
+      participation =
+        Repo.get_by!(Cuevolution.Competitions.StageParticipation, team_id: team.id)
+
+      assert participation.region_id == new_region.id
+    end
+
+    test "rejects a player who isn't the captain" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      impostor = insert(:player)
+      new_region = build(:region)
+
+      assert {:error, :not_captain} = Teams.update_team_region(team, impostor, new_region.id)
+    end
+
+    test "rejects once the team has been drawn into a group" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      captain = Repo.get!(Player, captain.id)
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      new_region = build(:region)
+
+      assert {:error, :team_drawn} = Teams.update_team_region(team, captain, new_region.id)
+      assert Repo.get!(Cuevolution.Teams.Team, team.id).region_id == team.region_id
+    end
+  end
+
+  describe "admin_update_team_region/3" do
+    test "reassigns the team's region and logs the admin action" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      new_region = build(:region)
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:ok, updated_team} = Teams.admin_update_team_region(admin, team, new_region.id)
+      assert updated_team.region_id == new_region.id
+
+      assert Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+               entity_id: team.id,
+               action_type: "admin_update_team_region"
+             )
+    end
+
+    test "overrides the freeze once the team has already been drawn" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      Teams.lock_roster(team.id)
+      team = Repo.get!(Cuevolution.Teams.Team, team.id)
+      new_region = build(:region)
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:ok, updated_team} = Teams.admin_update_team_region(admin, team, new_region.id)
+      assert updated_team.region_id == new_region.id
+    end
+
+    test "rejects an admin without team-management permission" do
+      captain = insert(:player)
+      {:ok, team} = Teams.create_team(captain, %{"name" => "Team"})
+      new_region = build(:region)
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:error, :unauthorized} = Teams.admin_update_team_region(admin, team, new_region.id)
+      assert Repo.get!(Cuevolution.Teams.Team, team.id).region_id == team.region_id
+    end
+  end
+
   describe "invite_player/2" do
     test "creates a pending invitation, dispatches a notification, and schedules expiry" do
       team = insert(:team)

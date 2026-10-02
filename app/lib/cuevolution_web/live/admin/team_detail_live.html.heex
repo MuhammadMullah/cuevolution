@@ -44,6 +44,39 @@
   </AdminComponents.card>
 
   <AdminComponents.card class="mb-5">
+    <div class="mb-1 text-sm font-semibold text-ink-700">Team region</div>
+    <p class="mb-3 text-[13px] text-ink-400">
+      The team's competition region — this is what the team is drawn into, separate from where
+      it prefers to physically play its matches.
+      <span :if={@team.roster_locked_at}>
+        This team has already been drawn into a group; changing its region here overrides that freeze.
+      </span>
+    </p>
+    <form id="admin-team-region-form" phx-submit="update_region" class="flex items-center gap-2.5">
+      <select
+        id="admin-team-region-select"
+        name="region_id"
+        class="rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none"
+      >
+        <option
+          :for={region <- @regions}
+          value={region.id}
+          selected={region.id == @team.region_id}
+        >
+          {region.name}
+        </option>
+      </select>
+      <button
+        id="admin-update-region-button"
+        type="submit"
+        class="rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-800"
+      >
+        Save region
+      </button>
+    </form>
+  </AdminComponents.card>
+
+  <AdminComponents.card class="mb-5">
     <div class="mb-1 text-sm font-semibold text-ink-700">Add player directly</div>
     <p class="mb-3 text-[13px] text-ink-400">
       This assigns the player immediately and does not send an invitation.

@@ -82,6 +82,7 @@ defmodule Cuevolution.Seeds.Accounts do
       venues = Repo.all(from v in Venue, where: v.active == true, order_by: v.id)
       regions_by_id = Repo.all(Region) |> Map.new(&{&1.id, &1})
       grassroots_stage_id = Competitions.grassroots_stage().id
+      regional_stage_id = Competitions.regional_stage().id
 
       # Hashed once and reused for every seed player (bulk `insert_all`
       # bypasses `Player.registration_changeset/2` entirely, so nothing else
@@ -91,17 +92,36 @@ defmodule Cuevolution.Seeds.Accounts do
 
       (already_seeded + 1)..@player_count
       |> Enum.chunk_every(@batch_size)
-      |> Enum.each(&seed_batch(&1, venues, regions_by_id, grassroots_stage_id, hashed_password))
+      |> Enum.each(
+        &seed_batch(
+          &1,
+          venues,
+          regions_by_id,
+          grassroots_stage_id,
+          regional_stage_id,
+          hashed_password
+        )
+      )
 
       IO.puts("Seeded players #{already_seeded + 1}..#{@player_count}.")
     end
   end
 
-  # Bulk-inserts a batch of players and their Grassroots `StageParticipation`
-  # rows via `insert_all`, skipping changesets/callbacks (and so the
+  # Bulk-inserts a batch of players and their `StageParticipation` rows via
+  # `insert_all`, skipping changesets/callbacks (and so the
   # registration-confirmation notification `Accounts.register_player/1`
   # would otherwise dispatch — not wanted for bulk-seeded fixture data).
-  defp seed_batch(ns, venues, regions_by_id, grassroots_stage_id, hashed_password) do
+  # Males enter at Grassroots, females at Regional directly — mirrors
+  # `Competitions.enroll_player_changeset/1`, which this bulk path
+  # intentionally bypasses for speed but must still agree with.
+  defp seed_batch(
+         ns,
+         venues,
+         regions_by_id,
+         grassroots_stage_id,
+         regional_stage_id,
+         hashed_password
+       ) do
     # Backdated to before the tournament registration cutoff (rather than
     # stamped with the real "now") so seeded players stay draw-eligible
     # (`Accounts.tournament_registration_cutoff/0`) no matter when this
@@ -123,6 +143,7 @@ defmodule Cuevolution.Seeds.Accounts do
           venues,
           regions_by_id,
           grassroots_stage_id,
+          regional_stage_id,
           hashed_password,
           now,
           joined_at
@@ -141,6 +162,7 @@ defmodule Cuevolution.Seeds.Accounts do
          venues,
          regions_by_id,
          grassroots_stage_id,
+         regional_stage_id,
          hashed_password,
          now,
          joined_at
@@ -180,7 +202,7 @@ defmodule Cuevolution.Seeds.Accounts do
       id: Ecto.UUID.generate(),
       player_id: player_id,
       region_id: region.id,
-      stage_id: grassroots_stage_id,
+      stage_id: if(gender == "female", do: regional_stage_id, else: grassroots_stage_id),
       category: gender,
       joined_at: joined_at,
       inserted_at: now,

@@ -410,7 +410,7 @@ defmodule Cuevolution.Accounts do
     |> Multi.insert(:player, Player.registration_changeset(%Player{}, attrs))
     |> Multi.run(:stage_participation, fn repo, %{player: player} ->
       if tournament_eligible?(player) do
-        repo.insert(Competitions.enroll_player_in_grassroots_changeset(player))
+        repo.insert(Competitions.enroll_player_changeset(player))
       else
         {:ok, nil}
       end

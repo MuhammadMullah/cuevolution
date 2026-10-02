@@ -6,13 +6,19 @@ defmodule CuevolutionWeb.GroupManagementLive do
   Admin.dc.html`'s single `GROUPS` section, `grOn`/`grOff` branch) rather than
   the three separate pages an earlier pass split this into:
 
-  - Grassroots, Individual Male/Female, with a venue selected (`grassroots_singles?/1`):
-    the full formula-driven draw lifecycle (propose → deal → approve →
-    publish → redraw) plus a "Groups" / "Group standings" tab pair, both
-    inline on this page. This replaces the standalone `Admin.DrawWizardLive`
-    and `Admin.GroupStandingsLive` routes, which are gone.
-  - Everything else (Regional, Team category, or no venue selected yet):
-    the original manual create-group / assign-member flow, unchanged.
+  - The formula-driven draw lifecycle (propose → deal → approve → publish →
+    redraw) plus a "Groups" / "Group standings" tab pair, both inline on
+    this page, for: Grassroots Individual Male with a venue selected
+    (venue-scoped), or Regional Individual Female/Team (region-scoped —
+    both genders drawn together under the single "team" category; ladies
+    and teams start their tournament here, not at Grassroots). See
+    `auto_draw_eligible?/1`. This replaces the standalone
+    `Admin.DrawWizardLive` and `Admin.GroupStandingsLive` routes, which are
+    gone.
+  - Everything else (Regional Male — deliberately kept manual rather than
+    unified onto the engine above, since that pipeline already works today
+    — or no venue selected yet): the original manual create-group /
+    assign-member flow, unchanged.
 
   Grassroots groups are venue-scoped (FR-003); Regional groups are
   region-scoped (FR-004). Neither stage ever creates a knockout bracket —
@@ -50,6 +56,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
     stage = List.first(stages)
     region = List.first(regions)
+    categories = categories_for_stage(stage)
 
     {:ok,
      socket
@@ -60,10 +67,10 @@ defmodule CuevolutionWeb.GroupManagementLive do
        can_manage_groups?: Admin.can?(current_admin, :manage_groups),
        stages: stages,
        regions: regions,
-       categories: @categories,
+       categories: categories,
        stage: stage,
        region: region,
-       category: List.first(@categories),
+       category: List.first(categories),
        venue: nil,
        form: to_form(%{}, as: :group),
        open_group_ids: MapSet.new(),
@@ -93,9 +100,16 @@ defmodule CuevolutionWeb.GroupManagementLive do
         {:noreply, put_flash(socket, :error, "That stage is not available.")}
 
       stage ->
+        categories = categories_for_stage(stage)
+
+        category =
+          if socket.assigns.category in categories,
+            do: socket.assigns.category,
+            else: List.first(categories)
+
         {:noreply,
          socket
-         |> assign(:stage, stage)
+         |> assign(stage: stage, categories: categories, category: category)
          |> load_venues()
          |> load_scope()}
     end
@@ -211,9 +225,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
   ## grOn: formula-driven draw lifecycle
 
   def handle_event("propose", _params, socket) do
-    %{stage: stage, venue: venue, category: category} = socket.assigns
+    %{stage: stage, category: category} = socket.assigns
 
-    case Competitions.propose_draw(stage.id, venue.id, category) do
+    case Competitions.propose_draw(stage.id, draw_scope(socket.assigns), category) do
       {:ok, proposal} ->
         {:noreply,
          socket
@@ -234,14 +248,17 @@ defmodule CuevolutionWeb.GroupManagementLive do
     do: {:noreply, adjust_group_count(socket, 1)}
 
   def handle_event("create_draw", _params, socket) do
-    %{stage: stage, venue: venue, category: category} = socket.assigns
+    %{stage: stage, category: category} = socket.assigns
     override = override_value(socket)
 
+    attrs =
+      Map.merge(
+        %{stage_id: stage.id, category: category},
+        scope_attrs(draw_scope(socket.assigns))
+      )
+
     with {:ok, draw} <-
-           Competitions.create_draw(
-             %{stage_id: stage.id, venue_id: venue.id, category: category},
-             socket.assigns.current_admin
-           ),
+           Competitions.create_draw(attrs, socket.assigns.current_admin),
          {:ok, _groups} <-
            Competitions.deal_draw(draw, socket.assigns.current_admin, override) do
       {:noreply,
@@ -405,7 +422,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   def handle_event("close_stage", _params, socket) do
     ids = Enum.map(socket.assigns.qualifiers, & &1.participant_id)
 
-    case Competitions.close_grassroots_stage(
+    case Competitions.close_group_stage(
            socket.assigns.stage.id,
            socket.assigns.category,
            socket.assigns.current_admin,
@@ -424,12 +441,41 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   # Takes an assigns map, not a socket — deliberately, so the exact same
   # function works both from `handle_event`/loaders (`grassroots?(socket.assigns)`)
-  # and directly from the template (`grassroots_singles?(assigns)`), which
+  # and directly from the template (`auto_draw_eligible?(assigns)`), which
   # only ever sees `assigns`, never `socket`.
   defp grassroots?(assigns), do: assigns.stage.name == "Grassroots"
 
-  defp grassroots_singles?(assigns),
-    do: grassroots?(assigns) and assigns.category in ~w(male female) and !!assigns.venue
+  defp regional?(assigns), do: assigns.stage.name == "Regional"
+
+  # The formula-driven draw engine applies to: Grassroots Individual Male
+  # with a venue selected (venue-scoped), or Regional Individual
+  # Female/Team (region-scoped). Regional Male deliberately stays on the
+  # manual flow — see the moduledoc.
+  defp auto_draw_eligible?(assigns) do
+    cond do
+      grassroots?(assigns) -> assigns.category == "male" and !!assigns.venue
+      regional?(assigns) -> assigns.category in ~w(female team)
+      true -> false
+    end
+  end
+
+  # `{:venue_id, id} | {:region_id, id}` for whichever scope dimension
+  # applies to the current stage selection — mirrors
+  # `Competitions.draw_scope/1`, just derived from the live `assigns` map
+  # instead of a persisted `Draw`.
+  defp draw_scope(assigns) do
+    cond do
+      grassroots?(assigns) and assigns.venue -> {:venue_id, assigns.venue.id}
+      regional?(assigns) -> {:region_id, assigns.region.id}
+      true -> nil
+    end
+  end
+
+  defp scope_attrs({:venue_id, id}), do: %{venue_id: id}
+  defp scope_attrs({:region_id, id}), do: %{region_id: id}
+
+  defp categories_for_stage(%{name: "Grassroots"}), do: ~w(male)
+  defp categories_for_stage(_stage), do: @categories
 
   defp load_venues(socket) do
     if socket.assigns.venue_rep? do
@@ -466,14 +512,14 @@ defmodule CuevolutionWeb.GroupManagementLive do
         tie_resolution: nil
       )
 
-    if grassroots_singles?(socket.assigns),
+    if auto_draw_eligible?(socket.assigns),
       do: load_gr(socket),
       else: socket |> load_groups() |> load_unassigned()
   end
 
   defp load_gr(socket) do
-    %{stage: stage, venue: venue, category: category} = socket.assigns
-    draw = Competitions.latest_draw(stage.id, venue.id, category)
+    %{stage: stage, category: category} = socket.assigns
+    draw = Competitions.latest_draw(stage.id, draw_scope(socket.assigns), category)
     dealt? = draw && draw.state != "draft"
     groups = if(dealt?, do: Competitions.list_groups_for_draw(draw.id), else: [])
 
@@ -496,7 +542,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   end
 
   defp load_gr_standings_if_needed(socket) do
-    if socket.assigns.gr_view == :standings and grassroots_singles?(socket.assigns),
+    if socket.assigns.gr_view == :standings and auto_draw_eligible?(socket.assigns),
       do: load_gr_standings(socket),
       else: socket
   end

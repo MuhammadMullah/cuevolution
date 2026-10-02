@@ -90,6 +90,36 @@ defmodule CuevolutionWeb.TeamDashboardLiveTest do
     assert saved_team.match_venue_id == venue.id
   end
 
+  test "the captain can update the team's structural region before it is drawn", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    new_region = build(:region)
+    captain = Repo.get!(Player, captain.id)
+
+    conn = log_in_player(conn, captain)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    html =
+      view
+      |> form("#team-region-form")
+      |> render_submit(team_region: %{"region_id" => new_region.id})
+
+    assert html =~ "Team region updated."
+    assert Repo.get!(Cuevolution.Teams.Team, team.id).region_id == new_region.id
+  end
+
+  test "the team region field is disabled once the team has been drawn", %{conn: conn} do
+    captain = insert(:player)
+    {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})
+    {1, _} = Teams.lock_roster(team.id)
+    captain = Repo.get!(Player, captain.id)
+
+    conn = log_in_player(conn, captain)
+    {:ok, view, _html} = live(conn, ~p"/team")
+
+    assert view |> element("#team-region-select") |> render() =~ "disabled"
+  end
+
   test "a non-captain cannot edit the team name", %{conn: conn} do
     captain = insert(:player)
     {:ok, team} = Teams.create_team(captain, %{"name" => "The Sharks"})

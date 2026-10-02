@@ -172,6 +172,52 @@
   </PlayerComponents.card>
 
   <PlayerComponents.card :if={@is_captain} class="mb-5">
+    <div class="mb-1 text-sm font-semibold text-ink-700">Team region</div>
+    <p class="mb-4 text-[13px] text-ink-400">
+      The region your team competes in. This can be changed until your team is drawn into a group —
+      after that, ask a tournament director.
+    </p>
+    <.form
+      for={@team_region_form}
+      id="team-region-form"
+      phx-submit="update_team_region"
+      class="flex flex-col gap-3.5 sm:flex-row sm:items-end"
+    >
+      <div class="flex-1">
+        <label for="team-region-select" class="mb-1.5 block text-sm font-semibold text-ink-700">
+          Region
+        </label>
+        <select
+          id="team-region-select"
+          name="team_region[region_id]"
+          disabled={@team.roster_locked_at != nil}
+          class="w-full cursor-pointer rounded-md border border-ink-300 bg-white px-3 py-2 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-400"
+        >
+          <option
+            :for={region <- @team_match_regions}
+            value={region.id}
+            selected={region.id == @team_region_form[:region_id].value}
+          >
+            {region.name}
+          </option>
+        </select>
+      </div>
+      <div>
+        <PlayerComponents.button
+          type="submit"
+          variant="secondary"
+          disabled={@team.roster_locked_at != nil}
+        >
+          Save region
+        </PlayerComponents.button>
+      </div>
+    </.form>
+    <p :if={@team.roster_locked_at} class="mt-3 text-[12.5px] text-amber-700">
+      Your team has already been drawn into a group — ask a tournament director to change its region.
+    </p>
+  </PlayerComponents.card>
+
+  <PlayerComponents.card :if={@is_captain} class="mb-5">
     <div class="mb-1 text-sm font-semibold text-ink-700">Team match location</div>
     <p class="mb-4 text-[13px] text-ink-400">
       Choose the region and venue where your team will play its team matches. This can be changed

@@ -637,9 +637,9 @@ defmodule Cuevolution.CompetitionsTest do
 
     test "Team-category fixtures dispatch to every roster member of both teams", %{
       region: region,
-      venue: venue,
-      grassroots: grassroots
+      venue: venue
     } do
+      regional = stage("Regional")
       captain_a = insert(:player, region_id: region.id)
       {:ok, team_a} = Cuevolution.Teams.create_team(captain_a, %{"name" => "Team A"})
       member_a = insert(:player, region_id: region.id)
@@ -653,9 +653,8 @@ defmodule Cuevolution.CompetitionsTest do
 
       {:ok, team_group} =
         Competitions.create_group(%{
-          stage_id: grassroots.id,
+          stage_id: regional.id,
           region_id: region.id,
-          venue_id: venue.id,
           category: "team",
           name: "Team Pool A"
         })
@@ -665,7 +664,7 @@ defmodule Cuevolution.CompetitionsTest do
 
       {:ok, team_round} =
         Competitions.create_round(%{
-          stage_id: grassroots.id,
+          stage_id: regional.id,
           group_id: team_group.id,
           name: "Team Round 1"
         })
@@ -842,6 +841,74 @@ defmodule Cuevolution.CompetitionsTest do
 
       assert log.prior_value["winner_participation_id"] == fixture.participant_a_id
       assert log.new_value["winner_participation_id"] == fixture.participant_b_id
+    end
+
+    test "a venue rep can correct a result for their own venue while it's not yet approved" do
+      fixture = insert(:fixture)
+      admin = insert(:admin)
+      rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      assert {:ok, corrected} =
+               Competitions.correct_result(result, rep, %{
+                 "winner_participation_id" => fixture.participant_b_id
+               })
+
+      assert corrected.winner_participation_id == fixture.participant_b_id
+    end
+
+    test "a venue rep cannot correct a result once it has been approved" do
+      fixture = insert(:fixture)
+      admin = insert(:admin)
+      rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      {:ok, _verified} = Competitions.verify_result(Repo.reload(fixture), admin)
+
+      assert {:error, :already_approved} =
+               Competitions.correct_result(result, rep, %{
+                 "winner_participation_id" => fixture.participant_b_id
+               })
+    end
+
+    test "a venue rep cannot correct a result for a fixture outside their venue" do
+      fixture = insert(:fixture)
+      admin = insert(:admin)
+      rep = insert(:admin, role: "venue_representative", venue_id: insert(:venue).id)
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      assert {:error, :unauthorized} =
+               Competitions.correct_result(result, rep, %{
+                 "winner_participation_id" => fixture.participant_b_id
+               })
+    end
+
+    test "a suspended admin cannot correct a result despite an otherwise-permitted role" do
+      fixture = insert(:fixture)
+      admin = insert(:admin)
+      suspended = insert(:admin, suspended_at: DateTime.utc_now() |> DateTime.truncate(:second))
+
+      {:ok, result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      assert {:error, :unauthorized} =
+               Competitions.correct_result(result, suspended, %{
+                 "winner_participation_id" => fixture.participant_b_id
+               })
     end
   end
 
@@ -1208,6 +1275,91 @@ defmodule Cuevolution.CompetitionsTest do
       row = Enum.find(standings, &(&1.id == participant_a.id))
 
       refute row.advancing
+    end
+  end
+
+  describe "migrate_regional_start_enrollments/0" do
+    test "moves undrawn female and team Grassroots participations to Regional, leaving male alone" do
+      grassroots = stage("Grassroots")
+      regional = stage("Regional")
+      region = build(:region)
+
+      female_player = insert(:player, region_id: region.id, gender: "female")
+
+      female_sp =
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          region_id: region.id,
+          category: "female",
+          player_id: female_player.id
+        )
+
+      captain = insert(:player, region_id: region.id)
+      team = insert(:team, region_id: region.id, captain_id: captain.id)
+
+      team_sp =
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          region_id: region.id,
+          category: "team",
+          team_id: team.id,
+          player_id: nil
+        )
+
+      male_player = insert(:player, region_id: region.id, gender: "male")
+
+      male_sp =
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          region_id: region.id,
+          category: "male",
+          player_id: male_player.id
+        )
+
+      assert %{moved: 2, skipped_drawn: 0} = Competitions.migrate_regional_start_enrollments()
+
+      assert Repo.get!(Cuevolution.Competitions.StageParticipation, female_sp.id).stage_id ==
+               regional.id
+
+      assert Repo.get!(Cuevolution.Competitions.StageParticipation, team_sp.id).stage_id ==
+               regional.id
+
+      assert Repo.get!(Cuevolution.Competitions.StageParticipation, male_sp.id).stage_id ==
+               grassroots.id
+    end
+
+    test "is idempotent and skips a participation already drawn into a group" do
+      grassroots = stage("Grassroots")
+      region = build(:region)
+      venue = insert(:venue, region_id: region.id)
+
+      {:ok, group} =
+        Competitions.create_group(%{
+          stage_id: grassroots.id,
+          region_id: region.id,
+          venue_id: venue.id,
+          category: "female",
+          name: "Drawn Pool"
+        })
+
+      female_player = insert(:player, region_id: region.id, gender: "female")
+
+      female_sp =
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          region_id: region.id,
+          category: "female",
+          player_id: female_player.id
+        )
+
+      {:ok, _} = Competitions.assign_to_group(female_sp, group)
+
+      assert %{moved: 0, skipped_drawn: 1} = Competitions.migrate_regional_start_enrollments()
+
+      assert Repo.get!(Cuevolution.Competitions.StageParticipation, female_sp.id).stage_id ==
+               grassroots.id
+
+      assert %{moved: 0, skipped_drawn: 1} = Competitions.migrate_regional_start_enrollments()
     end
   end
 end

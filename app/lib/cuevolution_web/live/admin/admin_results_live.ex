@@ -50,6 +50,7 @@ defmodule CuevolutionWeb.AdminResultsLive do
         points_forms: %{},
         can_approve_results?: can_approve_results?,
         can_record_results?: can_record_results?,
+        missing_scope?: missing_scope?(current_admin),
         approval_regions: regions,
         approval_venues: approval_venues,
         approval_region_id: nil,
@@ -65,6 +66,15 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
     {:ok, socket}
   end
+
+  # A `record_results` holder whose own scope (venue for a venue rep, region
+  # for a regional coordinator) hasn't been assigned yet sees `can_record_results?
+  # == true` (role-based, scope-blind) but zero fixtures either way
+  # (`scope_fixtures_for_admin` falls back to a never-matching clause without
+  # one) — this tells them why, instead of a page that just looks broken.
+  defp missing_scope?(%Admin{role: "venue_representative", venue_id: nil}), do: true
+  defp missing_scope?(%Admin{role: "regional_coordinator", region_id: nil}), do: true
+  defp missing_scope?(%Admin{}), do: false
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :tab, tab)}
@@ -236,6 +246,14 @@ defmodule CuevolutionWeb.AdminResultsLive do
       {:error, :unauthorized} ->
         {:noreply, put_flash(socket, :error, "You don't have permission to correct results.")}
 
+      {:error, :already_approved} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "This result has already been approved — ask a tournament director to correct it."
+         )}
+
       {:error, changeset} ->
         {:noreply, assign(socket, :correction_form, to_form(changeset, as: :result))}
     end
@@ -309,6 +327,15 @@ defmodule CuevolutionWeb.AdminResultsLive do
   end
 
   defp points_eligible?(%{participant_a: %{stage: %{order: order}}}), do: order >= 3
+
+  # Mirrors `Competitions.correct_result/3`'s authorization: an approver can
+  # always correct; a recorder (e.g. a venue rep) only while the result is
+  # still awaiting approval. Keeps the UI from offering a form the backend
+  # would reject anyway.
+  defp can_correct_result?(admin, fixture) do
+    Admin.can?(admin, :approve_results) or
+      (Admin.can?(admin, :record_results) and fixture.status == "completed")
+  end
 
   defp fixture_label(fixture) do
     "#{Competitions.participant_name(fixture.participant_a)} vs #{Competitions.participant_name(fixture.participant_b)}"

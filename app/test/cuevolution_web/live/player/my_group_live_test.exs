@@ -69,4 +69,36 @@ defmodule CuevolutionWeb.Player.MyGroupLiveTest do
     refute html =~ "Other Group"
     assert html =~ "YOU"
   end
+
+  test "shows a ladies player's Regional group — individual females never pass through Grassroots",
+       %{conn: conn} do
+    regional = Cuevolution.Repo.get_by!(Stage, name: "Regional")
+    region = build(:region)
+    player = insert(:player, region_id: region.id, gender: "female", first_name: "Rose")
+
+    {:ok, group} =
+      Competitions.create_group(%{
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "female",
+        name: "Ladies Pool A"
+      })
+
+    participation =
+      insert(:stage_participation,
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "female",
+        player_id: player.id
+      )
+
+    {:ok, _} = Competitions.assign_to_group(participation, group)
+
+    conn = log_in_player(conn, player)
+    {:ok, _view, html} = live(conn, ~p"/my-group")
+
+    assert html =~ "Ladies Pool A"
+    assert html =~ "Regional"
+    assert html =~ "YOU"
+  end
 end

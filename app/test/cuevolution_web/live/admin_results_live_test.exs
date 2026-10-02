@@ -32,6 +32,21 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     assert html =~ "No played fixtures yet."
   end
 
+  test "a venue rep with no venue assigned sees why the page is empty instead of a silent blank",
+       %{conn: conn} do
+    conn = log_in_admin(conn, role: "venue_representative", venue_id: nil)
+    {:ok, _view, html} = live(conn, ~p"/admin/results")
+
+    assert html =~ "not assigned to a venue yet"
+  end
+
+  test "a regional coordinator with no region assigned sees why the page is empty", %{conn: conn} do
+    conn = log_in_admin(conn, role: "regional_coordinator", region_id: nil)
+    {:ok, _view, html} = live(conn, ~p"/admin/results")
+
+    assert html =~ "not assigned to a region yet"
+  end
+
   test "selecting an unplayed fixture and recording a result moves it to Played", %{conn: conn} do
     fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
 
@@ -147,6 +162,47 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
 
     assert Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).status ==
              "completed"
+  end
+
+  test "a venue rep can correct their own result before approval, but not after", %{conn: conn} do
+    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    {:ok, _result} =
+      Competitions.record_result(fixture, rep, %{
+        "winner_participation_id" => fixture.participant_a_id
+      })
+
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view |> element("button", "Played / Correct") |> render_click()
+    html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+
+    assert html =~ "Correct result"
+    refute has_element?(view, "#approve-result")
+
+    html =
+      view
+      |> form("form[phx-submit='correct_result']", %{
+        "result" => %{"winner_participation_id" => fixture.participant_b_id}
+      })
+      |> render_submit()
+
+    assert html =~ "Result corrected."
+
+    assert Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id).winner_participation_id ==
+             fixture.participant_b_id
+
+    director = insert(:admin, role: "tournament_director")
+    {:ok, _verified} = Competitions.verify_result(Cuevolution.Repo.reload(fixture), director)
+
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+    view |> element("button", "Played / Correct") |> render_click()
+    html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+
+    assert html =~ "Approved and final."
+    refute html =~ "Correct result"
   end
 
   test "tournament director approval makes a submitted result final", %{conn: conn} do

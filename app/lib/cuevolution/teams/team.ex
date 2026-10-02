@@ -31,4 +31,12 @@ defmodule Cuevolution.Teams.Team do
     |> foreign_key_constraint(:match_region_id)
     |> foreign_key_constraint(:match_venue_id)
   end
+
+  @doc "Updates `team`'s structural (competition) region — distinct from `match_region_id`, which is just where the team prefers to play."
+  def region_changeset(team, attrs) do
+    team
+    |> cast(attrs, [:region_id])
+    |> validate_required([:region_id])
+    |> foreign_key_constraint(:region_id)
+  end
 end

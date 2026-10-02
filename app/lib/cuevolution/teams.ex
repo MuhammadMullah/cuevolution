@@ -56,7 +56,7 @@ defmodule Cuevolution.Teams do
     Multi.new()
     |> Multi.insert(:team, changeset)
     |> Multi.insert(:stage_participation, fn %{team: team} ->
-      Competitions.enroll_team_in_grassroots_changeset(team)
+      Competitions.enroll_team_changeset(team)
     end)
     |> Multi.update_all(
       :claim_captain,
@@ -150,6 +150,33 @@ defmodule Cuevolution.Teams do
     end
   end
 
+  @doc """
+  Reassigns `team`'s structural region on behalf of an authorized admin —
+  this is the override path, so it's allowed even once the team has been
+  drawn into a group (`update_team_region/3` is the captain-facing
+  equivalent, which blocks at that point instead). Updates the team's
+  current `StageParticipation.region_id` in the same transaction, since
+  that's only ever copied from `team.region_id` once, at creation
+  (`Competitions.enroll_team_changeset/1`), and never re-synced afterward.
+  """
+  def admin_update_team_region(%Admin{} = admin, %Team{} = team, region_id) do
+    if Admin.can?(admin, :manage_teams) do
+      case update_team_region_and_participation(team, region_id) do
+        {:ok, updated_team} ->
+          Accounts.log_admin_action("admin_update_team_region", admin, updated_team,
+            new_value: %{"region_id" => region_id}
+          )
+
+          {:ok, updated_team}
+
+        error ->
+          error
+      end
+    else
+      {:error, :unauthorized}
+    end
+  end
+
   @doc "Deletes a team on behalf of an authorized admin and releases its roster."
   def admin_delete_team(%Admin{} = admin, %Team{} = team) do
     if Admin.can?(admin, :manage_teams) do
@@ -181,7 +208,7 @@ defmodule Cuevolution.Teams do
         })
       )
       |> Multi.insert(:stage_participation, fn %{team: team} ->
-        Competitions.enroll_team_in_grassroots_changeset(team)
+        Competitions.enroll_team_changeset(team)
       end)
       |> Multi.update_all(
         :claim_roster,
@@ -300,6 +327,41 @@ defmodule Cuevolution.Teams do
       else
         {:error, :invalid_match_location}
       end
+    end
+  end
+
+  @doc """
+  Updates `team`'s structural (competition) region on behalf of its
+  captain — distinct from `update_match_location/3`'s `match_region_id`,
+  which is non-competitive. Blocked once the team has been drawn into a
+  group (`team.roster_locked_at`, same freeze signal `add_player_to_roster/3`
+  uses); an admin can override via `admin_update_team_region/3`.
+  """
+  def update_team_region(%Team{} = team, %Player{} = captain, region_id) do
+    cond do
+      team.captain_id != captain.id -> {:error, :not_captain}
+      not is_nil(team.roster_locked_at) -> {:error, :team_drawn}
+      true -> update_team_region_and_participation(team, region_id)
+    end
+  end
+
+  defp update_team_region_and_participation(team, region_id) do
+    Multi.new()
+    |> Multi.update(:team, Team.region_changeset(team, %{region_id: region_id}))
+    |> Multi.run(:participation, fn repo, _changes ->
+      case repo.get_by(StageParticipation, team_id: team.id) do
+        nil ->
+          {:ok, nil}
+
+        participation ->
+          repo.update(StageParticipation.changeset(participation, %{region_id: region_id}))
+      end
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{team: updated_team}} -> {:ok, updated_team}
+      {:error, :team, changeset, _changes} -> {:error, changeset}
+      {:error, :participation, changeset, _changes} -> {:error, changeset}
     end
   end
 

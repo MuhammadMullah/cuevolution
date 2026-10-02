@@ -62,6 +62,27 @@ defmodule Cuevolution.Release do
   end
 
   @doc """
+  One-time: moves every existing female player's and team's current
+  Grassroots `StageParticipation` to Regional, now that ladies and teams
+  start there directly. Idempotent — safe to re-run. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.migrate_regional_start()'
+  """
+  def migrate_regional_start do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    %{moved: moved, skipped_drawn: skipped_drawn} =
+      Cuevolution.Competitions.migrate_regional_start_enrollments()
+
+    IO.puts(
+      "Moved #{moved} participant(s) to Regional (skipped #{skipped_drawn} already drawn into a Grassroots group)."
+    )
+
+    :ok
+  end
+
+  @doc """
   One-off: grants `:tournament_eligibility_override` to every player who
   registered between 21 and 25 September 2026 (UTC-naive, matching the
   existing `Accounts.tournament_registration_cutoff/0` EAT-midnight
