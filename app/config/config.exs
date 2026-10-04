@@ -19,7 +19,12 @@ config :cuevolution, Oban,
   plugins: [
     Oban.Plugins.Pruner,
     {Oban.Plugins.Cron,
-     crontab: [{"@hourly", Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker}]},
+     crontab: [
+       # 08:00 UTC = 11:00 EAT (Nairobi).
+       {"0 8 * * *", Cuevolution.Accounts.Workers.BirthdayGreetingWorker},
+       {"@daily", Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker},
+       {"@hourly", Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker}
+     ]},
     # Rescues jobs left "executing" when an instance restarts mid-job.
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}
   ],

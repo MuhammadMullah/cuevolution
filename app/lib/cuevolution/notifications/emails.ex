@@ -129,6 +129,60 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "Reminds a player to complete scheduled Grassroots fixtures before the deadline."
+  def grassroots_match_reminder(player, payload) do
+    %{deadline: deadline} = payload
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("Complete your Grassroots fixtures before #{deadline}")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        You still have scheduled Grassroots fixtures to complete. Please arrange and finish
+        your matches before <strong>#{esc(deadline)}</strong> to avoid a double walkover.
+      </p>
+      #{button("View My Fixtures", url("/fixtures"))}
+      <p style="margin:24px 0 0;">Good luck!</p>
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    You still have scheduled Grassroots fixtures to complete. Please arrange and finish your matches
+    before #{deadline} to avoid a double walkover.
+
+    See your fixtures: #{url("/fixtures")}
+    """)
+  end
+
+  @doc "Sends birthday wishes to a player."
+  def birthday_greeting(player) do
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("Happy birthday, #{player.first_name}!")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        Happy birthday from everyone at Sportpesa National Pool Circuit!
+        We hope your day is a great one, both on and off the table.
+      </p>
+      #{button("Open Cuevolution", url("/"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    Happy birthday from everyone at Sportpesa National Pool Circuit!
+    We hope your day is a great one, both on and off the table.
+
+    Open Cuevolution: #{url("/")}
+    """)
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload

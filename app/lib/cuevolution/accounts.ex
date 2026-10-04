@@ -43,6 +43,27 @@ defmodule Cuevolution.Accounts do
     NaiveDateTime.compare(inserted_at, @tournament_registration_cutoff) == :lt
   end
 
+  @doc "Returns active players whose birthday falls on the given calendar date."
+  def players_with_birthday_on(%Date{} = date) do
+    month = date.month
+    day = date.day
+
+    query =
+      from p in Player,
+        where:
+          not is_nil(p.date_of_birth) and is_nil(p.anonymized_at) and
+            fragment(
+              "EXTRACT(MONTH FROM ?) = ? AND EXTRACT(DAY FROM ?) = ?",
+              p.date_of_birth,
+              ^month,
+              p.date_of_birth,
+              ^day
+            ),
+        order_by: p.id
+
+    Repo.all(query)
+  end
+
   @doc """
   Grants `:tournament_eligibility_override` to every player who registered
   in `[from, to)` (UTC-naive, matching `inserted_at`) — the tournament

@@ -33,7 +33,9 @@ defmodule Cuevolution.Notifications do
     "team_player_left" => ~w(team_name player_name roster_count eligible),
     "player_location_updated" => ~w(region_name venue_name),
     "venue_deactivated" => ~w(venue_name suggested_venues),
-    "draw_published" => ~w(fixtures)
+    "draw_published" => ~w(fixtures),
+    "grassroots_match_reminder" => ~w(deadline),
+    "birthday_greeting" => []
   }
 
   @doc """
@@ -117,7 +119,11 @@ defmodule Cuevolution.Notifications do
   end
 
   defp enqueue(recipient, event_type, channel, payload, opts) do
-    idempotency_key = Keyword.get(opts, :idempotency_key) || Ecto.UUID.generate()
+    idempotency_key =
+      case Keyword.get(opts, :idempotency_key) do
+        nil -> Ecto.UUID.generate()
+        base_key -> "#{base_key}:#{channel}"
+      end
 
     changeset =
       Notification.changeset(%Notification{}, %{

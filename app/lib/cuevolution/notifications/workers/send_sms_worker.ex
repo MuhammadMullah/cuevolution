@@ -67,4 +67,12 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorker do
   defp build_body(%{event_type: "draw_published", player: player, payload: payload}) do
     SmsMessages.draw_published(player, Support.atomize_payload(payload))
   end
+
+  defp build_body(%{event_type: "grassroots_match_reminder", player: player, payload: payload}) do
+    SmsMessages.grassroots_match_reminder(player, Support.atomize_payload(payload))
+  end
+
+  defp build_body(%{event_type: "birthday_greeting", player: player}) do
+    SmsMessages.birthday_greeting(player)
+  end
 end

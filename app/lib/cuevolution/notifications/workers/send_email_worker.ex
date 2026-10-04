@@ -64,4 +64,12 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorker do
   defp build_email(%{event_type: "draw_published", player: player, payload: payload}) do
     Emails.draw_published(player, Support.atomize_payload(payload))
   end
+
+  defp build_email(%{event_type: "grassroots_match_reminder", player: player, payload: payload}) do
+    Emails.grassroots_match_reminder(player, Support.atomize_payload(payload))
+  end
+
+  defp build_email(%{event_type: "birthday_greeting", player: player}) do
+    Emails.birthday_greeting(player)
+  end
 end

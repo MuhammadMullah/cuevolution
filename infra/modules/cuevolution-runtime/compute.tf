@@ -70,11 +70,12 @@ resource "google_compute_firewall" "allow_ssh" {
 }
 
 resource "google_compute_instance" "app" {
-  project      = var.project_id
-  name         = "cuevolution-${var.environment}-vm"
-  zone         = coalesce(var.vm_zone, "${var.region}-a")
-  machine_type = var.vm_machine_type
-  tags         = ["cuevolution-${var.environment}-vm"]
+  project                    = var.project_id
+  name                       = "cuevolution-${var.environment}-vm"
+  zone                       = coalesce(var.vm_zone, "${var.region}-a")
+  machine_type               = var.vm_machine_type
+  allow_stopping_for_update = true
+  tags                       = ["cuevolution-${var.environment}-vm"]
 
   # Under Terraform's management (not a one-off `gcloud compute instances
   # add-metadata`) so a later apply can't silently wipe SSH access by

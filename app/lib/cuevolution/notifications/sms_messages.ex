@@ -25,6 +25,14 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "SportPesa National Pool Circuit: You've been drawn. Log in to see your fixtures. Carry a copy of your ID for verification at your matches."
   end
 
+  def grassroots_match_reminder(_player, %{deadline: deadline}) do
+    "SportPesa National Pool Circuit: You have scheduled Grassroots fixtures. Finish your matches before #{deadline} to avoid a double walkover. Log in to view fixtures."
+  end
+
+  def birthday_greeting(_player) do
+    "On behalf of Sportpesa and the entire pool community, we wish you a very happy birthday! Have a fantastic day."
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(_player, payload) do
     %{team_name: team_name} = payload

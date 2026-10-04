@@ -18,5 +18,6 @@ module "cuevolution" {
   db_name                       = var.db_name
   db_user                       = var.db_user
   db_password_version           = 1
+  vm_machine_type               = "e2-standard-2"
   ssh_public_key                = var.ssh_public_key
 }

@@ -73,6 +73,99 @@ defmodule Cuevolution.Competitions do
     Repo.one!(from s in Stage, where: s.order == 2)
   end
 
+  @doc "Players with scheduled Grassroots fixtures and fewer than half of their played matches in Grassroots."
+  def players_with_grassroots_match_backlog do
+    query_grassroots_match_backlog()
+    |> Repo.all()
+  end
+
+  @doc "Returns a page of Grassroots match-backlog players for batched notification delivery."
+  def players_with_grassroots_match_backlog(limit, offset)
+      when is_integer(limit) and limit > 0 and is_integer(offset) and offset >= 0 do
+    query_grassroots_match_backlog()
+    |> limit(^limit)
+    |> offset(^offset)
+    |> Repo.all()
+  end
+
+  defp query_grassroots_match_backlog do
+    scheduled_from_a =
+      from f in Fixture,
+        join: sp in StageParticipation,
+        on: sp.id == f.participant_a_id,
+        join: r in Round,
+        on: r.id == f.round_id,
+        join: s in Stage,
+        on: s.id == r.stage_id,
+        where: f.status == "scheduled" and s.name == "Grassroots",
+        select: %{player_id: sp.player_id}
+
+    scheduled_from_b =
+      from f in Fixture,
+        join: sp in StageParticipation,
+        on: sp.id == f.participant_b_id,
+        join: r in Round,
+        on: r.id == f.round_id,
+        join: s in Stage,
+        on: s.id == r.stage_id,
+        where: f.status == "scheduled" and s.name == "Grassroots",
+        select: %{player_id: sp.player_id}
+
+    scheduled_player_ids =
+      scheduled_from_a
+      |> union_all(^scheduled_from_b)
+      |> subquery()
+
+    played_from_a =
+      from f in Fixture,
+        join: sp in StageParticipation,
+        on: sp.id == f.participant_a_id,
+        join: r in Round,
+        on: r.id == f.round_id,
+        join: s in Stage,
+        on: s.id == r.stage_id,
+        join: mr in MatchResult,
+        on: mr.fixture_id == f.id,
+        where: f.status in ["verified", "walkover"],
+        select: %{player_id: sp.player_id, fixture_id: f.id, stage_name: s.name}
+
+    played_from_b =
+      from f in Fixture,
+        join: sp in StageParticipation,
+        on: sp.id == f.participant_b_id,
+        join: r in Round,
+        on: r.id == f.round_id,
+        join: s in Stage,
+        on: s.id == r.stage_id,
+        join: mr in MatchResult,
+        on: mr.fixture_id == f.id,
+        where: f.status in ["verified", "walkover"],
+        select: %{player_id: sp.player_id, fixture_id: f.id, stage_name: s.name}
+
+    played_matches =
+      played_from_a
+      |> union_all(^played_from_b)
+      |> subquery()
+
+    played_match_counts =
+      from pm in played_matches,
+        where: not is_nil(pm.player_id) and pm.player_id in subquery(scheduled_player_ids),
+        group_by: pm.player_id,
+        select: %{
+          player_id: pm.player_id,
+          total_matches: count(pm.fixture_id, :distinct),
+          grassroots_matches:
+            sum(fragment("CASE WHEN ? = 'Grassroots' THEN 1 ELSE 0 END", pm.stage_name))
+        }
+
+    from counts in subquery(played_match_counts),
+      join: p in Player,
+      on: p.id == counts.player_id,
+      where: counts.grassroots_matches * 2 < counts.total_matches,
+      order_by: p.id,
+      select: p
+  end
+
   @doc "Recent verified and walkover fixtures for a player, including Grassroots deadline results."
   def recent_results_for_player(player_id) do
     participant_ids =
