@@ -73,7 +73,7 @@ defmodule Cuevolution.Competitions do
     Repo.one!(from s in Stage, where: s.order == 2)
   end
 
-  @doc "Players with scheduled Grassroots fixtures and fewer than half of their played matches in Grassroots."
+  @doc "Players who have played fewer than half of their active Grassroots fixtures."
   def players_with_grassroots_match_backlog do
     query_grassroots_match_backlog()
     |> Repo.all()
@@ -115,8 +115,14 @@ defmodule Cuevolution.Competitions do
       scheduled_from_a
       |> union_all(^scheduled_from_b)
       |> subquery()
+      |> then(fn scheduled_players ->
+        from sp in scheduled_players,
+          where: not is_nil(sp.player_id),
+          distinct: sp.player_id,
+          select: sp.player_id
+      end)
 
-    played_from_a =
+    grassroots_from_a =
       from f in Fixture,
         join: sp in StageParticipation,
         on: sp.id == f.participant_a_id,
@@ -124,12 +130,12 @@ defmodule Cuevolution.Competitions do
         on: r.id == f.round_id,
         join: s in Stage,
         on: s.id == r.stage_id,
-        join: mr in MatchResult,
-        on: mr.fixture_id == f.id,
-        where: f.status in ["verified", "walkover"],
-        select: %{player_id: sp.player_id, fixture_id: f.id, stage_name: s.name}
+        where:
+          f.status in ["scheduled", "live", "completed", "verified", "walkover"] and
+            s.name == "Grassroots",
+        select: %{player_id: sp.player_id, fixture_id: f.id, status: f.status}
 
-    played_from_b =
+    grassroots_from_b =
       from f in Fixture,
         join: sp in StageParticipation,
         on: sp.id == f.participant_b_id,
@@ -137,31 +143,36 @@ defmodule Cuevolution.Competitions do
         on: r.id == f.round_id,
         join: s in Stage,
         on: s.id == r.stage_id,
-        join: mr in MatchResult,
-        on: mr.fixture_id == f.id,
-        where: f.status in ["verified", "walkover"],
-        select: %{player_id: sp.player_id, fixture_id: f.id, stage_name: s.name}
+        where:
+          f.status in ["scheduled", "live", "completed", "verified", "walkover"] and
+            s.name == "Grassroots",
+        select: %{player_id: sp.player_id, fixture_id: f.id, status: f.status}
 
-    played_matches =
-      played_from_a
-      |> union_all(^played_from_b)
+    grassroots_matches =
+      grassroots_from_a
+      |> union_all(^grassroots_from_b)
       |> subquery()
 
-    played_match_counts =
-      from pm in played_matches,
-        where: not is_nil(pm.player_id) and pm.player_id in subquery(scheduled_player_ids),
-        group_by: pm.player_id,
+    match_counts =
+      from gm in grassroots_matches,
+        where: not is_nil(gm.player_id) and gm.player_id in subquery(scheduled_player_ids),
+        group_by: gm.player_id,
         select: %{
-          player_id: pm.player_id,
-          total_matches: count(pm.fixture_id, :distinct),
-          grassroots_matches:
-            sum(fragment("CASE WHEN ? = 'Grassroots' THEN 1 ELSE 0 END", pm.stage_name))
+          player_id: gm.player_id,
+          total_matches: count(gm.fixture_id, :distinct),
+          played_matches:
+            sum(
+              fragment(
+                "CASE WHEN ? IN ('completed', 'verified', 'walkover') THEN 1 ELSE 0 END",
+                gm.status
+              )
+            )
         }
 
-    from counts in subquery(played_match_counts),
+    from counts in subquery(match_counts),
       join: p in Player,
       on: p.id == counts.player_id,
-      where: counts.grassroots_matches * 2 < counts.total_matches,
+      where: counts.played_matches * 2 < counts.total_matches,
       order_by: p.id,
       select: p
   end

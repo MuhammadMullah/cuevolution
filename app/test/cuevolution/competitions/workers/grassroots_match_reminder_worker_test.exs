@@ -33,11 +33,19 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
     end
 
     add_scheduled_fixture(target_participation, grassroots)
+    add_scheduled_fixture(target_participation, grassroots)
 
-    assert [^target] = Competitions.players_with_grassroots_match_backlog()
+    no_played_player = insert(:player, notification_preference: "email")
+    no_played_participation = insert(:stage_participation, player_id: no_played_player.id)
+    add_scheduled_fixture(no_played_participation, grassroots)
+
+    backlog_ids = Enum.map(Competitions.players_with_grassroots_match_backlog(), & &1.id)
+    assert target.id in backlog_ids
+    assert no_played_player.id in backlog_ids
+    assert length(backlog_ids) == 5
 
     assert :ok = GrassrootsMatchReminderWorker.perform(%Oban.Job{})
-    assert Repo.aggregate(Notification, :count, :id) == 4
+    assert Repo.aggregate(Notification, :count, :id) == 12
 
     assert Enum.any?(
              Repo.all(
@@ -50,7 +58,7 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
            )
 
     assert :ok = GrassrootsMatchReminderWorker.perform(%Oban.Job{})
-    assert Repo.aggregate(Notification, :count, :id) == 4
+    assert Repo.aggregate(Notification, :count, :id) == 12
   end
 
   test "does not notify when the deadline has passed" do
@@ -67,6 +75,21 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
 
     assert :ok = GrassrootsMatchReminderWorker.perform(%Oban.Job{})
     assert Repo.aggregate(Notification, :count, :id) == 0
+  end
+
+  test "does not include a player who has played exactly half of their Grassroots fixtures" do
+    grassroots = Repo.get_by!(Stage, name: "Grassroots")
+
+    Repo.update!(
+      Ecto.Changeset.change(grassroots, completion_deadline: Date.add(Date.utc_today(), 2))
+    )
+
+    player = insert(:player)
+    participation = insert(:stage_participation, player_id: player.id, stage_id: grassroots.id)
+    add_played_fixture(participation, grassroots, "verified")
+    add_scheduled_fixture(participation, grassroots)
+
+    refute player.id in Enum.map(Competitions.players_with_grassroots_match_backlog(), & &1.id)
   end
 
   defp add_played_fixture(participation, stage, status) do
