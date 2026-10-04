@@ -60,15 +60,17 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
         :ok
 
       players ->
-        Enum.each(players, fn player ->
-          dispatch_reminder(player, deadline, "initial")
-
-          if days_until_deadline == 2 do
-            dispatch_reminder(player, deadline, "48-hour")
-          end
-        end)
+        Enum.each(players, &dispatch_player_reminders(&1, deadline, days_until_deadline))
 
         dispatch_in_batches(deadline, days_until_deadline, offset + length(players))
+    end
+  end
+
+  defp dispatch_player_reminders(player, deadline, days_until_deadline) do
+    dispatch_reminder(player, deadline, "initial")
+
+    if days_until_deadline == 2 do
+      dispatch_reminder(player, deadline, "48-hour")
     end
   end
 end
