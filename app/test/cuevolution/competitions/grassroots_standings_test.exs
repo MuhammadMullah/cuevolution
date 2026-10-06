@@ -202,7 +202,7 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
         "winner_id" => a.id,
         "participant_a_frames" => 5,
         "participant_b_frames" => 0,
-        "points_a" => 5,
+        "points_a" => 3,
         "points_b" => 0,
         "bonus_a" => 0,
         "bonus_b" => 0
@@ -213,7 +213,7 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
     standings = Competitions.grassroots_group_standings(group)
     a_id = a.id
 
-    assert %{participant_id: ^a_id, points: 5, bonus: 0} =
+    assert %{participant_id: ^a_id, points: 3, bonus: 0} =
              Enum.find(standings, &(&1.participant_id == a.id))
 
     refute Repo.get_by(Fixture, participant_a_id: a.id, participant_b_id: b.id).status ==

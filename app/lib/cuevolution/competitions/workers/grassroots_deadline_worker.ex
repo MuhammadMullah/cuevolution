@@ -5,18 +5,28 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker do
 
   import Ecto.Query
 
-  alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.AdminActionLog
   alias Cuevolution.Competitions.{Fixture, Group, MatchResult, Round, Stage}
   alias Cuevolution.Repo
-  alias Ecto.Multi
 
   @deadline_action "deadline_double_walkover"
+
+  @double_walkover_score %{
+    "participant_a_frames" => 0,
+    "participant_b_frames" => 0,
+    "points_a" => 0,
+    "points_b" => 0,
+    "bonus_a" => 0,
+    "bonus_b" => 0,
+    "walkover" => true,
+    "walkover_kind" => "double"
+  }
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     deadline = DateTime.utc_now() |> DateTime.add(3 * 60 * 60, :second) |> DateTime.to_date()
 
-    fixtures =
+    fixture_ids =
       from(f in Fixture,
         join: r in Round,
         on: r.id == f.round_id,
@@ -26,68 +36,96 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker do
         on: s.id == g.stage_id,
         where:
           s.name == "Grassroots" and f.status == "scheduled" and s.completion_deadline < ^deadline,
-        select: f
+        select: f.id
       )
       |> Repo.all()
 
-    Enum.reduce_while(fixtures, {:ok, 0}, fn fixture, {:ok, count} ->
-      case convert_fixture(fixture) do
-        {:ok, _fixture} -> {:cont, {:ok, count + 1}}
-        {:skip, _reason} -> {:cont, {:ok, count}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, _count} -> :ok
-      {:error, reason} -> {:error, reason}
+    convert_fixtures(fixture_ids)
+
+    :ok
+  end
+
+  # Batched the same way as the draw/fixture-generation fix: claiming,
+  # recording a result, and auditing each of potentially hundreds of
+  # overdue fixtures one at a time (the original approach) ran 4
+  # sequential round trips per fixture in its own transaction. This does
+  # it in 4 round trips total regardless of how many fixtures are overdue
+  # — one claiming update, one result insert, one fixture-result backfill
+  # (each fixture needs its own freshly-created result's id, via a
+  # one-shot `unnest` join instead of N single-row updates), one audit
+  # insert.
+  defp convert_fixtures([]), do: :ok
+
+  defp convert_fixtures(fixture_ids) do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    {_count, claimed_ids} =
+      Fixture
+      |> where([f], f.id in ^fixture_ids and f.status == "scheduled")
+      |> select([f], f.id)
+      |> Repo.update_all(set: [status: "walkover", walkover_kind: "double", updated_at: now])
+
+    if claimed_ids != [] do
+      result_ids_by_fixture = Map.new(claimed_ids, &{&1, Ecto.UUID.generate()})
+
+      insert_results(result_ids_by_fixture, now)
+      backfill_fixture_result_ids(result_ids_by_fixture, now)
+      insert_audit_logs(claimed_ids, now)
     end
   end
 
-  defp convert_fixture(fixture) do
-    Multi.new()
-    |> Multi.run(:claim, fn repo, _changes ->
-      {count, _} =
-        repo.update_all(
-          from(f in Fixture, where: f.id == ^fixture.id and f.status == "scheduled"),
-          set: [status: "walkover", walkover_kind: "double"]
-        )
-
-      if count == 1, do: {:ok, :claimed}, else: {:error, :already_processed}
-    end)
-    |> Multi.insert(:result, fn _changes ->
-      MatchResult.system_double_walkover_changeset(%MatchResult{}, %{
-        fixture_id: fixture.id,
-        score: %{
-          "participant_a_frames" => 0,
-          "participant_b_frames" => 0,
-          "points_a" => 0,
-          "points_b" => 0,
-          "bonus_a" => 0,
-          "bonus_b" => 0,
-          "walkover" => true,
-          "walkover_kind" => "double"
+  defp insert_results(result_ids_by_fixture, now) do
+    rows =
+      Enum.map(result_ids_by_fixture, fn {fixture_id, result_id} ->
+        %{
+          id: result_id,
+          fixture_id: fixture_id,
+          score: @double_walkover_score,
+          inserted_at: now,
+          updated_at: now
         }
-      })
-    end)
-    |> Multi.update(:fixture, fn %{result: result} ->
-      Ecto.Changeset.change(fixture,
-        result_id: result.id,
-        status: "walkover",
-        walkover_kind: "double"
-      )
-    end)
-    |> Multi.run(:audit, fn _repo, %{fixture: updated} ->
-      if updated.id == fixture.id do
-        Accounts.log_system_action(@deadline_action, updated,
-          new_value: %{walkover_kind: "double", reason: "completion_deadline"}
-        )
-      end
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{fixture: updated}} -> {:ok, updated}
-      {:error, :claim, :already_processed, _changes} -> {:skip, :already_processed}
-      {:error, _step, reason, _changes} -> {:error, reason}
-    end
+      end)
+
+    Repo.insert_all(MatchResult, rows)
+  end
+
+  defp backfill_fixture_result_ids(result_ids_by_fixture, now) do
+    {fixture_ids, result_ids} = Enum.unzip(result_ids_by_fixture)
+
+    from(f in Fixture,
+      join:
+        v in fragment(
+          "SELECT * FROM unnest(?::text[], ?::text[]) AS t(fixture_id, result_id)",
+          ^fixture_ids,
+          ^result_ids
+        ),
+      on: v.fixture_id == fragment("?::text", f.id),
+      update: [
+        set: [
+          result_id: type(fragment("?::uuid", v.result_id), Ecto.UUID),
+          updated_at: ^now
+        ]
+      ]
+    )
+    |> Repo.update_all([])
+  end
+
+  defp insert_audit_logs(fixture_ids, now) do
+    entity_type = Fixture |> to_string() |> String.trim_leading("Elixir.")
+
+    rows =
+      Enum.map(fixture_ids, fn fixture_id ->
+        %{
+          id: Ecto.UUID.generate(),
+          actor_type: "system",
+          action_type: @deadline_action,
+          entity_type: entity_type,
+          entity_id: fixture_id,
+          new_value: %{"walkover_kind" => "double", "reason" => "completion_deadline"},
+          inserted_at: now
+        }
+      end)
+
+    Repo.insert_all(AdminActionLog, rows)
   end
 end

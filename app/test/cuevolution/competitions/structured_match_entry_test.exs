@@ -87,6 +87,8 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
       result = Repo.get_by!(MatchResult, fixture_id: fixture.id)
       assert result.score["participant_a_frames"] == 5
       assert result.score["participant_b_frames"] == 0
+      assert result.score["points_a"] == 3
+      assert result.score["points_b"] == 0
     end
 
     test "requires a reason to postpone and can resume with approval permission" do
@@ -124,6 +126,10 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
       assert {:ok, converted} = Competitions.process_withdrawal(withdrawn, admin)
       assert Enum.any?(converted, &(&1.id == remaining.id and &1.walkover_kind == "single"))
       assert Repo.get!(Fixture, fixture.id).status == "completed"
+
+      withdrawal_result = Repo.get_by!(MatchResult, fixture_id: remaining.id)
+      assert withdrawal_result.score["points_a"] == 0
+      assert withdrawal_result.score["points_b"] == 3
     end
 
     test "resets played results when fewer than half the fixtures are played" do

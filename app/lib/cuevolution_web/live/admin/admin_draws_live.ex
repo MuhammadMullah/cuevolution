@@ -425,7 +425,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
   end
 
   defp participant_suggestions(_round, "team", query) do
-    %{name: query} |> Teams.list_teams_filtered() |> Enum.take(6) |> Enum.map(&team_suggestion/1)
+    %{name: query, limit: 6} |> Teams.list_teams_filtered() |> Enum.map(&team_suggestion/1)
   end
 
   defp group_member_suggestion(%{player_id: nil, team: team}), do: team_suggestion(team)

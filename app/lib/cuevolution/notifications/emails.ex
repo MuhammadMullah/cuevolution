@@ -157,6 +157,41 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "Corrects the Grassroots deadline communicated in an earlier reminder."
+  def grassroots_deadline_apology(player, payload) do
+    %{deadline: deadline} = payload
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("Correction: Grassroots deadline is #{deadline}")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        We apologize for the incorrect Grassroots deadline communicated earlier.
+      </p>
+      <p style="margin:0 0 16px;">
+        The correct Grassroots completion deadline is <strong>#{esc(deadline)}</strong>.
+        Please complete your scheduled matches before this date.
+      </p>
+      #{button("View My Fixtures", url("/fixtures"))}
+      <p style="margin:24px 0 0;">Thank you for your understanding.</p>
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    We apologize for the incorrect Grassroots deadline communicated earlier.
+
+    The correct Grassroots completion deadline is #{deadline}.
+    Please complete your scheduled matches before this date.
+
+    See your fixtures: #{url("/fixtures")}
+
+    Thank you for your understanding.
+    """)
+  end
+
   @doc "Sends birthday wishes to a player."
   def birthday_greeting(player) do
     first_name = esc(player.first_name)

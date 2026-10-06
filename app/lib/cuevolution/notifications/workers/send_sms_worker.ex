@@ -72,6 +72,10 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorker do
     SmsMessages.grassroots_match_reminder(player, Support.atomize_payload(payload))
   end
 
+  defp build_body(%{event_type: "grassroots_deadline_apology", player: player, payload: payload}) do
+    SmsMessages.grassroots_deadline_apology(player, Support.atomize_payload(payload))
+  end
+
   defp build_body(%{event_type: "birthday_greeting", player: player}) do
     SmsMessages.birthday_greeting(player)
   end

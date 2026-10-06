@@ -414,11 +414,17 @@ defmodule CuevolutionWeb.AdminDashboardLive do
         Date.add(first_day, index) |> Calendar.strftime("%d %b")
       end)
 
+    counts_by_day =
+      Player
+      |> where([p], p.inserted_at >= ^start_at)
+      |> group_by([p], fragment("date(?)", p.inserted_at))
+      |> select([p], {fragment("date(?)", p.inserted_at), count(p.id)})
+      |> Repo.all()
+      |> Map.new()
+
     values =
-      Repo.all(from p in Player, where: p.inserted_at >= ^start_at, select: p.inserted_at)
-      |> Enum.reduce(List.duplicate(0, day_count), fn inserted_at, counts ->
-        day_index = Date.diff(NaiveDateTime.to_date(inserted_at), first_day)
-        List.update_at(counts, day_index, &(&1 + 1))
+      Enum.map(0..(day_count - 1), fn index ->
+        Map.get(counts_by_day, Date.add(first_day, index), 0)
       end)
 
     %{labels: labels, values: values}

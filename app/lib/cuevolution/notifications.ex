@@ -35,6 +35,7 @@ defmodule Cuevolution.Notifications do
     "venue_deactivated" => ~w(venue_name suggested_venues),
     "draw_published" => ~w(fixtures),
     "grassroots_match_reminder" => ~w(deadline),
+    "grassroots_deadline_apology" => ~w(deadline),
     "birthday_greeting" => []
   }
 
@@ -61,6 +62,72 @@ defmodule Cuevolution.Notifications do
   end
 
   @doc """
+  Batched counterpart to `dispatch/3` for events with many recipients at
+  once (a published draw's fixtures, a venue-wide relocation) — same
+  channel-routing/payload-allowlist/idempotency semantics, but writes all
+  `Notification` rows and enqueues all delivery jobs in two `insert_all`
+  calls total instead of two round trips per recipient per channel. A
+  draw can fan out to hundreds of recipients; looping `dispatch/3` over
+  them pins a DB connection for that many sequential inserts, the same
+  shape of bug fixed in the draw/fixture-generation pipeline.
+
+  `entries` is a list of `{recipient, payload, idempotency_key}` tuples
+  sharing one `event_type`. As in `dispatch/3`'s `idempotency_key` option,
+  the channel is appended to each entry's key so a "both"-preference
+  recipient gets one distinct key per channel.
+
+  Unlike `dispatch/3`, a recipient already notified under a given
+  idempotency key is silently skipped at the DB level (no row, no job) —
+  there's no per-recipient return value to resolve back to, since callers
+  of this function act on the batch as a whole, not on one recipient's
+  result.
+
+  Raises `ArgumentError` on the same payload-allowlist violation as
+  `dispatch/3`, applied per entry.
+  """
+  def dispatch_many(entries, event_type) when is_atom(event_type) and is_list(entries) do
+    event_type = Atom.to_string(event_type)
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    rows =
+      for {recipient, payload, idempotency_key} <- entries,
+          safe_payload = validate_payload!(event_type, payload),
+          channel <- channels_for(recipient) do
+        %{
+          id: Ecto.UUID.generate(),
+          player_id: recipient.id,
+          event_type: event_type,
+          channel: channel,
+          status: "pending",
+          payload: safe_payload,
+          idempotency_key: "#{idempotency_key}:#{channel}",
+          inserted_at: now,
+          updated_at: now
+        }
+      end
+
+    {_count, inserted} =
+      Repo.insert_all(Notification, rows,
+        on_conflict: :nothing,
+        conflict_target: :idempotency_key,
+        returning: [:id, :channel]
+      )
+
+    inserted
+    |> Enum.map(fn notification ->
+      worker = if notification.channel == "email", do: SendEmailWorker, else: SendSmsWorker
+      worker.new(%{"notification_id" => notification.id})
+    end)
+    |> Oban.insert_all()
+
+    Logger.info(
+      "notifications batch-enqueued event=#{event_type} requested=#{length(rows)} created=#{length(inserted)}"
+    )
+
+    :ok
+  end
+
+  @doc """
   Re-queues up to `limit` `event_type`/`channel` notifications stuck in
   "failed" or "sending" (a crashed/restarted worker can leave a row
   claimed but never resolved) for another delivery attempt — resets each
@@ -77,18 +144,22 @@ defmodule Cuevolution.Notifications do
   def redrive_failed(event_type, channel, limit \\ 400) when channel in ["email", "sms"] do
     worker = if channel == "email", do: SendEmailWorker, else: SendSmsWorker
 
-    candidates =
+    candidate_ids =
       Notification
       |> where([n], n.event_type == ^event_type and n.channel == ^channel)
       |> where([n], n.status in ["failed", "sending"])
       |> order_by([n], asc: n.inserted_at)
       |> limit(^limit)
+      |> select([n], n.id)
       |> Repo.all()
 
-    Enum.each(candidates, fn notification ->
-      notification |> Ecto.Changeset.change(status: "pending") |> Repo.update!()
-      %{"notification_id" => notification.id} |> worker.new() |> Oban.insert!()
-    end)
+    Notification
+    |> where([n], n.id in ^candidate_ids)
+    |> Repo.update_all(set: [status: "pending"])
+
+    candidate_ids
+    |> Enum.map(&worker.new(%{"notification_id" => &1}))
+    |> Oban.insert_all()
 
     remaining =
       Notification
@@ -96,7 +167,7 @@ defmodule Cuevolution.Notifications do
       |> where([n], n.status in ["failed", "sending"])
       |> Repo.aggregate(:count)
 
-    {length(candidates), remaining}
+    {length(candidate_ids), remaining}
   end
 
   defp channels_for(%Player{notification_preference: "email"}), do: ["email"]

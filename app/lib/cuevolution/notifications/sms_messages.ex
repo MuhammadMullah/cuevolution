@@ -29,6 +29,10 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "SportPesa National Pool Circuit: You have scheduled Grassroots fixtures. Finish your matches before #{deadline} to avoid a double walkover. Log in to view fixtures."
   end
 
+  def grassroots_deadline_apology(_player, %{deadline: deadline}) do
+    "SportPesa National Pool Circuit: We apologize for the incorrect Grassroots deadline. The correct deadline is #{deadline}. Please complete your scheduled matches before this date."
+  end
+
   def birthday_greeting(_player) do
     "On behalf of Sportpesa and the entire pool community, we wish you a very happy birthday! Have a fantastic day."
   end

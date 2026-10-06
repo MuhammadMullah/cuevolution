@@ -256,10 +256,11 @@ defmodule Cuevolution.Competitions do
 
   defp backfill_player_enrollments do
     enrolled_ids = participation_owner_ids(:player_id)
+    cutoff = Accounts.tournament_registration_cutoff()
 
     Player
+    |> where([p], p.inserted_at < ^cutoff or p.tournament_eligibility_override)
     |> Repo.all()
-    |> Enum.filter(&Accounts.tournament_eligible?/1)
     |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
     |> Enum.reduce({0, []}, fn player, {count, errors} ->
       case player |> enroll_player_changeset() |> Repo.insert() do
@@ -271,17 +272,38 @@ defmodule Cuevolution.Competitions do
 
   defp backfill_team_enrollments do
     enrolled_ids = participation_owner_ids(:team_id)
+    ineligible_team_ids = ineligible_team_ids()
 
     Team
     |> Repo.all()
-    |> Enum.filter(&Teams.tournament_eligible_team?/1)
-    |> Enum.reject(&MapSet.member?(enrolled_ids, &1.id))
+    |> Enum.reject(fn team ->
+      MapSet.member?(enrolled_ids, team.id) or MapSet.member?(ineligible_team_ids, team.id)
+    end)
     |> Enum.reduce({0, []}, fn team, {count, errors} ->
       case team |> enroll_team_changeset() |> Repo.insert() do
         {:ok, _} -> {count + 1, errors}
         {:error, changeset} -> {count, [{team.id, changeset} | errors]}
       end
     end)
+  end
+
+  # Mirrors `Teams.tournament_eligible_team?/1`'s rule (ineligible if the
+  # team has a late-registered player without the override) as one query
+  # covering every team at once, rather than that function's per-team
+  # `Repo.exists?` — fine for a single team-detail page view, but this
+  # backfill otherwise runs it once per team in the whole system.
+  defp ineligible_team_ids do
+    Player
+    |> where([p], not is_nil(p.team_id))
+    |> where(
+      [p],
+      p.inserted_at >= ^Accounts.tournament_registration_cutoff() and
+        not p.tournament_eligibility_override
+    )
+    |> select([p], p.team_id)
+    |> distinct(true)
+    |> Repo.all()
+    |> MapSet.new()
   end
 
   defp participation_owner_ids(field) do
@@ -1052,97 +1074,111 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  # Builds every Round/Fixture row for the draw in memory first, then
+  # inserts each table in one `insert_all` batch — a dealt region/venue can
+  # mean hundreds of groups' worth of rounds and fixtures, and inserting
+  # those one row at a time (the original approach) pins a DB connection
+  # for thousands of sequential round trips, starving the connection pool
+  # for everyone else while a draw is being published.
   defp generate_group_fixtures(repo, draw, groups) do
-    existing_match_ids =
-      repo.all(from f in Fixture, where: not is_nil(f.match_id), select: f.match_id)
-      |> MapSet.new()
-
-    Enum.reduce_while(groups, {:ok, [], existing_match_ids}, fn group,
-                                                                {:ok, fixtures, match_ids} ->
-      participants = Enum.map(group.group_memberships, & &1.stage_participation)
-
-      case insert_group_fixtures(repo, draw, group, participants, match_ids) do
-        {:ok, group_fixtures, updated_ids} ->
-          {:cont, {:ok, fixtures ++ group_fixtures, updated_ids}}
-
-        {:error, reason} ->
-          {:halt, {:error, reason}}
-      end
-    end)
-    |> normalize_fixture_result()
-  end
-
-  defp normalize_fixture_result({:ok, fixtures, _match_ids}), do: {:ok, fixtures}
-  defp normalize_fixture_result({:ok, fixtures}), do: {:ok, fixtures}
-  defp normalize_fixture_result(error), do: error
-
-  defp insert_group_fixtures(repo, draw, group, participants, existing_match_ids) do
-    rounds = round_robin_rounds(participants)
+    existing_match_ids = existing_match_ids_for(repo, draw)
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
     location_code = location_code(draw)
 
-    Enum.reduce_while(Enum.with_index(rounds, 1), {:ok, [], existing_match_ids}, fn
-      {pairs, round_number}, {:ok, fixtures, match_ids} ->
-        round_changeset =
-          Round.changeset(%Round{}, %{
-            stage_id: draw.stage_id,
-            group_id: group.id,
-            name: "Round #{round_number}"
-          })
+    {group_rows, _match_ids} =
+      Enum.map_reduce(groups, existing_match_ids, fn group, match_ids ->
+        participants = Enum.map(group.group_memberships, & &1.stage_participation)
+        build_group_rows(draw, group, participants, location_code, match_ids, now)
+      end)
 
-        with {:ok, round} <- repo.insert(round_changeset),
-             {:ok, new_fixtures, new_match_ids} <-
-               insert_round_fixtures(
-                 repo,
-                 round,
-                 draw,
-                 group,
-                 pairs,
-                 round_number,
-                 location_code,
-                 match_ids
-               ) do
-          {:cont, {:ok, fixtures ++ new_fixtures, new_match_ids}}
-        else
-          error -> {:halt, error}
-        end
-    end)
+    round_rows = Enum.flat_map(group_rows, &elem(&1, 0))
+    fixture_rows = Enum.flat_map(group_rows, &elem(&1, 1))
+
+    repo.insert_all(Round, round_rows)
+    repo.insert_all(Fixture, fixture_rows)
+
+    {:ok, Enum.map(fixture_rows, &struct(Fixture, &1))}
   end
 
-  defp insert_round_fixtures(
-         repo,
-         round,
-         draw,
-         group,
-         pairs,
-         round_number,
-         location_code,
-         match_ids
-       ) do
-    Enum.reduce_while(Enum.with_index(pairs, 1), {:ok, [], match_ids}, fn
-      {{participant_a, participant_b}, match_number}, {:ok, fixtures, ids} ->
-        match_id =
-          next_match_id(location_code, draw.category, group.name, round_number, match_number, ids)
+  # Scoped to `category` only — *not* to this draw's venue/region. Two
+  # different locations can collide on `location_code` (it's a truncated
+  # 5-char prefix of the venue/region name, e.g. "Nairobi A" and "Nairobi
+  # B" both become "NAIRO"), so a fixture from a same-prefix location in a
+  # different draw is a real collision risk here and must stay visible.
+  # `category_code` has no such ambiguity (male/female/team map 1:1 to
+  # fixed, disjoint codes), so filtering on it is a safe, if modest, way to
+  # avoid scanning fixtures that could never collide with this draw.
+  defp existing_match_ids_for(repo, draw) do
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: g in Group,
+      on: g.id == r.group_id,
+      where: g.category == ^draw.category and not is_nil(f.match_id),
+      select: f.match_id
+    )
+    |> repo.all()
+    |> MapSet.new()
+  end
 
-        changeset =
-          Fixture.auto_generate_changeset(
-            %Fixture{},
-            %{
-              round_id: round.id,
-              participant_a_id: participant_a.id,
-              participant_b_id: participant_b.id,
-              match_id: match_id
-            },
-            %{participant_a: participant_a, participant_b: participant_b}
+  defp build_group_rows(draw, group, participants, location_code, match_ids, now) do
+    rounds = round_robin_rounds(participants)
+
+    {per_round_rows, match_ids} =
+      rounds
+      |> Enum.with_index(1)
+      |> Enum.map_reduce(match_ids, fn {pairs, round_number}, match_ids ->
+        build_round_rows(draw, group, pairs, round_number, location_code, match_ids, now)
+      end)
+
+    round_rows = Enum.map(per_round_rows, &elem(&1, 0))
+    fixture_rows = Enum.flat_map(per_round_rows, &elem(&1, 1))
+
+    {{round_rows, fixture_rows}, match_ids}
+  end
+
+  defp build_round_rows(draw, group, pairs, round_number, location_code, match_ids, now) do
+    round_id = Ecto.UUID.generate()
+
+    round_row = %{
+      id: round_id,
+      stage_id: draw.stage_id,
+      group_id: group.id,
+      name: "Round #{round_number}",
+      inserted_at: now,
+      updated_at: now
+    }
+
+    {fixture_rows, match_ids} =
+      pairs
+      |> Enum.with_index(1)
+      |> Enum.map_reduce(match_ids, fn {{participant_a, participant_b}, match_number},
+                                       match_ids ->
+        match_id =
+          next_match_id(
+            location_code,
+            draw.category,
+            group.name,
+            round_number,
+            match_number,
+            match_ids
           )
 
-        case repo.insert(changeset) do
-          {:ok, fixture} ->
-            {:cont, {:ok, fixtures ++ [fixture], MapSet.put(ids, match_id)}}
+        fixture_row = %{
+          id: Ecto.UUID.generate(),
+          round_id: round_id,
+          participant_a_id: participant_a.id,
+          participant_b_id: participant_b.id,
+          match_id: match_id,
+          status: "scheduled",
+          inserted_at: now,
+          updated_at: now
+        }
 
-          error ->
-            {:halt, error}
-        end
-    end)
+        {fixture_row, MapSet.put(match_ids, match_id)}
+      end)
+
+    {{round_row, fixture_rows}, match_ids}
   end
 
   defp enqueue_draw_notifications(draw_id) do
@@ -1304,42 +1340,50 @@ defmodule Cuevolution.Competitions do
 
   defp same_team?(_, _members), do: false
 
+  # Batched the same way as `generate_group_fixtures/3` below: a region
+  # draw can mean hundreds of groups and thousands of memberships, and
+  # inserting those one row at a time pins a DB connection for the whole
+  # loop instead of two round trips.
   defp insert_draw_groups(repo, draw, buckets) do
     region_id = draw.region_id || draw.venue.region_id
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
-    Enum.reduce_while(Enum.with_index(buckets), {:ok, []}, fn {members, index}, {:ok, groups} ->
-      group_name = "Group #{group_label(index)}"
-
-      group_changeset =
-        Group.changeset(%Group{draw_id: draw.id}, %{
+    group_rows =
+      buckets
+      |> Enum.with_index()
+      |> Enum.map(fn {members, index} ->
+        %{
+          id: Ecto.UUID.generate(),
+          draw_id: draw.id,
           stage_id: draw.stage_id,
           region_id: region_id,
           venue_id: draw.venue_id,
           category: draw.category,
-          name: group_name
-        })
+          name: "Group #{group_label(index)}",
+          tie_breakers: [],
+          inserted_at: now,
+          updated_at: now,
+          members: members
+        }
+      end)
 
-      with {:ok, group} <- repo.insert(group_changeset),
-           {:ok, group} <- insert_group_memberships(repo, group, members) do
-        {:cont, {:ok, groups ++ [group]}}
-      else
-        error -> {:halt, error}
-      end
-    end)
-  end
+    repo.insert_all(Group, Enum.map(group_rows, &Map.drop(&1, [:members])))
 
-  defp insert_group_memberships(repo, group, members) do
-    Enum.reduce_while(members, {:ok, group}, fn participant, {:ok, group} ->
-      case repo.insert(
-             GroupMembership.changeset(%GroupMembership{}, %{
-               group_id: group.id,
-               stage_participation_id: participant.id
-             })
-           ) do
-        {:ok, _membership} -> {:cont, {:ok, group}}
-        error -> {:halt, error}
+    membership_rows =
+      for %{id: group_id, members: members} <- group_rows,
+          participant <- members do
+        %{
+          id: Ecto.UUID.generate(),
+          group_id: group_id,
+          stage_participation_id: participant.id,
+          inserted_at: now,
+          updated_at: now
+        }
       end
-    end)
+
+    repo.insert_all(GroupMembership, membership_rows)
+
+    {:ok, Enum.map(group_rows, &struct(Group, Map.drop(&1, [:members])))}
   end
 
   defp round_robin_rounds([]), do: []
@@ -2180,8 +2224,18 @@ defmodule Cuevolution.Competitions do
 
         score =
           if present_id == fixture.participant_a_id,
-            do: %{"participant_a_frames" => 5, "participant_b_frames" => 0},
-            else: %{"participant_a_frames" => 0, "participant_b_frames" => 5}
+            do: %{
+              "participant_a_frames" => 5,
+              "participant_b_frames" => 0,
+              "points_a" => 3,
+              "points_b" => 0
+            },
+            else: %{
+              "participant_a_frames" => 0,
+              "participant_b_frames" => 5,
+              "points_a" => 0,
+              "points_b" => 3
+            }
 
         Multi.new()
         |> Multi.insert(
@@ -2497,10 +2551,22 @@ defmodule Cuevolution.Competitions do
   end
 
   defp withdrawal_score(%Fixture{participant_a_id: participant_a_id}, participant_a_id),
-    do: %{"participant_a_frames" => 5, "participant_b_frames" => 0, "withdrawal" => true}
+    do: %{
+      "participant_a_frames" => 5,
+      "participant_b_frames" => 0,
+      "points_a" => 3,
+      "points_b" => 0,
+      "withdrawal" => true
+    }
 
   defp withdrawal_score(%Fixture{}, _participant_b_id),
-    do: %{"participant_a_frames" => 0, "participant_b_frames" => 5, "withdrawal" => true}
+    do: %{
+      "participant_a_frames" => 0,
+      "participant_b_frames" => 5,
+      "points_a" => 0,
+      "points_b" => 3,
+      "withdrawal" => true
+    }
 
   defp reset_withdrawal_fixtures(repo, fixtures) do
     Enum.reduce_while(fixtures, {:ok, []}, fn fixture, {:ok, reset} ->
@@ -2529,16 +2595,12 @@ defmodule Cuevolution.Competitions do
   is the Circuit/Finals equivalent).
   """
   def group_standings(%Group{} = group) do
-    participant_ids =
-      Repo.all(
-        from gm in GroupMembership,
-          where: gm.group_id == ^group.id,
-          select: gm.stage_participation_id
-      )
+    group = Repo.preload(group, :stage)
+    participant_ids = group_member_participant_ids(group.id)
 
-    case Repo.preload(group, :stage).stage.name do
+    case group.stage.name do
       "Grassroots" ->
-        grassroots_group_standings(group)
+        do_grassroots_group_standings(group, participant_ids)
 
       _ ->
         StandingsCalculator.rank(participant_ids, group_matches(group.id), cascade: :wins_first)
@@ -2551,15 +2613,18 @@ defmodule Cuevolution.Competitions do
   never do), including persisted TD tie overrides.
   """
   def grassroots_group_standings(%Group{} = group) do
-    participant_ids =
-      Repo.all(
-        from gm in GroupMembership,
-          where: gm.group_id == ^group.id,
-          select: gm.stage_participation_id
-      )
-
     group = Repo.preload(group, :stage)
+    do_grassroots_group_standings(group, group_member_participant_ids(group.id))
+  end
 
+  # Shared by `group_standings/1` and `grassroots_group_standings/1` so a
+  # Grassroots group's standings — needed by both every time
+  # `group_standings/1` is called on one — aren't fetched (membership ids,
+  # `:stage` preload) twice over. Each public function still does its own
+  # fetch when called directly (both have other callers), but
+  # `group_standings/1` reuses what it already has instead of calling back
+  # into `grassroots_group_standings/1` and repeating the same two queries.
+  defp do_grassroots_group_standings(%Group{} = group, participant_ids) do
     if group.stage.name in ["Grassroots", "Regional"] do
       StandingsCalculator.rank(participant_ids, group_matches(group.id),
         cascade: :points_first,
@@ -2568,6 +2633,14 @@ defmodule Cuevolution.Competitions do
     else
       []
     end
+  end
+
+  defp group_member_participant_ids(group_id) do
+    Repo.all(
+      from gm in GroupMembership,
+        where: gm.group_id == ^group_id,
+        select: gm.stage_participation_id
+    )
   end
 
   @doc "Persists a TD decision that `participant_a` ranks ahead of `participant_b`."
@@ -3096,14 +3169,18 @@ defmodule Cuevolution.Competitions do
   Finals has no next stage, so its entrants are never marked advancing.
   """
   def standings_for_category(category) do
-    points = points_by_participant()
-    win_loss = win_loss_by_participant()
+    participations =
+      StageParticipation
+      |> join(:inner, [p], s in assoc(p, :stage))
+      |> where([p, s], p.category == ^category and s.name in ^@standings_stages)
+      |> preload([:player, :team, :region, :stage])
+      |> Repo.all()
 
-    StageParticipation
-    |> join(:inner, [p], s in assoc(p, :stage))
-    |> where([p, s], p.category == ^category and s.name in ^@standings_stages)
-    |> preload([:player, :team, :region, :stage])
-    |> Repo.all()
+    participant_ids = Enum.map(participations, & &1.id)
+    points = points_by_participant(participant_ids)
+    win_loss = win_loss_by_participant(participant_ids)
+
+    participations
     |> Enum.map(fn participation ->
       stats = Map.get(win_loss, participation.id, %{played: 0, won: 0})
 
@@ -3157,17 +3234,30 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  defp points_by_participant do
+  # Scoped to this call's own participant ids rather than the whole table —
+  # Cuevo Points only ever come from Circuit/Finals knockout matches, but
+  # unscoped this still pulls every points entry ever recorded, growing
+  # with the full season's history instead of just this category's cohort.
+  defp points_by_participant(participant_ids) do
     CuevoPointsEntry
+    |> where([e], e.participant_id in ^participant_ids)
     |> group_by([e], e.participant_id)
     |> select([e], {e.participant_id, sum(e.points)})
     |> Repo.all()
     |> Map.new()
   end
 
-  defp win_loss_by_participant do
+  # Same scoping rationale as `points_by_participant/1` — a fixture can
+  # only ever pair participants of the same category and stage, so any
+  # match touching one of `participant_ids` necessarily has its other side
+  # in that set too; no rows are missed by filtering this way.
+  defp win_loss_by_participant(participant_ids) do
     MatchResult
     |> join(:inner, [mr], f in Fixture, on: f.id == mr.fixture_id)
+    |> where(
+      [mr, f],
+      f.participant_a_id in ^participant_ids or f.participant_b_id in ^participant_ids
+    )
     |> select([mr, f], {f.participant_a_id, f.participant_b_id, mr.winner_participation_id})
     |> Repo.all()
     |> Enum.reduce(%{}, fn {a_id, b_id, winner_id}, acc ->

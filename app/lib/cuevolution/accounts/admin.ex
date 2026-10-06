@@ -43,6 +43,7 @@ defmodule Cuevolution.Accounts.Admin do
     field :mobile_number, :string
     field :suspended_at, :utc_datetime
     field :removed_at, :utc_datetime
+    field :invite_revoked_at, :utc_datetime
     field :hashed_password, :string
     field :password, :string, virtual: true
     field :password_confirmation, :string, virtual: true
@@ -92,6 +93,10 @@ defmodule Cuevolution.Accounts.Admin do
   @doc "Whether `admin` has been invited but hasn't yet completed account setup."
   def pending?(%__MODULE__{hashed_password: nil}), do: true
   def pending?(%__MODULE__{}), do: false
+
+  @doc "Whether `admin`'s pending invite has been revoked (its setup link no longer works)."
+  def invite_revoked?(%__MODULE__{invite_revoked_at: %DateTime{}}), do: true
+  def invite_revoked?(%__MODULE__{}), do: false
 
   @doc "Full registration changeset, including password hashing — used to create the initial super admin (see priv/repo/seeds)."
   def registration_changeset(admin, attrs) do

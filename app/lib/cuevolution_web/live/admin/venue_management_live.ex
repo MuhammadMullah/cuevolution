@@ -244,18 +244,17 @@ defmodule CuevolutionWeb.VenueManagementLive do
 
     payload = %{venue_name: venue.name, suggested_venues: suggested_names}
 
-    venue.id
-    |> Accounts.list_players_by_preferred_venue()
-    |> Repo.all()
-    |> Enum.each(&dispatch_venue_deactivated(&1, payload))
-  end
+    entries =
+      venue.id
+      |> Accounts.list_players_by_preferred_venue()
+      |> Repo.all()
+      |> Enum.map(&{&1, payload, Ecto.UUID.generate()})
 
-  defp dispatch_venue_deactivated(player, payload) do
-    Notifications.dispatch(player, :venue_deactivated, payload)
+    Notifications.dispatch_many(entries, :venue_deactivated)
   rescue
     error ->
       Logger.error(
-        "venue_deactivated dispatch failed for player #{player.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
+        "venue_deactivated dispatch failed for venue #{venue.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
       )
 
       :ok
@@ -275,16 +274,22 @@ defmodule CuevolutionWeb.VenueManagementLive do
 
   defp notify_transferred_venue_players(venue, regions) do
     region_name = Enum.find_value(regions, &if(&1.id == venue.region_id, do: &1.name))
+    payload = %{region_name: region_name, venue_name: venue.name}
 
-    venue.id
-    |> Accounts.list_players_by_preferred_venue()
-    |> Repo.all()
-    |> Enum.each(fn player ->
-      Notifications.dispatch(player, :player_location_updated, %{
-        region_name: region_name,
-        venue_name: venue.name
-      })
-    end)
+    entries =
+      venue.id
+      |> Accounts.list_players_by_preferred_venue()
+      |> Repo.all()
+      |> Enum.map(&{&1, payload, Ecto.UUID.generate()})
+
+    Notifications.dispatch_many(entries, :player_location_updated)
+  rescue
+    error ->
+      Logger.error(
+        "player_location_updated dispatch failed for venue #{venue.id}: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   defp assign_form(socket, changeset) do

@@ -1,198 +1,382 @@
 <AdminComponents.app_shell current_admin={@current_admin} active={:admins} flash={@flash}>
   <AdminComponents.eyebrow class="mb-1.5">Admin team</AdminComponents.eyebrow>
-  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
-    Admins
-  </h1>
-
-  <div class="mb-7 rounded-2xl border border-ink-200 bg-white p-4.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
-    <h2 class="mb-3.5 text-[15px] font-bold tracking-tight text-ink-950">Invite an admin</h2>
-
-    <.form
-      for={@form}
-      id="invite-admin-form"
-      phx-change="validate"
-      phx-submit="invite"
-      class="flex flex-wrap items-start gap-2.5"
-    >
-      <div class="min-w-[240px] flex-1">
-        <.input
-          field={@form[:email]}
-          type="email"
-          placeholder="name@example.com"
-          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-        />
-      </div>
-      <div class="min-w-[220px]">
-        <.input
-          field={@form[:role]}
-          type="select"
-          options={@role_options}
-          prompt="Select a role"
-          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-        />
-      </div>
-      <div class="min-w-[220px]">
-        <.input
-          field={@form[:region_id]}
-          type="select"
-          options={@region_options}
-          prompt="Region (for regional reps)"
-          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-        />
-      </div>
-      <div class="min-w-[220px]">
-        <.input
-          field={@form[:venue_id]}
-          type="select"
-          options={@venue_options}
-          prompt="Venue (for venue reps)"
-          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-        />
-      </div>
-      <div class="min-w-[220px]">
-        <.input
-          field={@form[:mobile_number]}
-          type="tel"
-          placeholder="Mobile number"
-          class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-        />
+  <div class="mb-[18px] flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+      Admins
+    </h1>
+    <div class="flex items-center gap-2.5">
+      <div
+        class="relative inline-block text-left"
+        id="admin-filters"
+        phx-click-away={JS.hide(to: "#admin-filters-panel")}
+      >
+        <button
+          type="button"
+          phx-click={JS.toggle(to: "#admin-filters-panel")}
+          class={[
+            "flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold",
+            (@status_filter || @role_filter) && "border-ink-950 text-ink-950",
+            !(@status_filter || @role_filter) &&
+              "border-ink-300 text-ink-700 hover:border-ink-950"
+          ]}
+        >
+          <.icon name="hero-funnel" class="size-4" /> Filters
+          <span
+            :if={@status_filter || @role_filter}
+            class="ml-0.5 size-[7px] rounded-full bg-red-500"
+          />
+        </button>
+        <div
+          id="admin-filters-panel"
+          class="absolute right-0 top-10 z-10 hidden w-72 rounded-xl border border-ink-200 bg-white p-4 shadow-lg"
+        >
+          <.form for={@filter_form} id="admin-filter-form" phx-change="filter" class="space-y-3">
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-ink-500">Status</label>
+              <.input
+                field={@filter_form[:status]}
+                type="select"
+                options={@status_options}
+                prompt="All statuses"
+                class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-ink-500">Role</label>
+              <.input
+                field={@filter_form[:role]}
+                type="select"
+                options={@filter_role_options}
+                prompt="All roles"
+                class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+              />
+            </div>
+          </.form>
+          <button
+            :if={@status_filter || @role_filter}
+            type="button"
+            phx-click="clear_filters"
+            class="mt-3 text-xs font-semibold text-ink-500 hover:text-ink-950"
+          >
+            Clear filters
+          </button>
+        </div>
       </div>
       <button
-        type="submit"
+        type="button"
+        phx-click="show_invite_modal"
         class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
       >
-        Send invite
+        Add User
       </button>
-    </.form>
+    </div>
+  </div>
+
+  <div class="mb-3 flex justify-start">
+    <div class="font-mono text-[13px] text-ink-500">
+      Showing {length(@admins)} of {@total_count} admin{if @total_count == 1, do: "", else: "s"}
+    </div>
   </div>
 
   <div
     :if={@admins != []}
-    class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    class="mb-4 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <div
-      :for={admin <- @admins}
-      class="flex flex-col gap-3 border-b border-ink-100 px-4.5 py-4 last:border-0 sm:flex-row sm:items-center"
-    >
-      <div class="min-w-0 flex-1">
-        <div class="text-[14.5px] font-semibold text-ink-950">{admin.email}</div>
-        <div class="text-[12.5px] text-ink-500">{Admin.role_label(admin.role)}</div>
-        <div class="mt-1 text-[12.5px] text-ink-500">
-          {admin.mobile_number || "Mobile number not provided"}
-        </div>
-      </div>
-      <span class={["rounded-full px-2.5 py-1 text-xs font-semibold", status_badge_class(admin)]}>
-        {status_label(admin)}
-      </span>
-      <div class="w-full sm:w-[220px]">
-        <.form
-          :if={Admin.manageable_by?(@current_admin, admin)}
-          for={to_form(%{"mobile_number" => admin.mobile_number || ""}, as: :admin)}
-          id={"mobile-form-#{admin.id}"}
-          phx-submit="change_mobile"
-        >
-          <input type="hidden" name="target_id" value={admin.id} />
-          <.input
-            field={
-              to_form(%{"mobile_number" => admin.mobile_number || ""}, as: :admin)[:mobile_number]
-            }
-            id={"mobile-#{admin.id}"}
-            type="tel"
-            placeholder="Add mobile number"
-            aria-label={"Mobile number for #{admin.email}"}
-            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-          />
-        </.form>
-      </div>
-      <div class="w-full sm:w-[220px]">
-        <.form
-          for={to_form(%{"role" => admin.role}, as: :role)}
-          id={"role-form-#{admin.id}"}
-          phx-change="change_role"
-        >
-          <input type="hidden" name="target_id" value={admin.id} />
-          <.input
-            field={to_form(%{"role" => admin.role}, as: :role)[:role]}
-            id={"role-#{admin.id}"}
-            type="select"
-            options={role_options_for(@current_admin, admin)}
-            disabled={!Admin.manageable_by?(@current_admin, admin)}
-            aria-label={"Role for #{admin.email}"}
-            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-          />
-        </.form>
-        <div
-          :if={admin.role == "super_admin" and @current_admin.role == "tournament_director"}
-          class="mt-1 text-xs font-medium text-ink-400"
-        >
-          Protected — Super Admin accounts cannot be managed by Tournament Directors.
-        </div>
-      </div>
-      <div :if={admin.role == "venue_representative"} class="w-full sm:w-[240px]">
-        <.form
-          for={to_form(%{"venue_id" => admin.venue_id}, as: :venue)}
-          id={"venue-form-#{admin.id}"}
-          phx-change="change_venue"
-        >
-          <input type="hidden" name="target_id" value={admin.id} />
-          <.input
-            field={to_form(%{"venue_id" => admin.venue_id}, as: :venue)[:venue_id]}
-            type="select"
-            options={@venue_options}
-            prompt="Assign venue"
-            disabled={!Admin.manageable_by?(@current_admin, admin)}
-            aria-label={"Venue for #{admin.email}"}
-            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-          />
-        </.form>
-      </div>
-      <div :if={admin.role == "regional_coordinator"} class="w-full sm:w-[240px]">
-        <.form
-          for={to_form(%{"region_id" => admin.region_id}, as: :region)}
-          id={"region-form-#{admin.id}"}
-          phx-change="change_region"
-        >
-          <input type="hidden" name="target_id" value={admin.id} />
-          <.input
-            field={to_form(%{"region_id" => admin.region_id}, as: :region)[:region_id]}
-            type="select"
-            options={@region_options}
-            prompt="Assign region"
-            disabled={!Admin.manageable_by?(@current_admin, admin)}
-            aria-label={"Region for #{admin.email}"}
-            class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-          />
-        </.form>
-      </div>
-      <div
-        :if={admin.id != @current_admin.id and Admin.manageable_by?(@current_admin, admin)}
-        class="flex flex-wrap gap-2"
-      >
-        <button
-          type="button"
-          phx-click="toggle_suspend"
-          phx-value-id={admin.id}
-          class="rounded-full border border-ink-300 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-100"
-        >
-          {if Admin.suspended?(admin), do: "Reinstate", else: "Suspend"}
-        </button>
-        <button
-          type="button"
-          phx-click="remove"
-          phx-value-id={admin.id}
-          data-confirm="Remove this admin?"
-          class="rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
-        >
-          Remove
-        </button>
-      </div>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[820px] table-fixed border-collapse">
+        <colgroup>
+          <col class="w-[26%]" />
+          <col class="w-[20%]" />
+          <col class="w-[28%]" />
+          <col class="w-[14%]" />
+          <col class="w-[12%]" />
+        </colgroup>
+        <thead>
+          <tr class="border-b border-ink-200 bg-ink-50">
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Admin
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Role
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Mobile number
+            </th>
+            <th class="px-3.5 py-[11px] text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+              Status
+            </th>
+            <th class="px-3.5 py-[11px]">
+              <span class="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for admin <- @admins do %>
+            <tr class="border-b border-ink-100 last:border-0 hover:bg-ink-50">
+              <td class="px-3.5 py-3 align-top">
+                <div class="text-[14.5px] font-semibold text-ink-950">{admin.email}</div>
+              </td>
+              <td class="px-3.5 py-3 align-top">
+                <div class="text-sm text-ink-700">{Admin.role_label(admin.role)}</div>
+                <div :if={admin.role == "venue_representative"} class="text-[12.5px] text-ink-500">
+                  {if admin.venue, do: admin.venue.name, else: "No venue assigned"}
+                </div>
+                <div :if={admin.role == "regional_coordinator"} class="text-[12.5px] text-ink-500">
+                  {if admin.region, do: admin.region.name, else: "No region assigned"}
+                </div>
+                <div
+                  :if={
+                    admin.role == "super_admin" and @current_admin.role == "tournament_director"
+                  }
+                  class="mt-1 text-xs font-medium text-ink-400"
+                >
+                  Protected — Super Admin accounts cannot be managed by Tournament Directors.
+                </div>
+              </td>
+              <td class="px-3.5 py-3 align-top text-sm text-ink-700">
+                {admin.mobile_number || "Mobile number not provided"}
+              </td>
+              <td class="px-3.5 py-3 align-top">
+                <span class={[
+                  "rounded-full px-2.5 py-1 text-xs font-semibold",
+                  status_badge_class(admin)
+                ]}>
+                  {status_label(admin)}
+                </span>
+              </td>
+              <td class="px-3.5 py-3 align-top text-right">
+                <div
+                  class="relative inline-block text-left"
+                  id={"admin-actions-#{admin.id}"}
+                  phx-click-away={JS.hide(to: "#admin-actions-dropdown-#{admin.id}")}
+                >
+                  <button
+                    type="button"
+                    phx-click={JS.toggle(to: "#admin-actions-dropdown-#{admin.id}")}
+                    class="rounded-full p-1.5 text-ink-500 hover:bg-ink-100 hover:text-ink-950"
+                    aria-label={"Actions for #{admin.email}"}
+                  >
+                    <.icon name="hero-ellipsis-vertical" class="size-5" />
+                  </button>
+                  <div
+                    id={"admin-actions-dropdown-#{admin.id}"}
+                    class="absolute right-0 top-9 z-10 hidden w-48 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg"
+                  >
+                    <button
+                      type="button"
+                      disabled={!Admin.manageable_by?(@current_admin, admin)}
+                      phx-click={
+                        JS.push("edit_admin", value: %{id: admin.id})
+                        |> JS.hide(to: "#admin-actions-dropdown-#{admin.id}")
+                      }
+                      class="block w-full px-3.5 py-2 text-left text-sm font-medium text-ink-700 hover:bg-ink-100 disabled:cursor-not-allowed disabled:text-ink-300 disabled:hover:bg-transparent"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      :if={
+                        Admin.pending?(admin) and not Admin.invite_revoked?(admin) and
+                          Admin.manageable_by?(@current_admin, admin)
+                      }
+                      type="button"
+                      phx-click={
+                        JS.push("revoke_invite", value: %{id: admin.id})
+                        |> JS.hide(to: "#admin-actions-dropdown-#{admin.id}")
+                      }
+                      phx-value-id={admin.id}
+                      class="block w-full px-3.5 py-2 text-left text-sm font-medium text-ink-700 hover:bg-ink-100"
+                    >
+                      Revoke invite
+                    </button>
+                    <button
+                      :if={
+                        Admin.invite_revoked?(admin) and
+                          Admin.manageable_by?(@current_admin, admin)
+                      }
+                      type="button"
+                      phx-click={
+                        JS.push("resend_invite", value: %{id: admin.id})
+                        |> JS.hide(to: "#admin-actions-dropdown-#{admin.id}")
+                      }
+                      phx-value-id={admin.id}
+                      class="block w-full px-3.5 py-2 text-left text-sm font-medium text-ink-700 hover:bg-ink-100"
+                    >
+                      Resend invite
+                    </button>
+                    <button
+                      :if={
+                        admin.id != @current_admin.id and
+                          Admin.manageable_by?(@current_admin, admin)
+                      }
+                      type="button"
+                      phx-click={
+                        JS.push("toggle_suspend", value: %{id: admin.id})
+                        |> JS.hide(to: "#admin-actions-dropdown-#{admin.id}")
+                      }
+                      phx-value-id={admin.id}
+                      class="block w-full px-3.5 py-2 text-left text-sm font-medium text-ink-700 hover:bg-ink-100"
+                    >
+                      {if Admin.suspended?(admin), do: "Reinstate", else: "Suspend"}
+                    </button>
+                    <button
+                      :if={
+                        admin.id != @current_admin.id and
+                          Admin.manageable_by?(@current_admin, admin)
+                      }
+                      type="button"
+                      phx-click={
+                        JS.push("remove", value: %{id: admin.id})
+                        |> JS.hide(to: "#admin-actions-dropdown-#{admin.id}")
+                      }
+                      phx-value-id={admin.id}
+                      data-confirm="Remove this admin?"
+                      class="block w-full border-t border-ink-100 px-3.5 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr
+              :if={@editing_id == admin.id}
+              class="border-b border-ink-100 bg-ink-50/60 last:border-0"
+            >
+              <td colspan="5" class="px-3.5 py-4">
+                <.form
+                  for={
+                    to_form(
+                      %{
+                        "role" => @editing_role || admin.role,
+                        "venue_id" => admin.venue_id,
+                        "region_id" => admin.region_id,
+                        "mobile_number" => admin.mobile_number || ""
+                      },
+                      as: :admin
+                    )
+                  }
+                  id={"edit-admin-form-#{admin.id}"}
+                  phx-change="preview_edit_role"
+                  phx-submit="save_edit"
+                >
+                  <input type="hidden" name="target_id" value={admin.id} />
+                  <div class="flex flex-nowrap items-end gap-3">
+                    <div class="w-44 shrink-0 [&_.fieldset]:m-0 [&_.fieldset]:p-0">
+                      <label class="mb-1 block text-xs font-semibold text-ink-500">Role</label>
+                      <.input
+                        field={
+                          to_form(%{"role" => @editing_role || admin.role}, as: :admin)[:role]
+                        }
+                        id={"edit-role-#{admin.id}"}
+                        type="select"
+                        options={role_options_for(@current_admin, admin)}
+                        class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                      />
+                    </div>
+                    <div
+                      :if={(@editing_role || admin.role) == "venue_representative"}
+                      class="w-56 shrink-0 [&_.fieldset]:m-0 [&_.fieldset]:p-0"
+                    >
+                      <label class="mb-1 block text-xs font-semibold text-ink-500">Venue</label>
+                      <.input
+                        field={to_form(%{"venue_id" => admin.venue_id}, as: :admin)[:venue_id]}
+                        id={"edit-venue-#{admin.id}"}
+                        type="select"
+                        options={@venue_options}
+                        prompt="Assign venue"
+                        class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                      />
+                    </div>
+                    <div
+                      :if={(@editing_role || admin.role) == "regional_coordinator"}
+                      class="w-56 shrink-0 [&_.fieldset]:m-0 [&_.fieldset]:p-0"
+                    >
+                      <label class="mb-1 block text-xs font-semibold text-ink-500">Region</label>
+                      <.input
+                        field={to_form(%{"region_id" => admin.region_id}, as: :admin)[:region_id]}
+                        id={"edit-region-#{admin.id}"}
+                        type="select"
+                        options={@region_options}
+                        prompt="Assign region"
+                        class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                      />
+                    </div>
+                    <div class="w-52 shrink-0 [&_.fieldset]:m-0 [&_.fieldset]:p-0">
+                      <label class="mb-1 block text-xs font-semibold text-ink-500">
+                        Mobile number
+                      </label>
+                      <.input
+                        field={
+                          to_form(%{"mobile_number" => admin.mobile_number || ""}, as: :admin)[
+                            :mobile_number
+                          ]
+                        }
+                        id={"edit-mobile-#{admin.id}"}
+                        type="tel"
+                        placeholder="Add mobile number"
+                        class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                      />
+                    </div>
+                    <div class="shrink-0">
+                      <label class="mb-1 block text-xs font-semibold text-ink-500 invisible">
+                        Actions
+                      </label>
+                      <div class="flex gap-2">
+                        <button
+                          type="submit"
+                          class="rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-900"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="cancel_edit"
+                          class="rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-100"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </.form>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
     </div>
   </div>
   <div
     :if={@admins == []}
     class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    No admins yet.
+    {if @status_filter || @role_filter,
+      do: "No admins match these filters.",
+      else: "No admins yet."}
+  </div>
+
+  <div :if={@total_pages > 1} class="mb-4 flex items-center justify-between gap-3">
+    <button
+      id="admins-previous-page"
+      type="button"
+      phx-click="page"
+      phx-value-page={@page - 1}
+      disabled={@page == 1}
+      class="rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      Previous
+    </button>
+    <span class="font-mono text-[13px] text-ink-500">Page {@page} of {@total_pages}</span>
+    <button
+      id="admins-next-page"
+      type="button"
+      phx-click="page"
+      phx-value-page={@page + 1}
+      disabled={@page == @total_pages}
+      class="rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      Next
+    </button>
   </div>
 
   <AdminComponents.card class="mt-4">
@@ -236,4 +420,115 @@
       </table>
     </div>
   </AdminComponents.card>
+
+  <div
+    :if={@show_invite_modal}
+    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-950/50 px-4 py-4 sm:items-center sm:py-8"
+    phx-click-away="hide_invite_modal"
+  >
+    <div class="max-h-[calc(100dvh-2rem)] w-full max-w-[560px] overflow-y-auto rounded-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-4rem)]">
+      <div class="relative border-b border-ink-100 px-5 py-5 sm:px-6">
+        <button
+          type="button"
+          phx-click="hide_invite_modal"
+          class="absolute right-4 top-4 flex size-[30px] items-center justify-center rounded-full text-ink-400 hover:bg-ink-100 hover:text-ink-950"
+        >
+          ✕
+        </button>
+        <h2 class="text-[18px] font-bold tracking-tight text-ink-950">Add an admin</h2>
+        <p class="mt-1 text-sm text-ink-500">
+          Sends a setup link by email. They'll choose a password and complete their profile.
+        </p>
+      </div>
+
+      <.form
+        for={@form}
+        id="invite-admin-form"
+        phx-change="validate"
+        phx-submit="invite"
+        class="flex flex-col gap-3 p-5 sm:p-6"
+      >
+        <div>
+          <label class="mb-1 block text-xs font-semibold text-ink-500">Email</label>
+          <.input
+            field={@form[:email]}
+            type="email"
+            placeholder="name@example.com"
+            class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-semibold text-ink-500">Role</label>
+          <.input
+            field={@form[:role]}
+            type="select"
+            options={@role_options}
+            prompt="Select a role"
+            class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </div>
+        <div :if={@invite_role == "regional_coordinator"}>
+          <label class="mb-1 block text-xs font-semibold text-ink-500">Region</label>
+          <.input
+            field={@form[:region_id]}
+            type="select"
+            options={@region_options}
+            prompt="Select a region"
+            class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </div>
+        <div :if={@invite_role == "venue_representative"}>
+          <label class="mb-1 block text-xs font-semibold text-ink-500">
+            Region <span class="font-normal text-ink-400">(narrows the venue list below)</span>
+          </label>
+          <.input
+            field={
+              to_form(%{"venue_region_filter" => @invite_venue_region_filter})[
+                :venue_region_filter
+              ]
+            }
+            id="invite-venue-region-filter"
+            type="select"
+            options={@region_options}
+            prompt="All regions"
+            class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </div>
+        <div :if={@invite_role == "venue_representative"}>
+          <label class="mb-1 block text-xs font-semibold text-ink-500">Venue</label>
+          <.input
+            field={@form[:venue_id]}
+            type="select"
+            options={@venue_options}
+            prompt="Select a venue"
+            class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-semibold text-ink-500">Mobile number</label>
+          <.input
+            field={@form[:mobile_number]}
+            type="tel"
+            placeholder="Mobile number"
+            class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+        </div>
+        <div class="mt-2 flex justify-end gap-2">
+          <button
+            type="button"
+            phx-click="hide_invite_modal"
+            class="rounded-full border border-ink-300 px-[22px] py-2.5 text-sm font-semibold text-ink-700 hover:bg-ink-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="rounded-full bg-ink-950 px-[22px] py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
+          >
+            Send invite
+          </button>
+        </div>
+      </.form>
+    </div>
+  </div>
 </AdminComponents.app_shell>

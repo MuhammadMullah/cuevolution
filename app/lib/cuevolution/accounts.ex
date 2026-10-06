@@ -74,24 +74,41 @@ defmodule Cuevolution.Accounts do
   system `AdminActionLog` entry. Returns the granted players' usernames.
   """
   def grant_tournament_eligibility_override(%NaiveDateTime{} = from, %NaiveDateTime{} = to) do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
     Repo.transaction(fn ->
+      players =
+        Player
+        |> where([p], p.inserted_at >= ^from and p.inserted_at < ^to)
+        |> where([p], p.tournament_eligibility_override == false)
+        |> select([p], %{id: p.id, username: p.username})
+        |> Repo.all()
+
+      player_ids = Enum.map(players, & &1.id)
+
       Player
-      |> where([p], p.inserted_at >= ^from and p.inserted_at < ^to)
-      |> where([p], p.tournament_eligibility_override == false)
-      |> Repo.all()
-      |> Enum.map(fn player ->
-        {:ok, updated} =
-          player
-          |> Ecto.Changeset.change(tournament_eligibility_override: true)
-          |> Repo.update()
+      |> where([p], p.id in ^player_ids)
+      |> Repo.update_all(set: [tournament_eligibility_override: true, updated_at: now])
 
-        log_system_action("grant_tournament_eligibility_override", updated,
-          prior_value: %{"tournament_eligibility_override" => false},
-          new_value: %{"tournament_eligibility_override" => true}
-        )
+      entity_type = Player |> to_string() |> String.trim_leading("Elixir.")
 
-        updated.username
-      end)
+      log_rows =
+        Enum.map(players, fn player ->
+          %{
+            id: Ecto.UUID.generate(),
+            actor_type: "system",
+            action_type: "grant_tournament_eligibility_override",
+            entity_type: entity_type,
+            entity_id: player.id,
+            prior_value: %{"tournament_eligibility_override" => false},
+            new_value: %{"tournament_eligibility_override" => true},
+            inserted_at: now
+          }
+        end)
+
+      Repo.insert_all(AdminActionLog, log_rows)
+
+      Enum.map(players, & &1.username)
     end)
   end
 
@@ -119,14 +136,64 @@ defmodule Cuevolution.Accounts do
     end
   end
 
-  @doc "Lists all active and suspended admins for the admin-management page, most recently invited first."
-  def list_admins do
-    Repo.all(
-      from a in Admin,
-        where: is_nil(a.removed_at),
-        order_by: [desc: a.inserted_at],
-        preload: [:venue, :region]
-    )
+  @doc """
+  Lists admins for the admin-management page, most recently invited first.
+
+  `opts` (all optional):
+
+    * `:status` — one of `"active"`, `"invited"`, `"revoked"`, `"suspended"`
+    * `:role` — one of `Admin.roles/0`
+    * `:limit` / `:offset` — for pagination
+
+  Always excludes removed admins.
+  """
+  def list_admins(opts \\ %{}) do
+    Admin
+    |> admins_base_query()
+    |> filter_admins_by_status(opts[:status])
+    |> filter_admins_by_role(opts[:role])
+    |> order_by([a], desc: a.inserted_at)
+    |> limit_offset(opts[:limit], opts[:offset])
+    |> preload([:venue, :region])
+    |> Repo.all()
+  end
+
+  @doc "Counts admins matching `opts` (same filters as `list_admins/1`, ignoring pagination)."
+  def count_admins(opts \\ %{}) do
+    Admin
+    |> admins_base_query()
+    |> filter_admins_by_status(opts[:status])
+    |> filter_admins_by_role(opts[:role])
+    |> Repo.aggregate(:count)
+  end
+
+  defp admins_base_query(query), do: where(query, [a], is_nil(a.removed_at))
+
+  defp filter_admins_by_status(query, status) when status in [nil, ""], do: query
+
+  defp filter_admins_by_status(query, "active") do
+    where(query, [a], not is_nil(a.hashed_password) and is_nil(a.suspended_at))
+  end
+
+  defp filter_admins_by_status(query, "suspended") do
+    where(query, [a], not is_nil(a.hashed_password) and not is_nil(a.suspended_at))
+  end
+
+  defp filter_admins_by_status(query, "invited") do
+    where(query, [a], is_nil(a.hashed_password) and is_nil(a.invite_revoked_at))
+  end
+
+  defp filter_admins_by_status(query, "revoked") do
+    where(query, [a], is_nil(a.hashed_password) and not is_nil(a.invite_revoked_at))
+  end
+
+  defp filter_admins_by_role(query, role) when role in [nil, ""], do: query
+  defp filter_admins_by_role(query, role), do: where(query, [a], a.role == ^role)
+
+  defp limit_offset(query, nil, _offset), do: query
+
+  defp limit_offset(query, limit, offset) do
+    query |> limit(^limit) |> offset(^(offset || 0))
   end
 
   @doc """
@@ -254,6 +321,75 @@ defmodule Cuevolution.Accounts do
       target
       |> Ecto.Changeset.change(removed_at: DateTime.utc_now() |> DateTime.truncate(:second))
       |> Repo.update()
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  @doc """
+  Revokes a pending admin's invite: the setup link they were sent stops
+  working immediately (every outstanding `admin_setup` token is deleted).
+  Only a not-yet-revoked pending invite can be revoked.
+  """
+  def revoke_invite(%Admin{} = actor, %Admin{} = target) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         Admin.pending?(target) and not Admin.invite_revoked?(target) do
+      Multi.new()
+      |> Multi.update(
+        :admin,
+        Ecto.Changeset.change(target,
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+      )
+      |> Multi.delete_all(
+        :tokens,
+        AdminToken.by_admin_and_contexts_query(target, ["admin_setup"])
+      )
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{admin: admin}} -> {:ok, admin}
+        {:error, _step, changeset, _changes} -> {:error, changeset}
+      end
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  @doc """
+  Resends an invite for a revoked admin: clears the revocation, issues a
+  fresh setup token (invalidating any stale ones), and enqueues a new
+  invitation email. Only a revoked pending invite can be resent.
+  """
+  def resend_invite(%Admin{} = actor, %Admin{} = target, setup_url_fun)
+      when is_function(setup_url_fun, 1) do
+    if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
+         Admin.pending?(target) and Admin.invite_revoked?(target) do
+      Multi.new()
+      |> Multi.delete_all(
+        :old_tokens,
+        AdminToken.by_admin_and_contexts_query(target, ["admin_setup"])
+      )
+      |> Multi.update(:admin, Ecto.Changeset.change(target, invite_revoked_at: nil))
+      |> Multi.run(:token, fn repo, %{admin: admin} ->
+        {encoded_token, token_struct} = AdminToken.build_admin_setup_token(admin)
+        repo.insert(token_struct)
+        {:ok, encoded_token}
+      end)
+      |> Multi.run(:log, fn _repo, %{admin: admin} ->
+        log_admin_action("resend_invite", actor, admin, new_value: %{"role" => admin.role})
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{admin: admin, token: encoded_token}} ->
+          %{"admin_id" => admin.id, "setup_url" => setup_url_fun.(encoded_token)}
+          |> SendAdminInvitationEmailWorker.new()
+          |> Oban.insert()
+
+          {:ok, admin}
+
+        {:error, _step, changeset, _changes} ->
+          {:error, changeset}
+      end
     else
       {:error, :unauthorized}
     end
@@ -819,51 +955,43 @@ defmodule Cuevolution.Accounts do
   end
 
   defp persist_custom_venue_assignments(players, player_ids, venue, admin) do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
     Multi.new()
     |> Multi.update_all(
       :players,
       from(p in Player, where: p.id in ^player_ids),
       set: [preferred_venue_id: venue.id, other_venue_name: nil]
     )
-    |> Multi.run(:logs, fn repo, _changes ->
-      insert_custom_venue_logs(repo, players, venue, admin)
-    end)
+    |> Multi.insert_all(:logs, AdminActionLog, custom_venue_log_rows(players, venue, admin, now))
     |> Repo.transaction()
     |> case do
       {:ok, %{players: {count, _}}} -> {:ok, count}
       {:error, :players, reason, _changes} -> {:error, reason}
-      {:error, :logs, reason, _changes} -> {:error, reason}
     end
   end
 
-  defp insert_custom_venue_logs(repo, players, venue, admin) do
-    Enum.reduce_while(players, {:ok, 0}, fn player, {:ok, count} ->
-      player
-      |> custom_venue_log_changeset(venue, admin)
-      |> repo.insert()
-      |> accumulate_custom_venue_log(count)
+  defp custom_venue_log_rows(players, venue, admin, now) do
+    Enum.map(players, fn player ->
+      %{
+        id: Ecto.UUID.generate(),
+        admin_id: admin.id,
+        actor_type: "admin",
+        action_type: "consolidate_custom_venue",
+        entity_type: "Cuevolution.Accounts.Player",
+        entity_id: player.id,
+        prior_value: %{
+          "preferred_venue_id" => player.preferred_venue_id,
+          "other_venue_name" => player.other_venue_name
+        },
+        new_value: %{
+          "preferred_venue_id" => venue.id,
+          "other_venue_name" => nil
+        },
+        inserted_at: now
+      }
     end)
   end
-
-  defp custom_venue_log_changeset(player, venue, admin) do
-    AdminActionLog.changeset(%AdminActionLog{}, %{
-      admin_id: admin.id,
-      action_type: "consolidate_custom_venue",
-      entity_type: "Cuevolution.Accounts.Player",
-      entity_id: player.id,
-      prior_value: %{
-        "preferred_venue_id" => player.preferred_venue_id,
-        "other_venue_name" => player.other_venue_name
-      },
-      new_value: %{
-        "preferred_venue_id" => venue.id,
-        "other_venue_name" => nil
-      }
-    })
-  end
-
-  defp accumulate_custom_venue_log({:ok, _log}, count), do: {:cont, {:ok, count + 1}}
-  defp accumulate_custom_venue_log({:error, changeset}, _count), do: {:halt, {:error, changeset}}
 
   defp valid_uuid?(id) do
     is_binary(id) and match?({:ok, _}, Ecto.UUID.cast(id))

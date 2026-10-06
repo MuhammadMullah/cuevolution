@@ -170,13 +170,13 @@ defmodule Cuevolution.Competitions.StandingsCalculatorTest do
           [
             match(:present, :present, :absent, 5, 0)
             |> Map.put(:status, "walkover")
-            |> Map.put(:points_a, 5)
+            |> Map.put(:points_a, 3)
           ],
           cascade: :points_first
         )
 
       present = entry(standings, :present)
-      assert present.points == 5
+      assert present.points == 3
       assert present.bonus == 0
     end
   end

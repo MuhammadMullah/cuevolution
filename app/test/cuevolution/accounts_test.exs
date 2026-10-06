@@ -175,6 +175,201 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "list_admins/1 and count_admins/1" do
+    test "filters by status" do
+      active = insert(:admin, role: "venue_representative")
+
+      suspended =
+        insert(:admin,
+          role: "venue_representative",
+          suspended_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      invited = insert(:admin, hashed_password: nil, role: "venue_representative")
+
+      revoked =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      assert Accounts.list_admins(%{status: "active"}) |> Enum.map(& &1.id) == [active.id]
+      assert Accounts.count_admins(%{status: "active"}) == 1
+
+      assert Accounts.list_admins(%{status: "suspended"}) |> Enum.map(& &1.id) == [
+               suspended.id
+             ]
+
+      assert Accounts.list_admins(%{status: "invited"}) |> Enum.map(& &1.id) == [invited.id]
+      assert Accounts.list_admins(%{status: "revoked"}) |> Enum.map(& &1.id) == [revoked.id]
+    end
+
+    test "filters by role" do
+      coordinator = insert(:admin, role: "regional_coordinator")
+      insert(:admin, role: "venue_representative")
+
+      assert Accounts.list_admins(%{role: "regional_coordinator"}) |> Enum.map(& &1.id) == [
+               coordinator.id
+             ]
+
+      assert Accounts.count_admins(%{role: "regional_coordinator"}) == 1
+    end
+
+    test "excludes removed admins regardless of filters" do
+      removed =
+        insert(:admin,
+          role: "venue_representative",
+          removed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      refute removed.id in Enum.map(Accounts.list_admins(), & &1.id)
+    end
+
+    test "paginates with limit and offset, most recently invited first" do
+      base = ~N[2026-01-01 00:00:00]
+      first = insert(:admin, role: "venue_representative", inserted_at: base)
+
+      second =
+        insert(:admin, role: "venue_representative", inserted_at: NaiveDateTime.add(base, 1))
+
+      third =
+        insert(:admin, role: "venue_representative", inserted_at: NaiveDateTime.add(base, 2))
+
+      assert Accounts.list_admins(%{limit: 2, offset: 0}) |> Enum.map(& &1.id) == [
+               third.id,
+               second.id
+             ]
+
+      assert Accounts.list_admins(%{limit: 2, offset: 2}) |> Enum.map(& &1.id) == [first.id]
+      assert Accounts.count_admins() >= 3
+    end
+  end
+
+  describe "revoke_invite/2 and resend_invite/3" do
+    test "revoking a pending invite marks it revoked and invalidates its setup token" do
+      actor = insert(:admin, role: "super_admin")
+      target = insert(:admin, hashed_password: nil, role: "venue_representative")
+      {encoded_token, token_struct} = AdminToken.build_admin_setup_token(target)
+      Repo.insert!(token_struct)
+
+      assert {:ok, revoked} = Accounts.revoke_invite(actor, target)
+
+      assert Admin.invite_revoked?(revoked)
+      assert Admin.pending?(revoked)
+      assert Accounts.get_admin_by_setup_token(encoded_token) == nil
+    end
+
+    test "rejects revoking an invite that was already revoked" do
+      actor = insert(:admin, role: "super_admin")
+
+      target =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      assert {:error, :unauthorized} = Accounts.revoke_invite(actor, target)
+    end
+
+    test "rejects revoking an admin who already completed setup" do
+      actor = insert(:admin, role: "super_admin")
+      target = insert(:admin, role: "venue_representative")
+
+      assert {:error, :unauthorized} = Accounts.revoke_invite(actor, target)
+    end
+
+    test "rejects a revoke from an actor without manage_admins permission" do
+      actor = insert(:admin, role: "venue_representative")
+      target = insert(:admin, hashed_password: nil, role: "venue_representative")
+
+      assert {:error, :unauthorized} = Accounts.revoke_invite(actor, target)
+      refute Admin.invite_revoked?(Repo.get!(Admin, target.id))
+    end
+
+    test "resending a revoked invite clears the revocation and issues a new working setup link" do
+      actor = insert(:admin, role: "super_admin")
+
+      target =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      assert {:ok, resent} =
+               Accounts.resend_invite(
+                 actor,
+                 target,
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+
+      refute Admin.invite_revoked?(resent)
+      assert Admin.pending?(resent)
+
+      assert_enqueued(
+        worker: Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker,
+        args: %{"admin_id" => target.id}
+      )
+
+      [job] =
+        all_enqueued(worker: Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker)
+
+      "https://cuevolution.test/admin/setup/" <> token = job.args["setup_url"]
+      assert Accounts.get_admin_by_setup_token(token).id == target.id
+    end
+
+    test "resending invalidates any stale setup tokens left over from before the revoke" do
+      actor = insert(:admin, role: "super_admin")
+
+      target =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      {stale_token, stale_struct} = AdminToken.build_admin_setup_token(target)
+      Repo.insert!(stale_struct)
+
+      {:ok, _resent} =
+        Accounts.resend_invite(actor, target, &"https://cuevolution.test/admin/setup/#{&1}")
+
+      assert Accounts.get_admin_by_setup_token(stale_token) == nil
+    end
+
+    test "rejects resending an invite that hasn't been revoked" do
+      actor = insert(:admin, role: "super_admin")
+      target = insert(:admin, hashed_password: nil, role: "venue_representative")
+
+      assert {:error, :unauthorized} =
+               Accounts.resend_invite(
+                 actor,
+                 target,
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+    end
+
+    test "rejects a resend from an actor without manage_admins permission" do
+      actor = insert(:admin, role: "venue_representative")
+
+      target =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      assert {:error, :unauthorized} =
+               Accounts.resend_invite(
+                 actor,
+                 target,
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+    end
+  end
+
   describe "generate_admin_session_token/1 and get_admin_by_session_token/1" do
     test "a generated token resolves back to the admin that generated it" do
       admin = insert(:admin)

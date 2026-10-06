@@ -243,6 +243,56 @@ defmodule Cuevolution.Competitions.DrawsTest do
     assert Repo.aggregate(Cuevolution.Notifications.Notification, :count) == notification_count
   end
 
+  test "publishing a region-scoped team draw notifies only each team's captain, not the rest of the roster" do
+    admin = insert(:admin, role: "super_admin")
+    regional = Repo.get_by!(Stage, name: "Regional")
+    region = build(:region)
+
+    teams =
+      for n <- 1..4 do
+        captain = insert(:player, region_id: region.id)
+        {:ok, team} = Cuevolution.Teams.create_team(captain, %{"name" => "Team #{n}"})
+        member = insert(:player, region_id: region.id)
+        {:ok, _} = Cuevolution.Teams.add_player_to_roster(team, member)
+        {team, captain, member}
+      end
+
+    {:ok, draw} =
+      Competitions.create_draw(
+        %{stage_id: regional.id, region_id: region.id, category: "team"},
+        admin
+      )
+
+    {:ok, _groups} = Competitions.deal_draw(draw, admin, nil)
+    previewed = Repo.get!(Draw, draw.id)
+    {:ok, approved} = Competitions.advance_draw_state(previewed, admin, "approved")
+
+    assert {:ok, %{draw: published, fixtures: fixtures}} =
+             Competitions.advance_draw_state(approved, admin, "published")
+
+    assert published.state == "published"
+    assert fixtures != []
+
+    assert :ok =
+             perform_job(
+               Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications,
+               %{"draw_id" => draw.id}
+             )
+
+    notified_player_ids =
+      from(n in Cuevolution.Notifications.Notification,
+        where: n.event_type == "draw_published",
+        select: n.player_id
+      )
+      |> Repo.all()
+      |> MapSet.new()
+
+    for {_team, captain, member} <- teams do
+      assert MapSet.member?(notified_player_ids, captain.id)
+      refute MapSet.member?(notified_player_ids, member.id)
+    end
+  end
+
   test "publishing enforces the state machine, locks groups, and rejects a second publish" do
     admin = insert(:admin, role: "super_admin")
     {draw, _players} = create_draw_with_players(admin, 4)
