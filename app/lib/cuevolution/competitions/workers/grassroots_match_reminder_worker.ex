@@ -15,9 +15,8 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
     if reminder_active?(stage.completion_deadline) do
       deadline_date = stage.completion_deadline
       deadline = Date.to_iso8601(deadline_date)
-      days_until_deadline = Date.diff(deadline_date, eat_today())
 
-      dispatch_in_batches(deadline, days_until_deadline, 0)
+      dispatch_in_batches(deadline, 0)
     end
 
     :ok
@@ -52,7 +51,7 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
       :ok
   end
 
-  defp dispatch_in_batches(deadline, days_until_deadline, offset) do
+  defp dispatch_in_batches(deadline, offset) do
     players = Competitions.players_with_grassroots_match_backlog(@batch_size, offset)
 
     case players do
@@ -60,17 +59,9 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
         :ok
 
       players ->
-        Enum.each(players, &dispatch_player_reminders(&1, deadline, days_until_deadline))
+        Enum.each(players, &dispatch_reminder(&1, deadline, "initial"))
 
-        dispatch_in_batches(deadline, days_until_deadline, offset + length(players))
-    end
-  end
-
-  defp dispatch_player_reminders(player, deadline, days_until_deadline) do
-    dispatch_reminder(player, deadline, "initial")
-
-    if days_until_deadline == 2 do
-      dispatch_reminder(player, deadline, "48-hour")
+        dispatch_in_batches(deadline, offset + length(players))
     end
   end
 end

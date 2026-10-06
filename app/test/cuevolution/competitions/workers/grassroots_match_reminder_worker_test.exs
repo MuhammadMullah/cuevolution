@@ -13,7 +13,7 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
 
     grassroots =
       Repo.update!(
-        Ecto.Changeset.change(grassroots, completion_deadline: Date.add(Date.utc_today(), 2))
+        Ecto.Changeset.change(grassroots, completion_deadline: Date.add(Date.utc_today(), 3))
       )
 
     target = insert(:player, notification_preference: "both")
@@ -45,7 +45,7 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
     assert length(backlog_ids) == 5
 
     assert :ok = GrassrootsMatchReminderWorker.perform(%Oban.Job{})
-    assert Repo.aggregate(Notification, :count, :id) == 12
+    assert Repo.aggregate(Notification, :count, :id) == 6
 
     assert Enum.any?(
              Repo.all(
@@ -58,7 +58,7 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
            )
 
     assert :ok = GrassrootsMatchReminderWorker.perform(%Oban.Job{})
-    assert Repo.aggregate(Notification, :count, :id) == 12
+    assert Repo.aggregate(Notification, :count, :id) == 6
   end
 
   test "does not notify when the deadline has passed" do
