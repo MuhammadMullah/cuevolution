@@ -9,7 +9,7 @@ defmodule Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker do
   in a table an admin can browse. No `Notification` row is created for this
   event type.
   """
-  use Oban.Worker, queue: :notifications, max_attempts: 5
+  use Oban.Worker, queue: :notifications_critical, max_attempts: 5
 
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Mailer

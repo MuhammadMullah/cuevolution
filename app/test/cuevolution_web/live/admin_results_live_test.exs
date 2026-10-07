@@ -6,7 +6,7 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
 
-  defp log_in_admin(conn, attrs \\ []) do
+  defp log_in_admin(conn, attrs) do
     admin =
       case Keyword.fetch(attrs, :id) do
         {:ok, id} -> Cuevolution.Repo.get!(Cuevolution.Accounts.Admin, id)
@@ -22,7 +22,8 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
   end
 
   test "shows the Unplayed/Played tabs, empty by default", %{conn: conn} do
-    conn = log_in_admin(conn)
+    venue = insert(:venue)
+    conn = log_in_admin(conn, role: "venue_representative", venue_id: venue.id)
     {:ok, view, html} = live(conn, ~p"/admin/results")
 
     assert html =~ "Match results"
@@ -49,8 +50,9 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
 
   test "selecting an unplayed fixture and recording a result moves it to Played", %{conn: conn} do
     fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
 
-    conn = log_in_admin(conn)
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
     {:ok, view, html} = live(conn, ~p"/admin/results")
 
     assert html =~ Competitions.participant_name(fixture.participant_a)
@@ -71,7 +73,72 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     assert played_fixture.result_id
   end
 
-  test "correcting a played result updates the winner and shows the warning banner", %{conn: conn} do
+  test "recording a result from frame scores alone derives the winner, no radio pick needed",
+       %{conn: conn} do
+    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view |> element("[phx-click='select_fixture']") |> render_click(%{"id" => fixture.id})
+
+    html =
+      view
+      |> form("form[phx-submit='record_result']", %{
+        "result" => %{"participant_a_frames" => "1", "participant_b_frames" => "4"}
+      })
+      |> render_submit()
+
+    assert html =~ "Result recorded."
+
+    result =
+      Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id)
+
+    assert result.winner_participation_id == fixture.participant_b_id
+  end
+
+  test "recording a result with neither a winner nor a score shows an error instead of crashing",
+       %{conn: conn} do
+    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view |> element("[phx-click='select_fixture']") |> render_click(%{"id" => fixture.id})
+
+    html =
+      view
+      |> form("form[phx-submit='record_result']", %{"result" => %{}})
+      |> render_submit()
+
+    assert html =~ "Pick a winner or enter the frame score."
+    refute Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).result_id
+  end
+
+  test "recording a result with tied frame scores is rejected", %{conn: conn} do
+    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view |> element("[phx-click='select_fixture']") |> render_click(%{"id" => fixture.id})
+
+    html =
+      view
+      |> form("form[phx-submit='record_result']", %{
+        "result" => %{"participant_a_frames" => "3", "participant_b_frames" => "3"}
+      })
+      |> render_submit()
+
+    assert html =~ "can&#39;t be tied"
+    refute Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).result_id
+  end
+
+  test "correcting just the frame score flips the winner automatically, even with a stale radio pick",
+       %{conn: conn} do
     fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
     admin = insert(:admin)
 
@@ -80,11 +147,9 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
         "winner_participation_id" => fixture.participant_a_id
       })
 
-    conn = log_in_admin(conn)
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
     {:ok, view, _html} = live(conn, ~p"/admin/results")
-
-    html = view |> element("button", "Played / Correct") |> render_click()
-    assert html =~ "Winner: #{Competitions.participant_name(fixture.participant_a)}"
 
     html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
     assert html =~ "may affect standings"
@@ -92,7 +157,13 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     html =
       view
       |> form("form[phx-submit='correct_result']", %{
-        "result" => %{"winner_participation_id" => fixture.participant_b_id}
+        "result" => %{
+          # Deliberately the *wrong* (stale) winner — the scores below favor
+          # participant_b, so the score must win regardless of this.
+          "winner_participation_id" => fixture.participant_a_id,
+          "participant_a_frames" => "2",
+          "participant_b_frames" => "5"
+        }
       })
       |> render_submit()
 
@@ -104,6 +175,12 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
       Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id)
 
     assert result.winner_participation_id == fixture.participant_b_id
+    assert result.score == %{"participant_a_frames" => 2, "participant_b_frames" => 5}
+
+    # Reopening shows the just-saved score, not a blank form.
+    html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+    assert html =~ ~s(name="result[participant_a_frames]" value="2")
+    assert html =~ ~s(name="result[participant_b_frames]" value="5")
   end
 
   test "Cuevo Points entry is offered for a Circuit-stage fixture but not a Grassroots one", %{
@@ -118,10 +195,15 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     {:ok, _result} =
       Competitions.record_result(fixture, admin, %{"winner_participation_id" => pa.id})
 
-    conn = log_in_admin(conn)
+    # `record_points/3` requires `:record_results` (Tournament Director has
+    # only `:approve_results` — see `Admin.permissions/0`), so initial points
+    # entry stays with the recorder/Super Admin; a Tournament Director can
+    # still correct an existing entry (`correct_points/3`, gated on
+    # `:approve_results`). Reuse the super admin who recorded the result to
+    # exercise the entry form here.
+    conn = log_in_admin(conn, id: admin.id, role: admin.role)
     {:ok, view, _html} = live(conn, ~p"/admin/results")
 
-    view |> element("button", "Played / Correct") |> render_click()
     html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
 
     assert html =~ "Cuevo Points"
@@ -229,6 +311,50 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
 
     assert Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).status ==
              "verified"
+  end
+
+  test "a tournament director can open a single pending result, correct it, then approve just that one",
+       %{conn: conn} do
+    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    {:ok, _result} =
+      Competitions.record_result(fixture, rep, %{
+        "winner_participation_id" => fixture.participant_a_id
+      })
+
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+    assert html =~ "Correct result"
+
+    html =
+      view
+      |> form("form[phx-submit='correct_result']", %{
+        "result" => %{"winner_participation_id" => fixture.participant_b_id}
+      })
+      |> render_submit()
+
+    assert html =~ "Result corrected."
+    refute has_element?(view, "#approve-result")
+
+    html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+    assert html =~ "Approve and finalize result"
+
+    html = view |> element("#approve-result") |> render_click()
+
+    assert html =~ "Result approved and finalized."
+    refute html =~ "select-result-#{fixture.id}"
+
+    updated_fixture = Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id)
+    assert updated_fixture.status == "verified"
+
+    result =
+      Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id)
+
+    assert result.winner_participation_id == fixture.participant_b_id
   end
 
   test "tournament director filters provisional results and approves multiple selections", %{

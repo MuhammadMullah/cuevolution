@@ -208,6 +208,16 @@ if config_env() == :prod do
       raise "unsupported MAIL_PROVIDER=#{provider}; expected postmark or local"
   end
 
+  # Not required to raise: until these two secrets exist in Secret Manager,
+  # CuevolutionWeb.PostmarkWebhookController's `authenticate/2` sees a
+  # non-binary username/password and 503s every request instead of
+  # accepting the dev placeholder credentials from config.exs — deploying
+  # this code doesn't require the Postmark-side webhook to be configured
+  # yet, and never falls back to a predictable prod secret.
+  config :cuevolution, :postmark_webhook,
+    username: secret.("POSTMARK_WEBHOOK_USERNAME"),
+    password: secret.("POSTMARK_WEBHOOK_PASSWORD")
+
   # ## Configuring SMS (Africa's Talking)
   case System.get_env("SMS_PROVIDER", "africastalking") do
     "africastalking" ->

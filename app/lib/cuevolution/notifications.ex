@@ -18,6 +18,7 @@ defmodule Cuevolution.Notifications do
   alias Cuevolution.Notifications.Notification
   alias Cuevolution.Notifications.Workers.SendEmailWorker
   alias Cuevolution.Notifications.Workers.SendSmsWorker
+  alias Cuevolution.Notifications.Workers.Support
   alias Cuevolution.Repo
 
   # Explicit allowlist per event type dispatch/3 rejects any
@@ -168,6 +169,33 @@ defmodule Cuevolution.Notifications do
       |> Repo.aggregate(:count)
 
     {length(candidate_ids), remaining}
+  end
+
+  @doc """
+  Marks the most recently sent email `Notification` to `email` as failed —
+  called from `CuevolutionWeb.PostmarkWebhookController` on a
+  Bounce/SpamComplaint webhook. `Mailer.deliver/1` returning `{:ok, _}`
+  only means Postmark *accepted* the send; actual delivery failures are
+  reported later, asynchronously, which is the only way a bounce is ever
+  visible for a notification that already shows as "sent". Reuses
+  `Support.mark_failed/2` so the bounced row is picked up by the same
+  `redrive_failed/3` path as any other failure.
+  """
+  def mark_bounced(email) do
+    Notification
+    |> join(:inner, [n], p in Player, on: p.id == n.player_id)
+    |> where([n, p], p.email == ^email and n.channel == "email" and n.status == "sent")
+    |> order_by([n], desc: n.updated_at)
+    |> limit(1)
+    |> Repo.one()
+    |> case do
+      nil ->
+        :ok
+
+      notification ->
+        _ = Support.mark_failed(notification, :bounced_or_spam_complaint)
+        :ok
+    end
   end
 
   defp channels_for(%Player{notification_preference: "email"}), do: ["email"]

@@ -331,6 +331,7 @@ defmodule CuevolutionWeb.AdminManagementLive do
   def status_badge_class(admin) do
     cond do
       Admin.invite_revoked?(admin) -> "bg-ink-200 text-ink-600"
+      Admin.invite_email_failed?(admin) -> "bg-[#FDECEA] text-[#A81810]"
       Admin.pending?(admin) -> "bg-[#FEF3E2] text-[#92400E]"
       Admin.suspended?(admin) -> "bg-[#FDECEA] text-[#A81810]"
       true -> "bg-[#DCF3E4] text-[#0E6A30]"
@@ -340,6 +341,7 @@ defmodule CuevolutionWeb.AdminManagementLive do
   def status_label(%Admin{} = admin) do
     cond do
       Admin.invite_revoked?(admin) -> "Invite revoked"
+      Admin.invite_email_failed?(admin) -> "Invite email failed"
       Admin.pending?(admin) -> "Invited"
       Admin.suspended?(admin) -> "Suspended"
       true -> "Active"

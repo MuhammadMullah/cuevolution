@@ -356,20 +356,31 @@ defmodule Cuevolution.Accounts do
   end
 
   @doc """
-  Resends an invite for a revoked admin: clears the revocation, issues a
-  fresh setup token (invalidating any stale ones), and enqueues a new
-  invitation email. Only a revoked pending invite can be resent.
+  Resends an invite for a revoked or email-delivery-failed admin: clears the
+  revocation (if any), issues a fresh setup token (invalidating any stale
+  ones), and enqueues a new invitation email. Only a revoked pending invite,
+  or one whose invitation email exhausted all delivery attempts, can be
+  resent — a pending invite that's still waiting on the invitee (email sent
+  successfully) must be revoked first.
   """
   def resend_invite(%Admin{} = actor, %Admin{} = target, setup_url_fun)
       when is_function(setup_url_fun, 1) do
     if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and
-         Admin.pending?(target) and Admin.invite_revoked?(target) do
+         Admin.pending?(target) and
+         (Admin.invite_revoked?(target) or Admin.invite_email_failed?(target)) do
       Multi.new()
       |> Multi.delete_all(
         :old_tokens,
         AdminToken.by_admin_and_contexts_query(target, ["admin_setup"])
       )
-      |> Multi.update(:admin, Ecto.Changeset.change(target, invite_revoked_at: nil))
+      |> Multi.update(
+        :admin,
+        Ecto.Changeset.change(target,
+          invite_revoked_at: nil,
+          invite_email_status: "pending",
+          invite_email_failed_at: nil
+        )
+      )
       |> Multi.run(:token, fn repo, %{admin: admin} ->
         {encoded_token, token_struct} = AdminToken.build_admin_setup_token(admin)
         repo.insert(token_struct)
@@ -393,6 +404,33 @@ defmodule Cuevolution.Accounts do
     else
       {:error, :unauthorized}
     end
+  end
+
+  @doc """
+  Marks a still-pending admin invite to `email` as a failed send — called
+  from `CuevolutionWeb.PostmarkWebhookController` on a Bounce/SpamComplaint
+  webhook. `Mailer.deliver/1` returning `{:ok, _}` only means Postmark
+  *accepted* the send; actual delivery failures are reported later,
+  asynchronously, which is the only way this ever surfaces for an invite
+  that looked "sent" at the time.
+
+  Scoped to `hashed_password: nil` (still pending) so a bounce webhook that
+  arrives late — after the admin already completed setup some other way —
+  can't retroactively mark an active admin's account as having a failed
+  invite.
+  """
+  def mark_invite_email_bounced(email) do
+    Admin
+    |> where(
+      [a],
+      a.email == ^email and is_nil(a.hashed_password) and
+        a.invite_email_status in ["pending", "sent"]
+    )
+    |> Repo.update_all(
+      set: [invite_email_status: "failed", invite_email_failed_at: DateTime.utc_now(:second)]
+    )
+
+    :ok
   end
 
   defp log_admin_change({:ok, _updated} = result, actor, target, action, role) do

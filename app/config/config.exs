@@ -28,7 +28,14 @@ config :cuevolution, Oban,
     # Rescues jobs left "executing" when an instance restarts mid-job.
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}
   ],
-  queues: [notifications: 5, deadline_enforcement: 1]
+  # `notifications_critical` is a separate lane (not just a priority within
+  # `notifications`) for single-recipient, time-sensitive mail — admin
+  # invitations and password resets — so a bulk fan-out dumped into
+  # `notifications` (a published draw, grassroots reminders, birthday
+  # greetings — hundreds/thousands of jobs at once) can never make a stuck
+  # admin wait behind it. See the 2026-10 investigation into delayed/missing
+  # admin invitation emails.
+  queues: [notifications: 5, notifications_critical: 2, deadline_enforcement: 1]
 
 # Configure the endpoint
 config :cuevolution, CuevolutionWeb.Endpoint,
@@ -58,6 +65,12 @@ config :cuevolution, :mail_from, {"Cuevolution", "notifications@cuevolution.test
 # prints to the console instead of sending. `:test` overrides this to the
 # Mox mock (config/test.exs).
 config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.StubAdapter
+
+# Basic Auth credentials CuevolutionWeb.PostmarkWebhookController checks on
+# incoming Bounce/SpamComplaint webhooks. Dev/test only — production sets
+# this from Secret Manager in config/runtime.exs (and leaves it unset,
+# disabling the endpoint, until POSTMARK_WEBHOOK_USERNAME/PASSWORD exist).
+config :cuevolution, :postmark_webhook, username: "postmark", password: "postmark-webhook-dev"
 
 # Configure esbuild (the version is required)
 config :esbuild,

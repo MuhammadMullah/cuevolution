@@ -44,6 +44,8 @@ defmodule Cuevolution.Accounts.Admin do
     field :suspended_at, :utc_datetime
     field :removed_at, :utc_datetime
     field :invite_revoked_at, :utc_datetime
+    field :invite_email_status, :string, default: "pending"
+    field :invite_email_failed_at, :utc_datetime
     field :hashed_password, :string
     field :password, :string, virtual: true
     field :password_confirmation, :string, virtual: true
@@ -97,6 +99,10 @@ defmodule Cuevolution.Accounts.Admin do
   @doc "Whether `admin`'s pending invite has been revoked (its setup link no longer works)."
   def invite_revoked?(%__MODULE__{invite_revoked_at: %DateTime{}}), do: true
   def invite_revoked?(%__MODULE__{}), do: false
+
+  @doc "Whether the invitation email exhausted all delivery attempts without ever sending."
+  def invite_email_failed?(%__MODULE__{invite_email_status: "failed"}), do: true
+  def invite_email_failed?(%__MODULE__{}), do: false
 
   @doc "Full registration changeset, including password hashing — used to create the initial super admin (see priv/repo/seeds)."
   def registration_changeset(admin, attrs) do

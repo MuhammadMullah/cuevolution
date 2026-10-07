@@ -192,4 +192,36 @@ defmodule Cuevolution.NotificationsTest do
       assert Repo.get!(Notification, other_event.id).status == "failed"
     end
   end
+
+  describe "mark_bounced/1" do
+    test "marks a sent email notification to that address as failed" do
+      player = insert(:player, notification_preference: "email")
+      [notification] = Notifications.dispatch(player, :registration_confirmation, %{})
+      notification |> Ecto.Changeset.change(status: "sent") |> Repo.update!()
+
+      assert :ok = Notifications.mark_bounced(player.email)
+
+      assert Repo.get!(Notification, notification.id).status == "failed"
+    end
+
+    test "ignores an sms notification to the same player" do
+      player = insert(:player, notification_preference: "both")
+      [email, sms] = Notifications.dispatch(player, :registration_confirmation, %{})
+      email |> Ecto.Changeset.change(status: "sent") |> Repo.update!()
+      sms |> Ecto.Changeset.change(status: "sent") |> Repo.update!()
+
+      assert :ok = Notifications.mark_bounced(player.email)
+
+      assert Repo.get!(Notification, email.id).status == "failed"
+      assert Repo.get!(Notification, sms.id).status == "sent"
+    end
+
+    test "is a no-op for an address with no sent notification" do
+      player = insert(:player, notification_preference: "email")
+      [pending] = Notifications.dispatch(player, :registration_confirmation, %{})
+
+      assert :ok = Notifications.mark_bounced(player.email)
+      assert Repo.get!(Notification, pending.id).status == "pending"
+    end
+  end
 end

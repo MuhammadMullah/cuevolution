@@ -351,6 +351,33 @@ defmodule Cuevolution.AccountsTest do
                )
     end
 
+    test "resending an invite whose invitation email failed, even without a revoke, clears the failure" do
+      actor = insert(:admin, role: "super_admin")
+
+      target =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_email_status: "failed",
+          invite_email_failed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      assert {:ok, resent} =
+               Accounts.resend_invite(
+                 actor,
+                 target,
+                 &"https://cuevolution.test/admin/setup/#{&1}"
+               )
+
+      refute Admin.invite_email_failed?(resent)
+      assert resent.invite_email_failed_at == nil
+
+      assert_enqueued(
+        worker: Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker,
+        args: %{"admin_id" => target.id}
+      )
+    end
+
     test "rejects a resend from an actor without manage_admins permission" do
       actor = insert(:admin, role: "venue_representative")
 
@@ -1172,6 +1199,40 @@ defmodule Cuevolution.AccountsTest do
 
       assert {:error, :invalid_credentials} =
                Accounts.authenticate_player(original_username, "Valid1!Pass")
+    end
+  end
+
+  describe "mark_invite_email_bounced/1" do
+    test "flips a pending invite's status to failed" do
+      admin =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_email_status: "sent"
+        )
+
+      assert :ok = Accounts.mark_invite_email_bounced(admin.email)
+
+      updated = Repo.get!(Admin, admin.id)
+      assert updated.invite_email_status == "failed"
+      assert updated.invite_email_failed_at
+    end
+
+    test "leaves an already-failed or completed invite untouched" do
+      failed =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          invite_email_status: "failed"
+        )
+
+      completed = insert(:admin, invite_email_status: "sent")
+
+      assert :ok = Accounts.mark_invite_email_bounced(failed.email)
+      assert :ok = Accounts.mark_invite_email_bounced(completed.email)
+
+      assert Repo.get!(Admin, failed.id).invite_email_status == "failed"
+      assert Repo.get!(Admin, completed.id).invite_email_status == "sent"
     end
   end
 end

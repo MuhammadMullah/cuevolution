@@ -190,7 +190,7 @@
                     </button>
                     <button
                       :if={
-                        Admin.invite_revoked?(admin) and
+                        (Admin.invite_revoked?(admin) or Admin.invite_email_failed?(admin)) and
                           Admin.manageable_by?(@current_admin, admin)
                       }
                       type="button"

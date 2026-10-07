@@ -29,6 +29,7 @@
         </p>
       </div>
       <button
+        :if={@approval_tab == "pending"}
         id="approve-selected-results"
         type="button"
         phx-click="approve_selected_results"
@@ -36,6 +37,33 @@
         class="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
       >
         Approve selected ({MapSet.size(@selected_result_ids)})
+      </button>
+    </div>
+
+    <div :if={@is_super_admin?} class="mb-4 flex gap-2 border-b border-ink-200">
+      <button
+        type="button"
+        phx-click="switch_approval_tab"
+        phx-value-tab="pending"
+        class={[
+          "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+          @approval_tab == "pending" && "border-red-500 text-ink-950",
+          @approval_tab != "pending" && "border-transparent text-ink-500 hover:text-ink-950"
+        ]}
+      >
+        Pending approval
+      </button>
+      <button
+        type="button"
+        phx-click="switch_approval_tab"
+        phx-value-tab="approved"
+        class={[
+          "whitespace-nowrap border-b-2 px-1 py-[11px] text-[14.5px] font-semibold",
+          @approval_tab == "approved" && "border-red-500 text-ink-950",
+          @approval_tab != "approved" && "border-transparent text-ink-500 hover:text-ink-950"
+        ]}
+      >
+        Approved
       </button>
     </div>
 
@@ -88,70 +116,165 @@
       </div>
     </form>
 
-    <div
-      id="pending-results"
-      phx-update="stream"
-      class="overflow-hidden rounded-xl border border-ink-200"
-    >
+    <div class={@approval_tab != "pending" && "hidden"}>
+      <p class="mb-3 text-sm text-ink-500">
+        Click a result to review and correct it before approving, or check several and approve them together.
+      </p>
       <div
-        id="pending-results-empty"
-        class="hidden only:block px-4 py-8 text-center text-sm text-ink-400"
+        id="pending-results"
+        phx-update="stream"
+        class="overflow-hidden rounded-xl border border-ink-200"
       >
-        No provisional results match these filters.
+        <div
+          id="pending-results-empty"
+          class="hidden only:block px-4 py-8 text-center text-sm text-ink-400"
+        >
+          No provisional results match these filters.
+        </div>
+        <div
+          :for={{dom_id, fixture} <- @streams.pending_results}
+          id={dom_id}
+          class={[
+            "flex items-start gap-3 border-b border-ink-100 px-3 py-3 last:border-0 sm:items-center sm:px-4",
+            @selected_played && @selected_played.id == fixture.id && "bg-red-50"
+          ]}
+        >
+          <input
+            id={"select-result-#{fixture.id}"}
+            type="checkbox"
+            phx-click="toggle_result_selection"
+            phx-value-id={fixture.id}
+            checked={MapSet.member?(@selected_result_ids, fixture.id)}
+            class="mt-1 size-4 rounded border-ink-300 text-ink-950 focus:ring-red-500 sm:mt-0"
+          />
+          <button
+            type="button"
+            phx-click="select_played"
+            phx-value-id={fixture.id}
+            class="min-w-0 flex-1 cursor-pointer text-left"
+          >
+            <div class="font-semibold text-[13.5px] text-ink-950">{fixture_label(fixture)}</div>
+            <div class="mt-0.5 text-[12.5px] text-ink-500">
+              {fixture_venue_label(fixture)} · Provisional
+            </div>
+          </button>
+        </div>
       </div>
-      <div
-        :for={{dom_id, fixture} <- @streams.pending_results}
-        id={dom_id}
-        class="flex items-start gap-3 border-b border-ink-100 px-3 py-3 last:border-0 sm:items-center sm:px-4"
+
+      <nav
+        :if={@approval_total_pages > 1}
+        id="approval-pagination"
+        aria-label="Approval queue pages"
+        class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 sm:flex-row"
       >
-        <input
-          id={"select-result-#{fixture.id}"}
-          type="checkbox"
-          phx-click="toggle_result_selection"
-          phx-value-id={fixture.id}
-          checked={MapSet.member?(@selected_result_ids, fixture.id)}
-          class="mt-1 size-4 rounded border-ink-300 text-ink-950 focus:ring-red-500 sm:mt-0"
-        />
-        <label for={"select-result-#{fixture.id}"} class="min-w-0 flex-1 cursor-pointer">
-          <div class="font-semibold text-[13.5px] text-ink-950">{fixture_label(fixture)}</div>
-          <div class="mt-0.5 text-[12.5px] text-ink-500">
-            {fixture_venue_label(fixture)} · Provisional
-          </div>
-        </label>
-      </div>
+        <button
+          id="approval-previous-page"
+          type="button"
+          phx-click="change_approval_page"
+          phx-value-page={@approval_page - 1}
+          disabled={@approval_page == 1}
+          class="min-h-10 w-full rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          Previous
+        </button>
+        <span class="text-sm text-ink-500">
+          Page {@approval_page} of {@approval_total_pages}
+        </span>
+        <button
+          id="approval-next-page"
+          type="button"
+          phx-click="change_approval_page"
+          phx-value-page={@approval_page + 1}
+          disabled={@approval_page == @approval_total_pages}
+          class="min-h-10 w-full rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          Next
+        </button>
+      </nav>
+
+      <.result_detail_panel
+        :if={@selected_played && @approval_tab == "pending"}
+        current_admin={@current_admin}
+        selected_played={@selected_played}
+        correction_form={@correction_form}
+        points_forms={@points_forms}
+      />
     </div>
 
-    <nav
-      :if={@approval_total_pages > 1}
-      id="approval-pagination"
-      aria-label="Approval queue pages"
-      class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 sm:flex-row"
-    >
-      <button
-        id="approval-previous-page"
-        type="button"
-        phx-click="change_approval_page"
-        phx-value-page={@approval_page - 1}
-        disabled={@approval_page == 1}
-        class="min-h-10 w-full rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+    <div :if={@is_super_admin?} class={@approval_tab != "approved" && "hidden"}>
+      <p class="mb-3 text-sm text-ink-500">
+        Already-approved results. Select one to edit its winner or Cuevo Points — this stays available to Super Admin after a result is final.
+      </p>
+      <div
+        id="approved-results"
+        phx-update="stream"
+        class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
       >
-        Previous
-      </button>
-      <span class="text-sm text-ink-500">Page {@approval_page} of {@approval_total_pages}</span>
-      <button
-        id="approval-next-page"
-        type="button"
-        phx-click="change_approval_page"
-        phx-value-page={@approval_page + 1}
-        disabled={@approval_page == @approval_total_pages}
-        class="min-h-10 w-full rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        <div
+          :for={{dom_id, fixture} <- @streams.approved_results}
+          id={dom_id}
+          phx-click="select_played"
+          phx-value-id={fixture.id}
+          class={[
+            "cursor-pointer border-b border-ink-100 px-4.5 py-3.5 text-[14px] last:border-0 hover:bg-ink-50",
+            @selected_played && @selected_played.id == fixture.id && "bg-red-50"
+          ]}
+        >
+          <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
+          <div class="text-[12.5px] text-ink-500">
+            {fixture_venue_label(fixture)} · {played_fixture_summary(fixture)}
+          </div>
+        </div>
+      </div>
+      <div :if={@approved_results_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
+        No approved results match these filters.
+      </div>
+
+      <nav
+        :if={@approved_total_pages > 1}
+        id="approved-pagination"
+        aria-label="Approved results pages"
+        class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 sm:flex-row"
       >
-        Next
-      </button>
-    </nav>
+        <button
+          id="approved-previous-page"
+          type="button"
+          phx-click="change_approved_page"
+          phx-value-page={@approved_page - 1}
+          disabled={@approved_page == 1}
+          class="min-h-10 w-full rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          Previous
+        </button>
+        <span class="text-sm text-ink-500">
+          Page {@approved_page} of {@approved_total_pages}
+        </span>
+        <button
+          id="approved-next-page"
+          type="button"
+          phx-click="change_approved_page"
+          phx-value-page={@approved_page + 1}
+          disabled={@approved_page == @approved_total_pages}
+          class="min-h-10 w-full rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          Next
+        </button>
+      </nav>
+
+      <.result_detail_panel
+        :if={@selected_played && @approval_tab == "approved"}
+        current_admin={@current_admin}
+        selected_played={@selected_played}
+        correction_form={@correction_form}
+        points_forms={@points_forms}
+      />
+    </div>
   </section>
 
-  <div :if={@can_record_results?} class="mb-4 flex gap-2 border-b border-ink-200">
+  <div
+    :if={@show_record_tabs?}
+    class="mb-4 flex gap-2 border-b border-ink-200"
+  >
     <button
       type="button"
       phx-click="switch_tab"
@@ -179,7 +302,7 @@
   </div>
 
   <div
-    :if={@can_record_results?}
+    :if={@show_record_tabs?}
     class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]", @tab != "unplayed" && "hidden"]}
   >
     <div
@@ -216,7 +339,6 @@
             type="radio"
             name="result[winner_participation_id]"
             value={@selected_unplayed.participant_a_id}
-            required
           />
           {Competitions.participant_name(@selected_unplayed.participant_a)} wins
         </label>
@@ -252,10 +374,7 @@
     </div>
   </div>
 
-  <div
-    :if={@can_record_results?}
-    class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_400px]", @tab != "played" && "hidden"]}
-  >
+  <div :if={@show_record_tabs?} class={@tab != "played" && "hidden"}>
     <div
       id="played-fixtures"
       phx-update="stream"
@@ -281,137 +400,12 @@
       No played fixtures yet.
     </div>
 
-    <div
+    <.result_detail_panel
       :if={@selected_played}
-      class="flex flex-col gap-4 rounded-2xl border border-ink-200 bg-white p-4.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
-    >
-      <div>
-        <div
-          :if={@selected_played.status == "completed"}
-          class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800"
-        >
-          Awaiting tournament director approval. This result is not final yet.
-        </div>
-        <div
-          :if={@selected_played.status == "verified"}
-          class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800"
-        >
-          Approved and final.
-        </div>
-        <button
-          :if={
-            @selected_played.status == "completed" && Admin.can?(@current_admin, :approve_results)
-          }
-          id="approve-result"
-          type="button"
-          phx-click="approve_result"
-          class="mb-3 w-full rounded-full bg-ink-950 px-4 py-2 text-[13px] font-semibold text-white hover:bg-ink-800"
-        >
-          Approve and finalize result
-        </button>
-        <h2
-          :if={can_correct_result?(@current_admin, @selected_played)}
-          class="mb-2 text-[14.5px] font-bold text-ink-950"
-        >
-          Correct result
-        </h2>
-        <div
-          :if={can_correct_result?(@current_admin, @selected_played)}
-          class="mb-2.5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800"
-        >
-          Correcting this result may affect standings and any stage advancement already made from it — review before saving.
-        </div>
-        <.form
-          :if={can_correct_result?(@current_admin, @selected_played)}
-          for={@correction_form}
-          phx-submit="correct_result"
-          class="flex flex-col gap-2.5"
-        >
-          <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
-            <input
-              type="radio"
-              name="result[winner_participation_id]"
-              value={@selected_played.participant_a_id}
-              checked={
-                @correction_form[:winner_participation_id].value ==
-                  @selected_played.participant_a_id
-              }
-            />
-            {Competitions.participant_name(@selected_played.participant_a)} wins
-          </label>
-          <label class="flex items-center gap-2 text-[13.5px] text-ink-700">
-            <input
-              type="radio"
-              name="result[winner_participation_id]"
-              value={@selected_played.participant_b_id}
-              checked={
-                @correction_form[:winner_participation_id].value ==
-                  @selected_played.participant_b_id
-              }
-            />
-            {Competitions.participant_name(@selected_played.participant_b)} wins
-          </label>
-          <button
-            type="submit"
-            class="rounded-full border border-ink-300 px-4 py-2 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-          >
-            Save correction
-          </button>
-        </.form>
-      </div>
-
-      <div :if={points_eligible?(@selected_played)} class="border-t border-ink-100 pt-3.5">
-        <h2 class="mb-2 text-[14.5px] font-bold text-ink-950">Cuevo Points</h2>
-        <div
-          :for={{_id, %{participant: participant, entry: entry, total: total}} <- @points_forms}
-          class="mb-3"
-        >
-          <div class="mb-1 flex items-center justify-between text-[13.5px] font-semibold text-ink-950">
-            <span>{Competitions.participant_name(participant)}</span>
-            <span class="font-mono text-[12.5px] text-ink-500">total: {total}</span>
-          </div>
-          <form
-            :if={is_nil(entry)}
-            id={"record-points-#{participant.id}"}
-            phx-submit="record_points"
-            class="flex items-center gap-2"
-          >
-            <input type="hidden" name="participant_id" value={participant.id} />
-            <input
-              type="number"
-              name="points"
-              placeholder="Points"
-              class="w-24 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
-            />
-            <button
-              type="submit"
-              class="rounded-full bg-ink-950 px-3.5 py-[7px] text-[13px] font-semibold text-white hover:bg-ink-900"
-            >
-              Add
-            </button>
-          </form>
-          <form
-            :if={entry}
-            id={"correct-points-#{participant.id}"}
-            phx-submit="correct_points"
-            class="flex items-center gap-2"
-          >
-            <input type="hidden" name="entry_id" value={entry.id} />
-            <input
-              type="number"
-              name="points"
-              value={entry.points}
-              class="w-24 rounded-lg border border-ink-300 px-2.5 py-2 text-[13px]"
-            />
-            <button
-              type="submit"
-              class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
-            >
-              Correct
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+      current_admin={@current_admin}
+      selected_played={@selected_played}
+      correction_form={@correction_form}
+      points_forms={@points_forms}
+    />
   </div>
 </AdminComponents.app_shell>

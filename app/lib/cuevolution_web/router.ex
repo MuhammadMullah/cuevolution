@@ -50,6 +50,12 @@ defmodule CuevolutionWeb.Router do
     get "/readiness", HealthController, :readiness
   end
 
+  scope "/webhooks", CuevolutionWeb do
+    pipe_through :api
+
+    post "/postmark", PostmarkWebhookController, :create
+  end
+
   scope "/", CuevolutionWeb do
     pipe_through [:browser, :player_required]
 

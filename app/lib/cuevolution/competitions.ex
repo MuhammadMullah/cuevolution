@@ -2993,6 +2993,20 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
+  @doc """
+  A single unplayed fixture by id, scoped the same way as
+  `list_unplayed_fixtures_for_admin/1` — `nil` if it doesn't exist or falls
+  outside `admin`'s scope. Used to refresh one row (e.g. after selecting it
+  in the UI) without re-fetching every unplayed fixture the admin can see.
+  """
+  def get_unplayed_fixture_for_admin(%Admin{} = admin, id) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], f.id == ^id and is_nil(f.result_id))
+    |> preload([:venue, participant_a: [:player, :team], participant_b: [:player, :team]])
+    |> Repo.one()
+  end
+
   @doc "Fixtures with a recorded result, most recently played first — PointsEntryLive's Played tab."
   def list_played_fixtures do
     Fixture
@@ -3020,6 +3034,26 @@ defmodule Cuevolution.Competitions do
       participant_b: [:player, :team, :stage]
     ])
     |> Repo.all()
+  end
+
+  @doc """
+  A single played fixture by id, scoped the same way as
+  `list_played_fixtures_for_admin/1` — `nil` if it doesn't exist or falls
+  outside `admin`'s scope. Covers both "completed" (pending approval) and
+  "verified" (final) fixtures, so the same lookup backs selecting a row from
+  either the pending-approval queue or the Played/Approved views.
+  """
+  def get_played_fixture_for_admin(%Admin{} = admin, id) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], f.id == ^id and not is_nil(f.result_id))
+    |> preload([
+      :venue,
+      [result: :winner_participation],
+      participant_a: [:player, :team, :stage],
+      participant_b: [:player, :team, :stage]
+    ])
+    |> Repo.one()
   end
 
   @pending_results_per_page 20
@@ -3050,12 +3084,47 @@ defmodule Cuevolution.Competitions do
     |> Repo.aggregate(:count, :id)
   end
 
+  @doc """
+  Approved (verified) result fixtures, optionally filtered by region and
+  venue, one page at a time — the Super Admin-only "Approved" view used to
+  edit a result after it has already been finalized.
+  """
+  def list_approved_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1) do
+    Fixture
+    |> approved_results_query(region_id, venue_id)
+    |> order_by([f, _r, _g, _v], desc: f.scheduled_at, desc: f.inserted_at)
+    |> limit(^@pending_results_per_page)
+    |> offset(^((max(page, 1) - 1) * @pending_results_per_page))
+    |> preload([
+      :venue,
+      [result: :winner_participation],
+      participant_a: [:player, :team, :stage],
+      participant_b: [:player, :team, :stage]
+    ])
+    |> Repo.all()
+  end
+
+  @doc "Total count of approved results matching the same region/venue filters, for pagination."
+  def count_approved_result_fixtures(region_id \\ nil, venue_id \\ nil) do
+    Fixture
+    |> approved_results_query(region_id, venue_id)
+    |> Repo.aggregate(:count, :id)
+  end
+
   defp pending_results_query(query, region_id, venue_id) do
+    results_by_status_query(query, "completed", region_id, venue_id)
+  end
+
+  defp approved_results_query(query, region_id, venue_id) do
+    results_by_status_query(query, "verified", region_id, venue_id)
+  end
+
+  defp results_by_status_query(query, status, region_id, venue_id) do
     query
     |> join(:left, [f], r in Round, on: r.id == f.round_id)
     |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
     |> join(:left, [f, _r, _g], v in assoc(f, :venue))
-    |> where([f, _r, _g, _v], f.status == "completed" and not is_nil(f.result_id))
+    |> where([f, _r, _g, _v], f.status == ^status and not is_nil(f.result_id))
     |> filter_pending_results_by_region(region_id)
     |> filter_pending_results_by_venue(venue_id)
   end
