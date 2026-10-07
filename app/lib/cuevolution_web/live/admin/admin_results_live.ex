@@ -13,8 +13,11 @@ defmodule CuevolutionWeb.AdminResultsLive do
       gets the approval queue: bulk-approve many provisional results at
       once, or click into one to open the same detail panel a recorder
       uses — correct the winner, enter Cuevo Points, then approve just
-      that fixture (`verify_result/2`). Super Admin additionally gets an
-      "Approved" tab to revisit already-final results.
+      that fixture (`verify_result/2`). Either role also gets an
+      "Approved" tab to revisit and correct already-final results —
+      `can_correct_result?/2` lets an approver correct a result
+      regardless of status, so this tab is just surfacing a capability
+      the backend already grants both roles.
 
   Cuevo Points entry/correction (`record_points/3`/`correct_points/3`) only
   applies to Circuit/Finals-stage fixtures — Grassroots/Regional never
@@ -38,7 +41,6 @@ defmodule CuevolutionWeb.AdminResultsLive do
     current_admin = socket.assigns.current_admin
     can_approve_results? = Admin.can?(current_admin, :approve_results)
     can_record_results? = Admin.can?(current_admin, :record_results)
-    is_super_admin? = current_admin.role == "super_admin"
     regions = if can_approve_results?, do: Accounts.list_regions(), else: []
     approval_venues = if can_approve_results?, do: Venues.list_venues(%{active: true}), else: []
 
@@ -74,7 +76,6 @@ defmodule CuevolutionWeb.AdminResultsLive do
         can_approve_results?: can_approve_results?,
         can_record_results?: can_record_results?,
         show_record_tabs?: show_record_tabs?,
-        is_super_admin?: is_super_admin?,
         missing_scope?: missing_scope?(current_admin),
         approval_regions: regions,
         approval_venues: approval_venues,
@@ -506,7 +507,7 @@ defmodule CuevolutionWeb.AdminResultsLive do
   defp refresh_approved_stream(socket, %{}), do: socket
 
   defp load_approved_results(socket) do
-    if socket.assigns.is_super_admin? do
+    if socket.assigns.can_approve_results? do
       %{approval_region_id: region_id, approval_venue_id: venue_id, approved_page: page} =
         socket.assigns
 

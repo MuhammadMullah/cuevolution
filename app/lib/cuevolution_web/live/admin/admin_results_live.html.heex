@@ -40,7 +40,7 @@
       </button>
     </div>
 
-    <div :if={@is_super_admin?} class="mb-4 flex gap-2 border-b border-ink-200">
+    <div :if={@can_approve_results?} class="mb-4 flex gap-2 border-b border-ink-200">
       <button
         type="button"
         phx-click="switch_approval_tab"
@@ -201,9 +201,9 @@
       />
     </div>
 
-    <div :if={@is_super_admin?} class={@approval_tab != "approved" && "hidden"}>
+    <div :if={@can_approve_results?} class={@approval_tab != "approved" && "hidden"}>
       <p class="mb-3 text-sm text-ink-500">
-        Already-approved results. Select one to edit its winner or Cuevo Points — this stays available to Super Admin after a result is final.
+        Already-approved results. Select one to edit its winner or Cuevo Points — this stays available to Tournament Directors and Super Admins after a result is final.
       </p>
       <div
         id="approved-results"

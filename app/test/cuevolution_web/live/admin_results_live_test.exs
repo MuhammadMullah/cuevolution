@@ -357,6 +357,49 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     assert result.winner_participation_id == fixture.participant_b_id
   end
 
+  test "a tournament director can open the Approved tab and correct an already-verified result",
+       %{conn: conn} do
+    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    {:ok, _result} =
+      Competitions.record_result(fixture, rep, %{
+        "winner_participation_id" => fixture.participant_a_id
+      })
+
+    super_admin = insert(:admin)
+    {:ok, _verified} = Competitions.verify_result(Cuevolution.Repo.reload(fixture), super_admin)
+
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
+    {:ok, view, html} = live(conn, ~p"/admin/results")
+
+    assert html =~ "Pending approval"
+    assert html =~ "Approved"
+
+    html = view |> element("button", "Approved") |> render_click()
+    assert html =~ "Already-approved results"
+    assert has_element?(view, "[phx-click='select_played'][phx-value-id='#{fixture.id}']")
+
+    html = view |> element("[phx-click='select_played']") |> render_click(%{"id" => fixture.id})
+    assert html =~ "Approved and final."
+    assert html =~ "Correct result"
+
+    html =
+      view
+      |> form("form[phx-submit='correct_result']", %{
+        "result" => %{"winner_participation_id" => fixture.participant_b_id}
+      })
+      |> render_submit()
+
+    assert html =~ "Result corrected."
+
+    result =
+      Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id)
+
+    assert result.winner_participation_id == fixture.participant_b_id
+  end
+
   test "tournament director filters provisional results and approves multiple selections", %{
     conn: conn
   } do
