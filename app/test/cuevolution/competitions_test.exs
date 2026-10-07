@@ -62,29 +62,32 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
-  describe "advance_to_stage/2" do
+  describe "advance_to_stage/3" do
     test "never rejects for an open destination stage" do
+      admin = insert(:admin, role: "super_admin")
       participation = insert(:stage_participation, stage_id: stage("Grassroots").id)
 
       assert {:ok, updated} =
-               Competitions.advance_to_stage(participation, stage("Regional"))
+               Competitions.advance_to_stage(participation, admin, stage("Regional"))
 
       assert updated.stage_id == stage("Regional").id
     end
 
     test "accepts while under capacity and increments current_count" do
+      admin = insert(:admin, role: "super_admin")
       finals = stage("Finals")
       config = Repo.get_by!(StageCapacityConfig, stage_id: finals.id, category: "female")
 
       participation =
         insert(:stage_participation, stage_id: stage("Circuit").id, category: "female")
 
-      assert {:ok, _updated} = Competitions.advance_to_stage(participation, finals)
+      assert {:ok, _updated} = Competitions.advance_to_stage(participation, admin, finals)
 
       assert Repo.get!(StageCapacityConfig, config.id).current_count == config.current_count + 1
     end
 
     test "rejects with :capacity_exceeded once the limit is reached" do
+      admin = insert(:admin, role: "super_admin")
       finals = stage("Finals")
       config = Repo.get_by!(StageCapacityConfig, stage_id: finals.id, category: "team")
 
@@ -101,10 +104,12 @@ defmodule Cuevolution.CompetitionsTest do
           category: "team"
         )
 
-      assert {:error, :capacity_exceeded} = Competitions.advance_to_stage(participation, finals)
+      assert {:error, :capacity_exceeded} =
+               Competitions.advance_to_stage(participation, admin, finals)
     end
 
     test "does not increment current_count on a lost/rejected advance" do
+      admin = insert(:admin, role: "super_admin")
       finals = stage("Finals")
       config = Repo.get_by!(StageCapacityConfig, stage_id: finals.id, category: "male")
 
@@ -116,9 +121,38 @@ defmodule Cuevolution.CompetitionsTest do
       participation =
         insert(:stage_participation, stage_id: stage("Circuit").id, category: "male")
 
-      assert {:error, :capacity_exceeded} = Competitions.advance_to_stage(participation, finals)
+      assert {:error, :capacity_exceeded} =
+               Competitions.advance_to_stage(participation, admin, finals)
 
       assert Repo.get!(StageCapacityConfig, config.id).current_count == config.capacity_limit
+    end
+
+    test "rejects a regional_coordinator with :unauthorized" do
+      admin = insert(:admin, role: "regional_coordinator")
+      participation = insert(:stage_participation, stage_id: stage("Grassroots").id)
+
+      assert {:error, :unauthorized} =
+               Competitions.advance_to_stage(participation, admin, stage("Regional"))
+
+      assert Repo.get!(Cuevolution.Competitions.StageParticipation, participation.id).stage_id ==
+               stage("Grassroots").id
+    end
+
+    test "logs the advance in the admin action log" do
+      admin = insert(:admin, role: "tournament_director")
+      participation = insert(:stage_participation, stage_id: stage("Grassroots").id)
+
+      assert {:ok, updated} =
+               Competitions.advance_to_stage(participation, admin, stage("Regional"))
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          entity_id: updated.id,
+          action_type: "advance_to_stage"
+        )
+
+      assert log.admin_id == admin.id
+      assert log.new_value["stage_id"] == stage("Regional").id
     end
   end
 

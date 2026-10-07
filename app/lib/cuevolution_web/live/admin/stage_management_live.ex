@@ -9,6 +9,7 @@ defmodule CuevolutionWeb.StageManagementLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Accounts
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
@@ -31,6 +32,7 @@ defmodule CuevolutionWeb.StageManagementLive do
        stages: stages,
        regions: regions,
        categories: @categories,
+       can_advance?: Admin.can?(socket.assigns.current_admin, :advance_participants),
        stage: List.first(stages),
        next_stage: Competitions.next_stage(List.first(stages)),
        region: List.first(regions),
@@ -78,25 +80,33 @@ defmodule CuevolutionWeb.StageManagementLive do
   end
 
   def handle_event("advance", %{"id" => participation_id}, socket) do
-    participation = Enum.find(socket.assigns.participations, &(&1.id == participation_id))
-    target = Competitions.next_stage(socket.assigns.stage)
+    if socket.assigns.can_advance? do
+      participation = Enum.find(socket.assigns.participations, &(&1.id == participation_id))
+      target = Competitions.next_stage(socket.assigns.stage)
 
-    socket =
-      case target && Competitions.advance_to_stage(participation, target) do
-        nil ->
-          put_flash(socket, :error, "There is no stage after Finals.")
+      socket =
+        case target &&
+               Competitions.advance_to_stage(participation, socket.assigns.current_admin, target) do
+          nil ->
+            put_flash(socket, :error, "There is no stage after Finals.")
 
-        {:ok, _participation} ->
-          put_flash(socket, :info, "Advanced to #{target.name}.")
+          {:ok, _participation} ->
+            put_flash(socket, :info, "Advanced to #{target.name}.")
 
-        {:error, :capacity_exceeded} ->
-          put_flash(socket, :error, "#{target.name} is at capacity for this category.")
+          {:error, :capacity_exceeded} ->
+            put_flash(socket, :error, "#{target.name} is at capacity for this category.")
 
-        {:error, _changeset} ->
-          put_flash(socket, :error, "Couldn't advance — please try again.")
-      end
+          {:error, :unauthorized} ->
+            put_flash(socket, :error, "You don't have permission to advance participants.")
 
-    {:noreply, load_participations(socket)}
+          {:error, _changeset} ->
+            put_flash(socket, :error, "Couldn't advance — please try again.")
+        end
+
+      {:noreply, load_participations(socket)}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to advance participants.")}
+    end
   end
 
   def handle_event("edit_config", %{"id" => id}, socket) do

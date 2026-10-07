@@ -111,7 +111,7 @@
         </div>
         <PlayerComponents.stage_badge stage={@stage.name} />
         <button
-          :if={@next_stage}
+          :if={@next_stage && @can_advance?}
           type="button"
           phx-click="advance"
           phx-value-id={p.id}

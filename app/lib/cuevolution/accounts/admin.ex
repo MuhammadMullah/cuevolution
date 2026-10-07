@@ -21,6 +21,7 @@ defmodule Cuevolution.Accounts.Admin do
     approve_results: ["super_admin", "tournament_director"],
     manage_stages: ["super_admin", "tournament_director", "regional_coordinator"],
     manage_groups: ["super_admin", "tournament_director", "regional_coordinator"],
+    advance_participants: ["super_admin", "tournament_director"],
     view_groups: [
       "super_admin",
       "tournament_director",

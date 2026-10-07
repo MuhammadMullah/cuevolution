@@ -413,6 +413,8 @@ defmodule Cuevolution.Competitions do
 
   @doc """
   Moves `participation` to `target_stage` (spec 006 FR-002/FR-005/FR-006).
+  Restricted to `:advance_participants` (Tournament Director/Super Admin
+  only) and recorded in `AdminActionLog` on success.
 
   Atomically checks and increments the destination stage's capacity via a
   conditional `UPDATE ... WHERE current_count < capacity_limit` — closes
@@ -422,7 +424,19 @@ defmodule Cuevolution.Competitions do
   doesn't retroactively break existing participations — the conditional
   update only blocks *new* advancements going forward.
   """
-  def advance_to_stage(%StageParticipation{} = participation, %Stage{id: stage_id}) do
+  def advance_to_stage(%StageParticipation{} = participation, %Admin{} = admin, %Stage{
+        id: stage_id
+      }) do
+    if Admin.can?(admin, :advance_participants) do
+      do_advance_to_stage(participation, admin, stage_id)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_advance_to_stage(participation, admin, stage_id) do
+    prior_stage_id = participation.stage_id
+
     Multi.new()
     |> Multi.run(:eligibility_check, fn repo, _changes ->
       if eligible_for_tournament?(repo, participation),
@@ -434,6 +448,12 @@ defmodule Cuevolution.Competitions do
     end)
     |> Multi.update(:participation, fn _changes ->
       StageParticipation.changeset(participation, %{stage_id: stage_id})
+    end)
+    |> Multi.run(:log, fn _repo, %{participation: updated} ->
+      Accounts.log_admin_action("advance_to_stage", admin, updated,
+        prior_value: %{"stage_id" => prior_stage_id},
+        new_value: %{"stage_id" => stage_id}
+      )
     end)
     |> Repo.transaction()
     |> case do
@@ -2735,10 +2755,12 @@ defmodule Cuevolution.Competitions do
   @doc """
   Advances the reviewed top-N and best-of-rest qualifiers into the next
   stage — works for either round-robin group stage (Grassroots or Regional).
+  Restricted to `:advance_participants` (Tournament Director/Super Admin
+  only), same as `advance_to_stage/3` which this calls per qualifier.
   """
   def close_group_stage(stage_id, category, %Admin{} = admin, confirmed_ids)
       when is_list(confirmed_ids) do
-    with true <- Admin.can?(admin, :manage_groups),
+    with true <- Admin.can?(admin, :advance_participants),
          %Stage{name: name} = stage when name in ["Grassroots", "Regional"] <-
            Repo.get(Stage, stage_id),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
@@ -2756,7 +2778,7 @@ defmodule Cuevolution.Competitions do
              Enum.sort(Enum.map(expected, &to_string/1)) do
       participations = Repo.all(from sp in StageParticipation, where: sp.id in ^expected)
 
-      advance_qualifiers(participations, next_stage)
+      advance_qualifiers(participations, admin, next_stage)
     else
       false -> {:error, :unauthorized}
       nil -> {:error, :stage_not_found}
@@ -2765,9 +2787,9 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  defp advance_qualifiers(participations, next_stage) do
+  defp advance_qualifiers(participations, admin, next_stage) do
     Enum.reduce_while(participations, {:ok, []}, fn participation, {:ok, advanced} ->
-      case advance_to_stage(participation, next_stage) do
+      case advance_to_stage(participation, admin, next_stage) do
         {:ok, advanced_participation} -> {:cont, {:ok, [advanced_participation | advanced]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end

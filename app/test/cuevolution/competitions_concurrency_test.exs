@@ -8,7 +8,8 @@ defmodule Cuevolution.CompetitionsConcurrencyTest do
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
 
-  test "concurrent advance_to_stage/2 calls at the last remaining capacity slot: exactly one succeeds" do
+  test "concurrent advance_to_stage/3 calls at the last remaining capacity slot: exactly one succeeds" do
+    admin = insert(:admin, role: "super_admin")
     circuit = Repo.get_by!(Stage, name: "Circuit")
     finals = Repo.get_by!(Stage, name: "Finals")
     config = Repo.get_by!(StageCapacityConfig, stage_id: finals.id, category: "male")
@@ -24,7 +25,7 @@ defmodule Cuevolution.CompetitionsConcurrencyTest do
 
     results =
       participations
-      |> Task.async_stream(fn p -> Competitions.advance_to_stage(p, finals) end,
+      |> Task.async_stream(fn p -> Competitions.advance_to_stage(p, admin, finals) end,
         max_concurrency: 5,
         timeout: 5_000
       )

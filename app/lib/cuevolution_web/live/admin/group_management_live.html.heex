@@ -517,7 +517,7 @@
       </div>
 
       <button
-        :if={@can_manage_groups? and @qualifiers != []}
+        :if={@can_close_stage? and @qualifiers != []}
         type="button"
         phx-click="confirm_close"
         class="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
@@ -526,7 +526,7 @@
       </button>
 
       <div
-        :if={@confirm_close}
+        :if={@confirm_close and @can_close_stage?}
         class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-5"
       >
         <p class="font-semibold text-ink-950">

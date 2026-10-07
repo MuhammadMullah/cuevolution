@@ -65,6 +65,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
        current_admin: current_admin,
        venue_rep?: venue_rep?,
        can_manage_groups?: Admin.can?(current_admin, :manage_groups),
+       can_close_stage?: Admin.can?(current_admin, :advance_participants),
        stages: stages,
        regions: regions,
        categories: categories,
@@ -413,27 +414,36 @@ defmodule CuevolutionWeb.GroupManagementLive do
     end
   end
 
-  def handle_event("confirm_close", _params, socket),
-    do: {:noreply, assign(socket, :confirm_close, true)}
+  def handle_event("confirm_close", _params, socket) do
+    if socket.assigns.can_close_stage? do
+      {:noreply, assign(socket, :confirm_close, true)}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to close this stage.")}
+    end
+  end
 
   def handle_event("cancel_close", _params, socket),
     do: {:noreply, assign(socket, :confirm_close, false)}
 
   def handle_event("close_stage", _params, socket) do
-    ids = Enum.map(socket.assigns.qualifiers, & &1.participant_id)
+    if socket.assigns.can_close_stage? do
+      ids = Enum.map(socket.assigns.qualifiers, & &1.participant_id)
 
-    case Competitions.close_group_stage(
-           socket.assigns.stage.id,
-           socket.assigns.category,
-           socket.assigns.current_admin,
-           ids
-         ) do
-      {:ok, _} ->
-        {:noreply,
-         socket |> put_flash(:info, "Qualifiers advanced.") |> assign(:confirm_close, false)}
+      case Competitions.close_group_stage(
+             socket.assigns.stage.id,
+             socket.assigns.category,
+             socket.assigns.current_admin,
+             ids
+           ) do
+        {:ok, _} ->
+          {:noreply,
+           socket |> put_flash(:info, "Qualifiers advanced.") |> assign(:confirm_close, false)}
 
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Could not close stage: #{inspect(reason)}")}
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Could not close stage: #{inspect(reason)}")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to close this stage.")}
     end
   end
 
