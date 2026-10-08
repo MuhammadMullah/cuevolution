@@ -81,12 +81,14 @@ defmodule CuevolutionWeb.AdminResultsLive do
         approval_venues: approval_venues,
         approval_region_id: nil,
         approval_venue_id: nil,
+        approval_search: nil,
         approval_page: 1,
         approved_page: 1,
         selected_result_ids: MapSet.new(),
         unplayed_empty?: unplayed == [],
         played_empty?: played == []
       )
+      |> assign_approval_search_form()
       |> load_pending_results()
       |> load_approved_results()
       |> stream(:unplayed, unplayed)
@@ -121,6 +123,41 @@ defmodule CuevolutionWeb.AdminResultsLive do
      |> assign(:approval_page, 1)
      |> assign(:approved_page, 1)
      |> assign(:selected_result_ids, MapSet.new())
+     |> load_pending_results()
+     |> load_approved_results()}
+  end
+
+  def handle_event("clear_approval_filters", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:approval_venues, approval_venues_for_region(nil))
+     |> assign(:approval_region_id, nil)
+     |> assign(:approval_venue_id, nil)
+     |> assign(:approval_page, 1)
+     |> assign(:approved_page, 1)
+     |> assign(:selected_result_ids, MapSet.new())
+     |> load_pending_results()
+     |> load_approved_results()}
+  end
+
+  def handle_event("search_approval", %{"search" => %{"term" => term}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:approval_search, blank_to_nil(term))
+     |> assign(:approval_page, 1)
+     |> assign(:approved_page, 1)
+     |> assign_approval_search_form()
+     |> load_pending_results()
+     |> load_approved_results()}
+  end
+
+  def handle_event("clear_approval_search", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:approval_search, nil)
+     |> assign(:approval_page, 1)
+     |> assign(:approved_page, 1)
+     |> assign_approval_search_form()
      |> load_pending_results()
      |> load_approved_results()}
   end
@@ -476,16 +513,30 @@ defmodule CuevolutionWeb.AdminResultsLive do
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
 
+  defp assign_approval_search_form(socket) do
+    assign(
+      socket,
+      :approval_search_form,
+      to_form(%{"term" => socket.assigns.approval_search}, as: :search)
+    )
+  end
+
   defp load_pending_results(socket) do
     if socket.assigns.can_approve_results? do
-      %{approval_region_id: region_id, approval_venue_id: venue_id, approval_page: page} =
-        socket.assigns
+      %{
+        approval_region_id: region_id,
+        approval_venue_id: venue_id,
+        approval_search: search,
+        approval_page: page
+      } = socket.assigns
 
       per_page = Competitions.pending_results_per_page()
-      total_count = Competitions.count_pending_result_fixtures(region_id, venue_id)
+      total_count = Competitions.count_pending_result_fixtures(region_id, venue_id, search)
       total_pages = max(1, ceil(total_count / per_page))
       page = page |> max(1) |> min(total_pages)
-      pending_results = Competitions.list_pending_result_fixtures(region_id, venue_id, page)
+
+      pending_results =
+        Competitions.list_pending_result_fixtures(region_id, venue_id, page, search)
 
       socket
       |> assign(:approval_page, page)
@@ -508,14 +559,20 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
   defp load_approved_results(socket) do
     if socket.assigns.can_approve_results? do
-      %{approval_region_id: region_id, approval_venue_id: venue_id, approved_page: page} =
-        socket.assigns
+      %{
+        approval_region_id: region_id,
+        approval_venue_id: venue_id,
+        approval_search: search,
+        approved_page: page
+      } = socket.assigns
 
       per_page = Competitions.pending_results_per_page()
-      total_count = Competitions.count_approved_result_fixtures(region_id, venue_id)
+      total_count = Competitions.count_approved_result_fixtures(region_id, venue_id, search)
       total_pages = max(1, ceil(total_count / per_page))
       page = page |> max(1) |> min(total_pages)
-      approved_results = Competitions.list_approved_result_fixtures(region_id, venue_id, page)
+
+      approved_results =
+        Competitions.list_approved_result_fixtures(region_id, venue_id, page, search)
 
       socket
       |> assign(:approved_page, page)

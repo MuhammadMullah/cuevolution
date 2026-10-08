@@ -456,6 +456,77 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
              "verified"
   end
 
+  test "tournament director searches the approval queue by player username or name", %{
+    conn: conn
+  } do
+    findable_player = insert(:player, username: "findable-rep")
+    pa = insert(:stage_participation, player_id: findable_player.id)
+    findable_fixture = insert(:fixture, participant_a_id: pa.id)
+    other_fixture = insert(:fixture)
+    admin = insert(:admin)
+
+    {:ok, _result_a} =
+      Competitions.record_result(findable_fixture, admin, %{
+        "winner_participation_id" => pa.id
+      })
+
+    {:ok, _result_b} =
+      Competitions.record_result(other_fixture, admin, %{
+        "winner_participation_id" => other_fixture.participant_a_id
+      })
+
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    html =
+      view
+      |> form("#approval-search-form", %{"search" => %{"term" => "findable"}})
+      |> render_change()
+
+    assert html =~ "select-result-#{findable_fixture.id}"
+    refute html =~ "select-result-#{other_fixture.id}"
+
+    html = view |> element("button[phx-click='clear_approval_search']") |> render_click()
+
+    assert html =~ "select-result-#{other_fixture.id}"
+  end
+
+  test "the Clear filters button in the filters panel resets region/venue filters", %{
+    conn: conn
+  } do
+    region = build(:region)
+    venue = insert(:venue, region_id: region.id)
+    fixture = insert(:fixture, venue_id: venue.id)
+    other_fixture = insert(:fixture)
+    admin = insert(:admin)
+
+    {:ok, _result} =
+      Competitions.record_result(fixture, admin, %{
+        "winner_participation_id" => fixture.participant_a_id
+      })
+
+    {:ok, _other_result} =
+      Competitions.record_result(other_fixture, admin, %{
+        "winner_participation_id" => other_fixture.participant_a_id
+      })
+
+    director = insert(:admin, role: "tournament_director")
+    conn = log_in_admin(conn, id: director.id, role: director.role)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view
+    |> form("#result-approval-filters", %{"region_id" => region.id, "venue_id" => venue.id})
+    |> render_change()
+
+    refute render(view) =~ "select-result-#{other_fixture.id}"
+
+    html = view |> element("button[phx-click='clear_approval_filters']") |> render_click()
+
+    assert html =~ "select-result-#{fixture.id}"
+    assert html =~ "select-result-#{other_fixture.id}"
+  end
+
   test "the approval queue paginates when there are more pending results than one page",
        %{conn: conn} do
     admin = insert(:admin)

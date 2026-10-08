@@ -25,19 +25,127 @@
         <AdminComponents.eyebrow class="mb-1">Tournament director</AdminComponents.eyebrow>
         <h2 class="text-lg font-bold text-ink-950">Provisional results awaiting approval</h2>
         <p class="mt-1 text-sm text-ink-500">
-          Filter by region and venue, select one or more results, then approve them as final.
+          Search or filter, select one or more results, then approve them as final.
         </p>
       </div>
-      <button
-        :if={@approval_tab == "pending"}
-        id="approve-selected-results"
-        type="button"
-        phx-click="approve_selected_results"
-        disabled={MapSet.size(@selected_result_ids) == 0}
-        class="inline-flex min-h-10 w-full items-center justify-center rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-      >
-        Approve selected ({MapSet.size(@selected_result_ids)})
-      </button>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <form id="approval-search-form" phx-change="search_approval" class="relative">
+          <.icon
+            name="hero-magnifying-glass"
+            class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400"
+          />
+          <input
+            type="text"
+            name="search[term]"
+            value={@approval_search_form[:term].value}
+            phx-debounce="300"
+            placeholder="Search by player username or name"
+            class="w-56 rounded-full border border-ink-300 bg-white py-2 pl-9 pr-8 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          />
+          <button
+            :if={@approval_search}
+            type="button"
+            phx-click="clear_approval_search"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-950"
+            aria-label="Clear search"
+          >
+            <.icon name="hero-x-mark" class="size-4" />
+          </button>
+        </form>
+
+        <div
+          class="relative inline-block text-left"
+          id="approval-filters"
+          phx-click-away={JS.hide(to: "#approval-filters-panel")}
+        >
+          <button
+            type="button"
+            phx-click={JS.toggle(to: "#approval-filters-panel")}
+            class={[
+              "flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold",
+              (@approval_region_id || @approval_venue_id) && "border-ink-950 text-ink-950",
+              !(@approval_region_id || @approval_venue_id) &&
+                "border-ink-300 text-ink-700 hover:border-ink-950"
+            ]}
+          >
+            <.icon name="hero-funnel" class="size-4" /> Filters
+            <span
+              :if={@approval_region_id || @approval_venue_id}
+              class="ml-0.5 size-[7px] rounded-full bg-red-500"
+            />
+          </button>
+          <div
+            id="approval-filters-panel"
+            class="absolute right-0 top-10 z-10 hidden w-72 rounded-xl border border-ink-200 bg-white p-4 shadow-lg"
+          >
+            <form id="result-approval-filters" phx-change="filter_approval" class="space-y-3">
+              <div>
+                <label
+                  for="approval-region-filter"
+                  class="mb-1.5 block text-xs font-semibold text-ink-500"
+                >
+                  Region
+                </label>
+                <select
+                  id="approval-region-filter"
+                  name="region_id"
+                  class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                >
+                  <option value="">All regions</option>
+                  <option
+                    :for={region <- @approval_regions}
+                    value={region.id}
+                    selected={@approval_region_id == region.id}
+                  >
+                    {region.name}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label
+                  for="approval-venue-filter"
+                  class="mb-1.5 block text-xs font-semibold text-ink-500"
+                >
+                  Venue
+                </label>
+                <select
+                  id="approval-venue-filter"
+                  name="venue_id"
+                  class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                >
+                  <option value="">All venues</option>
+                  <option
+                    :for={venue <- @approval_venues}
+                    value={venue.id}
+                    selected={@approval_venue_id == venue.id}
+                  >
+                    {venue.name}
+                  </option>
+                </select>
+              </div>
+            </form>
+            <button
+              :if={@approval_region_id || @approval_venue_id}
+              type="button"
+              phx-click="clear_approval_filters"
+              class="mt-3 text-xs font-semibold text-ink-500 hover:text-ink-950"
+            >
+              Clear filters
+            </button>
+          </div>
+        </div>
+
+        <button
+          :if={@approval_tab == "pending"}
+          id="approve-selected-results"
+          type="button"
+          phx-click="approve_selected_results"
+          disabled={MapSet.size(@selected_result_ids) == 0}
+          class="inline-flex min-h-10 items-center justify-center rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Approve selected ({MapSet.size(@selected_result_ids)})
+        </button>
+      </div>
     </div>
 
     <div :if={@can_approve_results?} class="mb-4 flex gap-2 border-b border-ink-200">
@@ -66,55 +174,6 @@
         Approved
       </button>
     </div>
-
-    <form id="result-approval-filters" phx-change="filter_approval" class="mb-4">
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label
-            for="approval-region-filter"
-            class="mb-1.5 block text-sm font-semibold text-ink-800"
-          >
-            Region
-          </label>
-          <select
-            id="approval-region-filter"
-            name="region_id"
-            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-          >
-            <option value="">All regions</option>
-            <option
-              :for={region <- @approval_regions}
-              value={region.id}
-              selected={@approval_region_id == region.id}
-            >
-              {region.name}
-            </option>
-          </select>
-        </div>
-        <div>
-          <label
-            for="approval-venue-filter"
-            class="mb-1.5 block text-sm font-semibold text-ink-800"
-          >
-            Venue
-          </label>
-          <select
-            id="approval-venue-filter"
-            name="venue_id"
-            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
-          >
-            <option value="">All venues</option>
-            <option
-              :for={venue <- @approval_venues}
-              value={venue.id}
-              selected={@approval_venue_id == venue.id}
-            >
-              {venue.name}
-            </option>
-          </select>
-        </div>
-      </div>
-    </form>
 
     <div class={@approval_tab != "pending" && "hidden"}>
       <p class="mb-3 text-sm text-ink-500">

@@ -1396,4 +1396,87 @@ defmodule Cuevolution.CompetitionsTest do
       assert %{moved: 0, skipped_drawn: 1} = Competitions.migrate_regional_start_enrollments()
     end
   end
+
+  describe "list_pending_result_fixtures/4 and count_pending_result_fixtures/3 (search)" do
+    test "matches by participant_a's player username" do
+      player = insert(:player, username: "findable-rep", first_name: "Alpha", last_name: "One")
+      pa = insert(:stage_participation, player_id: player.id)
+      fixture = insert(:fixture, participant_a_id: pa.id)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{"winner_participation_id" => pa.id})
+
+      other = insert(:fixture)
+
+      {:ok, _other_result} =
+        Competitions.record_result(other, admin, %{
+          "winner_participation_id" => other.participant_a_id
+        })
+
+      assert Competitions.list_pending_result_fixtures(nil, nil, 1, "findable")
+             |> Enum.map(& &1.id) == [fixture.id]
+
+      assert Competitions.count_pending_result_fixtures(nil, nil, "findable") == 1
+    end
+
+    test "matches by participant_b's player first or last name, case-insensitively" do
+      player = insert(:player, first_name: "Zanele", last_name: "Mbatha")
+      pb = insert(:stage_participation, player_id: player.id)
+      fixture = insert(:fixture, participant_b_id: pb.id)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{"winner_participation_id" => pb.id})
+
+      assert Competitions.list_pending_result_fixtures(nil, nil, 1, "zanele")
+             |> Enum.map(& &1.id) == [fixture.id]
+
+      assert Competitions.list_pending_result_fixtures(nil, nil, 1, "MBATHA")
+             |> Enum.map(& &1.id) == [fixture.id]
+    end
+
+    test "a search term matching nobody returns no results, not an error" do
+      fixture = insert(:fixture)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      assert Competitions.list_pending_result_fixtures(nil, nil, 1, "no-such-player") == []
+      assert Competitions.count_pending_result_fixtures(nil, nil, "no-such-player") == 0
+    end
+
+    test "search also narrows the approved results list and count" do
+      player = insert(:player, username: "verified-rep")
+      pa = insert(:stage_participation, player_id: player.id)
+      fixture = insert(:fixture, participant_a_id: pa.id)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{"winner_participation_id" => pa.id})
+
+      {:ok, _verified} = Competitions.verify_result(Repo.reload(fixture), admin)
+
+      assert Competitions.list_approved_result_fixtures(nil, nil, 1, "verified-rep")
+             |> Enum.map(& &1.id) == [fixture.id]
+
+      assert Competitions.count_approved_result_fixtures(nil, nil, "verified-rep") == 1
+    end
+
+    test "a blank search term is the same as no search" do
+      fixture = insert(:fixture)
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id
+        })
+
+      assert Competitions.count_pending_result_fixtures(nil, nil, "") ==
+               Competitions.count_pending_result_fixtures(nil, nil)
+    end
+  end
 end

@@ -3083,10 +3083,14 @@ defmodule Cuevolution.Competitions do
   @doc "How many provisional results are shown per page in the approval queue."
   def pending_results_per_page, do: @pending_results_per_page
 
-  @doc "Provisional result fixtures, optionally filtered by region and venue, one page at a time."
-  def list_pending_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1) do
+  @doc """
+  Provisional result fixtures, optionally filtered by region, venue, and a
+  `search` term matched against either participant's player username or
+  name, one page at a time.
+  """
+  def list_pending_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1, search \\ nil) do
     Fixture
-    |> pending_results_query(region_id, venue_id)
+    |> pending_results_query(region_id, venue_id, search)
     |> order_by([f, _r, _g, _v], asc: f.scheduled_at, asc: f.inserted_at)
     |> limit(^@pending_results_per_page)
     |> offset(^((max(page, 1) - 1) * @pending_results_per_page))
@@ -3099,10 +3103,10 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
-  @doc "Total count of provisional results matching the same region/venue filters, for pagination."
-  def count_pending_result_fixtures(region_id \\ nil, venue_id \\ nil) do
+  @doc "Total count of provisional results matching the same filters, for pagination."
+  def count_pending_result_fixtures(region_id \\ nil, venue_id \\ nil, search \\ nil) do
     Fixture
-    |> pending_results_query(region_id, venue_id)
+    |> pending_results_query(region_id, venue_id, search)
     |> Repo.aggregate(:count, :id)
   end
 
@@ -3111,9 +3115,9 @@ defmodule Cuevolution.Competitions do
   venue, one page at a time — the Super Admin-only "Approved" view used to
   edit a result after it has already been finalized.
   """
-  def list_approved_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1) do
+  def list_approved_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1, search \\ nil) do
     Fixture
-    |> approved_results_query(region_id, venue_id)
+    |> approved_results_query(region_id, venue_id, search)
     |> order_by([f, _r, _g, _v], desc: f.scheduled_at, desc: f.inserted_at)
     |> limit(^@pending_results_per_page)
     |> offset(^((max(page, 1) - 1) * @pending_results_per_page))
@@ -3126,22 +3130,22 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
-  @doc "Total count of approved results matching the same region/venue filters, for pagination."
-  def count_approved_result_fixtures(region_id \\ nil, venue_id \\ nil) do
+  @doc "Total count of approved results matching the same filters, for pagination."
+  def count_approved_result_fixtures(region_id \\ nil, venue_id \\ nil, search \\ nil) do
     Fixture
-    |> approved_results_query(region_id, venue_id)
+    |> approved_results_query(region_id, venue_id, search)
     |> Repo.aggregate(:count, :id)
   end
 
-  defp pending_results_query(query, region_id, venue_id) do
-    results_by_status_query(query, "completed", region_id, venue_id)
+  defp pending_results_query(query, region_id, venue_id, search) do
+    results_by_status_query(query, "completed", region_id, venue_id, search)
   end
 
-  defp approved_results_query(query, region_id, venue_id) do
-    results_by_status_query(query, "verified", region_id, venue_id)
+  defp approved_results_query(query, region_id, venue_id, search) do
+    results_by_status_query(query, "verified", region_id, venue_id, search)
   end
 
-  defp results_by_status_query(query, status, region_id, venue_id) do
+  defp results_by_status_query(query, status, region_id, venue_id, search) do
     query
     |> join(:left, [f], r in Round, on: r.id == f.round_id)
     |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
@@ -3149,6 +3153,7 @@ defmodule Cuevolution.Competitions do
     |> where([f, _r, _g, _v], f.status == ^status and not is_nil(f.result_id))
     |> filter_pending_results_by_region(region_id)
     |> filter_pending_results_by_venue(venue_id)
+    |> filter_results_by_player_search(search)
   end
 
   @doc "Approves a set of provisional results atomically for a results approver."
@@ -3195,6 +3200,24 @@ defmodule Cuevolution.Competitions do
 
   defp filter_pending_results_by_venue(query, venue_id) do
     where(query, [f, _r, g, _v], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
+  end
+
+  defp filter_results_by_player_search(query, term) when term in [nil, ""], do: query
+
+  defp filter_results_by_player_search(query, term) do
+    pattern = "%#{term}%"
+
+    query
+    |> join(:left, [f, ...], pa in assoc(f, :participant_a), as: :participant_a)
+    |> join(:left, [participant_a: pa], pap in assoc(pa, :player), as: :participant_a_player)
+    |> join(:left, [f, ...], pb in assoc(f, :participant_b), as: :participant_b)
+    |> join(:left, [participant_b: pb], pbp in assoc(pb, :player), as: :participant_b_player)
+    |> where(
+      [participant_a_player: pap, participant_b_player: pbp],
+      ilike(pap.username, ^pattern) or ilike(pap.first_name, ^pattern) or
+        ilike(pap.last_name, ^pattern) or ilike(pbp.username, ^pattern) or
+        ilike(pbp.first_name, ^pattern) or ilike(pbp.last_name, ^pattern)
+    )
   end
 
   defp fixture_accessible_to_admin?(fixture_id, %Admin{} = admin) do
