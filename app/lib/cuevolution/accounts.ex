@@ -143,6 +143,9 @@ defmodule Cuevolution.Accounts do
 
     * `:status` — one of `"active"`, `"invited"`, `"revoked"`, `"suspended"`
     * `:role` — one of `Admin.roles/0`
+    * `:search` — case-insensitive substring match against email, mobile
+      number, or assigned venue name (no `name` field exists on `Admin` —
+      email is the closest identifying text today)
     * `:limit` / `:offset` — for pagination
 
   Always excludes removed admins.
@@ -152,6 +155,7 @@ defmodule Cuevolution.Accounts do
     |> admins_base_query()
     |> filter_admins_by_status(opts[:status])
     |> filter_admins_by_role(opts[:role])
+    |> filter_admins_by_search(opts[:search])
     |> order_by([a], desc: a.inserted_at)
     |> limit_offset(opts[:limit], opts[:offset])
     |> preload([:venue, :region])
@@ -164,6 +168,7 @@ defmodule Cuevolution.Accounts do
     |> admins_base_query()
     |> filter_admins_by_status(opts[:status])
     |> filter_admins_by_role(opts[:role])
+    |> filter_admins_by_search(opts[:search])
     |> Repo.aggregate(:count)
   end
 
@@ -189,6 +194,19 @@ defmodule Cuevolution.Accounts do
 
   defp filter_admins_by_role(query, role) when role in [nil, ""], do: query
   defp filter_admins_by_role(query, role), do: where(query, [a], a.role == ^role)
+
+  defp filter_admins_by_search(query, term) when term in [nil, ""], do: query
+
+  defp filter_admins_by_search(query, term) do
+    pattern = "%#{term}%"
+
+    query
+    |> join(:left, [a], v in assoc(a, :venue), as: :venue)
+    |> where(
+      [a, venue: v],
+      ilike(a.email, ^pattern) or ilike(a.mobile_number, ^pattern) or ilike(v.name, ^pattern)
+    )
+  end
 
   defp limit_offset(query, nil, _offset), do: query
 

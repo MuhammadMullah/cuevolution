@@ -37,10 +37,12 @@ defmodule CuevolutionWeb.AdminManagementLive do
        filter_role_options: Enum.map(Admin.roles(), &{Admin.role_label(&1), &1}),
        status_filter: nil,
        role_filter: nil,
+       search_filter: nil,
        page: 1
      )
      |> assign_form(Admin.invite_changeset(%Admin{}, %{}))
      |> assign_filter_form()
+     |> assign_search_form()
      |> load_admins()}
   end
 
@@ -118,6 +120,24 @@ defmodule CuevolutionWeb.AdminManagementLive do
      |> assign(:role_filter, nil)
      |> assign(:page, 1)
      |> assign_filter_form()
+     |> load_admins()}
+  end
+
+  def handle_event("search", %{"search" => %{"term" => term}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:search_filter, blank_to_nil(term))
+     |> assign(:page, 1)
+     |> assign_search_form()
+     |> load_admins()}
+  end
+
+  def handle_event("clear_search", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:search_filter, nil)
+     |> assign(:page, 1)
+     |> assign_search_form()
      |> load_admins()}
   end
 
@@ -254,8 +274,10 @@ defmodule CuevolutionWeb.AdminManagementLive do
   end
 
   defp load_admins(socket) do
-    %{status_filter: status, role_filter: role, page: page} = socket.assigns
-    filter_opts = %{status: status, role: role}
+    %{status_filter: status, role_filter: role, search_filter: search, page: page} =
+      socket.assigns
+
+    filter_opts = %{status: status, role: role, search: search}
     total_count = Accounts.count_admins(filter_opts)
     total_pages = max(1, ceil(total_count / @page_size))
     page = min(page, total_pages)
@@ -271,6 +293,14 @@ defmodule CuevolutionWeb.AdminManagementLive do
   defp assign_filter_form(socket) do
     params = %{"status" => socket.assigns.status_filter, "role" => socket.assigns.role_filter}
     assign(socket, :filter_form, to_form(params, as: :filter))
+  end
+
+  defp assign_search_form(socket) do
+    assign(
+      socket,
+      :search_form,
+      to_form(%{"term" => socket.assigns.search_filter}, as: :search)
+    )
   end
 
   defp blank_to_nil(nil), do: nil

@@ -244,6 +244,42 @@ defmodule Cuevolution.AccountsTest do
       assert Accounts.list_admins(%{limit: 2, offset: 2}) |> Enum.map(& &1.id) == [first.id]
       assert Accounts.count_admins() >= 3
     end
+
+    test "search matches by email, case-insensitively and as a substring" do
+      match = insert(:admin, email: "loyford.somi@cuevolution.test")
+      insert(:admin, email: "someone-else@cuevolution.test")
+
+      assert Accounts.list_admins(%{search: "LOYFORD"}) |> Enum.map(& &1.id) == [match.id]
+      assert Accounts.count_admins(%{search: "LOYFORD"}) == 1
+    end
+
+    test "search matches by mobile number" do
+      match = insert(:admin, mobile_number: "+254712999184")
+      insert(:admin, mobile_number: "+254700000000")
+
+      assert Accounts.list_admins(%{search: "999184"}) |> Enum.map(& &1.id) == [match.id]
+    end
+
+    test "search matches by assigned venue name" do
+      venue = insert(:venue, name: "Gee spot")
+      match = insert(:admin, role: "venue_representative", venue_id: venue.id)
+      insert(:admin, role: "venue_representative", venue_id: insert(:venue, name: "Other").id)
+
+      assert Accounts.list_admins(%{search: "gee"}) |> Enum.map(& &1.id) == [match.id]
+    end
+
+    test "search returns nothing for an admin with no venue assigned, not an error" do
+      insert(:admin, role: "regional_coordinator", venue_id: nil)
+
+      assert Accounts.list_admins(%{search: "nonexistent-term"}) == []
+    end
+
+    test "a blank search term is the same as no search" do
+      insert(:admin)
+      insert(:admin)
+
+      assert Accounts.count_admins(%{search: ""}) == Accounts.count_admins()
+    end
   end
 
   describe "revoke_invite/2 and resend_invite/3" do

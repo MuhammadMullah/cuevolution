@@ -225,6 +225,59 @@ defmodule CuevolutionWeb.AdminManagementLiveTest do
     refute html =~ rep.email
   end
 
+  test "searches the list by mobile number, venue name, or email", %{conn: conn} do
+    conn = log_in_admin(conn, insert(:admin, role: "super_admin"))
+    venue = insert(:venue, name: "Gee spot")
+
+    by_phone =
+      insert(:admin, role: "venue_representative", mobile_number: "+254712999184")
+
+    by_venue = insert(:admin, role: "venue_representative", venue_id: venue.id)
+    by_email = insert(:admin, email: "findme-by-email@cuevolution.test")
+    unrelated = insert(:admin, role: "venue_representative")
+
+    {:ok, view, _html} = live(conn, ~p"/admin/admins")
+
+    html =
+      view
+      |> form("#admin-search-form", %{"search" => %{"term" => "999184"}})
+      |> render_change()
+
+    assert html =~ by_phone.email
+    refute html =~ unrelated.email
+
+    html =
+      view
+      |> form("#admin-search-form", %{"search" => %{"term" => "gee"}})
+      |> render_change()
+
+    assert html =~ by_venue.email
+    refute html =~ unrelated.email
+
+    html =
+      view
+      |> form("#admin-search-form", %{"search" => %{"term" => "findme-by-email"}})
+      |> render_change()
+
+    assert html =~ by_email.email
+    refute html =~ unrelated.email
+  end
+
+  test "clearing the search box restores the full list", %{conn: conn} do
+    conn = log_in_admin(conn, insert(:admin, role: "super_admin"))
+    rep = insert(:admin, role: "venue_representative")
+
+    {:ok, view, _html} = live(conn, ~p"/admin/admins")
+
+    view
+    |> form("#admin-search-form", %{"search" => %{"term" => "no-such-term"}})
+    |> render_change()
+
+    html = view |> element("button[phx-click='clear_search']") |> render_click()
+
+    assert html =~ rep.email
+  end
+
   test "clearing filters restores the full list", %{conn: conn} do
     conn = log_in_admin(conn, insert(:admin, role: "super_admin"))
     rep = insert(:admin, role: "venue_representative")

@@ -5,6 +5,29 @@
       Admins
     </h1>
     <div class="flex items-center gap-2.5">
+      <form id="admin-search-form" phx-change="search" class="relative">
+        <.icon
+          name="hero-magnifying-glass"
+          class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400"
+        />
+        <input
+          type="text"
+          name="search[term]"
+          value={@search_form[:term].value}
+          phx-debounce="300"
+          placeholder="Search mobile, venue, or email"
+          class="w-56 rounded-full border border-ink-300 bg-white py-2 pl-9 pr-8 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+        />
+        <button
+          :if={@search_filter}
+          type="button"
+          phx-click="clear_search"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-950"
+          aria-label="Clear search"
+        >
+          <.icon name="hero-x-mark" class="size-4" />
+        </button>
+      </form>
       <div
         class="relative inline-block text-left"
         id="admin-filters"
@@ -350,7 +373,7 @@
     :if={@admins == []}
     class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    {if @status_filter || @role_filter,
+    {if @status_filter || @role_filter || @search_filter,
       do: "No admins match these filters.",
       else: "No admins yet."}
   </div>
