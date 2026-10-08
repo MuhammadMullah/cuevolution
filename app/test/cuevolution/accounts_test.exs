@@ -1380,6 +1380,99 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "reset_pending_admins_with_temporary_password/2" do
+    test "deletes and recreates every pending admin of the given role, keeping their data" do
+      venue = insert(:venue)
+
+      invited =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          email: "invited@gmail.com",
+          venue_id: venue.id,
+          mobile_number: "0712345671"
+        )
+
+      revoked =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          email: "revoked@gmail.com",
+          venue_id: venue.id,
+          mobile_number: "0712345672",
+          invite_revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      report =
+        Accounts.reset_pending_admins_with_temporary_password(
+          "venue_representative",
+          "VenueRep@26"
+        )
+
+      assert Enum.sort(report) == [reset: "invited@gmail.com", reset: "revoked@gmail.com"]
+      refute Repo.get(Admin, invited.id)
+      refute Repo.get(Admin, revoked.id)
+
+      recreated_invited = Repo.get_by!(Admin, email: "invited@gmail.com")
+      assert recreated_invited.venue_id == venue.id
+      assert recreated_invited.mobile_number == "+254712345671"
+      assert recreated_invited.must_change_password
+      refute Admin.pending?(recreated_invited)
+      assert {:ok, _} = Accounts.authenticate_admin("invited@gmail.com", "VenueRep@26")
+
+      recreated_revoked = Repo.get_by!(Admin, email: "revoked@gmail.com")
+      refute Admin.invite_revoked?(recreated_revoked)
+    end
+
+    test "leaves an already-active admin of the given role untouched" do
+      active =
+        insert(:admin,
+          role: "venue_representative",
+          email: "active@gmail.com",
+          hashed_password: Bcrypt.hash_pwd_salt("TheirOwnPass@1")
+        )
+
+      assert Accounts.reset_pending_admins_with_temporary_password(
+               "venue_representative",
+               "VenueRep@26"
+             ) ==
+               []
+
+      unchanged = Repo.get!(Admin, active.id)
+      assert unchanged.hashed_password == active.hashed_password
+    end
+
+    test "leaves a pending admin of a different role untouched" do
+      pending = insert(:admin, hashed_password: nil, role: "regional_coordinator")
+
+      assert Accounts.reset_pending_admins_with_temporary_password(
+               "venue_representative",
+               "VenueRep@26"
+             ) ==
+               []
+
+      assert Repo.get(Admin, pending.id)
+    end
+
+    test "rolls back the delete when the recreate is rejected, leaving the original untouched" do
+      pending =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          email: "conflict@gmail.com"
+        )
+
+      report =
+        Accounts.reset_pending_admins_with_temporary_password(
+          "venue_representative",
+          "weak"
+        )
+
+      assert [{:failed, {"conflict@gmail.com", _changeset}}] = report
+      assert Repo.get(Admin, pending.id)
+    end
+  end
+
   describe "change_own_password/2" do
     test "updates the password and clears must_change_password" do
       admin =

@@ -3,6 +3,7 @@ defmodule Cuevolution.Release do
   Used for executing DB release tasks when run in production without Mix
   installed.
   """
+  alias Cuevolution.Accounts
   alias Cuevolution.Seeds.RegionalCoordinators
   alias Cuevolution.Seeds.VenueRepresentatives
 
@@ -171,6 +172,66 @@ defmodule Cuevolution.Release do
     {:ok, _} = Application.ensure_all_started(@app)
 
     RegionalCoordinators.run_direct()
+
+    :ok
+  end
+
+  @doc """
+  One-off: recovers every venue rep stuck pending (invited or
+  invite-revoked, never completed their own setup) because of unreliable
+  invite emails — deletes each one and reinserts them under the same
+  email, keeping their existing role/region/venue/mobile_number, but with
+  the password set directly to the shared temporary password instead of
+  the broken invite link (see `Accounts.reset_pending_admins_with_temporary_password/2`).
+  Never touches an already-active admin. Safe to re-run — anyone already
+  reset (now active) is simply skipped on a later run. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.reset_pending_venue_reps()'
+  """
+  def reset_pending_venue_reps do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    report =
+      Accounts.reset_pending_admins_with_temporary_password("venue_representative", "VenueRep@26")
+
+    reset_count = Enum.count(report, &match?({:reset, _}, &1))
+    failed = Enum.filter(report, &match?({:failed, _}, &1))
+
+    IO.puts("Reset #{reset_count} pending venue rep(s) to the shared temporary password.")
+
+    for {:failed, {email, changeset}} <- failed do
+      IO.puts(:stderr, "FAILED #{email}: #{inspect(changeset.errors)}")
+    end
+
+    :ok
+  end
+
+  @doc """
+  Same as `reset_pending_venue_reps/0`, but for regional coordinators. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.reset_pending_regional_coordinators()'
+  """
+  def reset_pending_regional_coordinators do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    report =
+      Accounts.reset_pending_admins_with_temporary_password(
+        "regional_coordinator",
+        "RegionCoord@26"
+      )
+
+    reset_count = Enum.count(report, &match?({:reset, _}, &1))
+    failed = Enum.filter(report, &match?({:failed, _}, &1))
+
+    IO.puts(
+      "Reset #{reset_count} pending regional coordinator(s) to the shared temporary password."
+    )
+
+    for {:failed, {email, changeset}} <- failed do
+      IO.puts(:stderr, "FAILED #{email}: #{inspect(changeset.errors)}")
+    end
 
     :ok
   end

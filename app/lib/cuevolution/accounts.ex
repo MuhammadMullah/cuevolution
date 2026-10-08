@@ -252,6 +252,53 @@ defmodule Cuevolution.Accounts do
   defp tag_result({:error, changeset}, _tag), do: {:error, changeset}
 
   @doc """
+  Resurrects every `role` admin whose invite never got activated — status
+  "Invited" or "Invite revoked" in the admin-management UI, both meaning
+  `hashed_password: nil` (see `AdminManagementLive.status_label/1`) — a
+  dead end from unreliable invite emails. Each one is deleted entirely and
+  reinserted under the same email, keeping its existing role/region/venue/
+  mobile_number, but with `password` set directly to `temporary_password`
+  (same shared password for everyone this touches) instead of a broken
+  invite link. Delete+reinsert happens in one transaction per admin, so a
+  rejected recreate (e.g. a stale `mobile_number` colliding with a
+  different, already-active admin) rolls back and leaves that one admin
+  untouched rather than losing their record. Never touches an
+  already-active admin.
+
+  Returns a report of `{:reset, email} | {:failed, {email, errors}}`.
+  """
+  def reset_pending_admins_with_temporary_password(role, temporary_password) do
+    Admin
+    |> where([a], a.role == ^role and is_nil(a.hashed_password))
+    |> Repo.all()
+    |> Enum.map(&reset_one_pending_admin(&1, temporary_password))
+  end
+
+  defp reset_one_pending_admin(%Admin{} = admin, temporary_password) do
+    attrs = %{
+      "email" => admin.email,
+      "role" => admin.role,
+      "region_id" => admin.region_id,
+      "venue_id" => admin.venue_id,
+      "mobile_number" => admin.mobile_number,
+      "password" => temporary_password
+    }
+
+    Repo.transaction(fn ->
+      Repo.delete!(admin)
+
+      case %Admin{} |> Admin.temporary_password_changeset(attrs) |> Repo.insert() do
+        {:ok, recreated} -> recreated
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+    |> case do
+      {:ok, recreated} -> {:reset, recreated.email}
+      {:error, changeset} -> {:failed, {admin.email, changeset}}
+    end
+  end
+
+  @doc """
   Lets a logged-in admin set their own new password — used by the forced
   password-change modal triggered by `must_change_password: true` (see
   `CuevolutionWeb.AdminAuth.on_mount/4`).
