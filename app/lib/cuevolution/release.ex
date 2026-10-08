@@ -3,6 +3,7 @@ defmodule Cuevolution.Release do
   Used for executing DB release tasks when run in production without Mix
   installed.
   """
+  alias Cuevolution.Seeds.RegionalCoordinators
   alias Cuevolution.Seeds.VenueRepresentatives
 
   @app :cuevolution
@@ -151,6 +152,25 @@ defmodule Cuevolution.Release do
     {:ok, _} = Application.ensure_all_started(@app)
 
     VenueRepresentatives.run_central_region_direct()
+
+    :ok
+  end
+
+  @doc """
+  One-off: creates/overrides regional coordinators directly with a shared
+  temporary password instead of an email invite — see
+  `Cuevolution.Seeds.RegionalCoordinators.run_direct/0` for the
+  override/skip rules (only ever overrides an admin still pending; never
+  touches one who's already active). Safe to re-run — already-active
+  accounts from a prior run are just skipped. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.seed_regional_coordinators_direct()'
+  """
+  def seed_regional_coordinators_direct do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    RegionalCoordinators.run_direct()
 
     :ok
   end

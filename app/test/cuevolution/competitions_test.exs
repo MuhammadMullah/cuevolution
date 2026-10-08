@@ -786,6 +786,35 @@ defmodule Cuevolution.CompetitionsTest do
       assert Repo.get!(Fixture, fixture.id).result_id == result.id
     end
 
+    test "a regional coordinator can record a result at any venue in their own region" do
+      region = build(:region)
+      venue = insert(:venue, region_id: region.id)
+      fixture = insert(:fixture, venue_id: venue.id)
+      coordinator = insert(:admin, role: "regional_coordinator", region_id: region.id)
+
+      assert {:ok, result} =
+               Competitions.record_result(fixture, coordinator, %{
+                 "winner_participation_id" => fixture.participant_a_id
+               })
+
+      assert result.fixture_id == fixture.id
+    end
+
+    test "a regional coordinator cannot record a result at a venue outside their region" do
+      coordinator_region = Repo.get_by!(Cuevolution.Accounts.Region, name: "Central")
+      other_region = Repo.get_by!(Cuevolution.Accounts.Region, name: "Eastern")
+      coordinator = insert(:admin, role: "regional_coordinator", region_id: coordinator_region.id)
+      other_venue = insert(:venue, region_id: other_region.id)
+      fixture = insert(:fixture, venue_id: other_venue.id)
+
+      assert {:error, :unauthorized} =
+               Competitions.record_result(fixture, coordinator, %{
+                 "winner_participation_id" => fixture.participant_a_id
+               })
+
+      refute Repo.get!(Fixture, fixture.id).result_id
+    end
+
     test "rejects a duplicate result for the same fixture" do
       fixture = insert(:fixture)
       admin = insert(:admin)
