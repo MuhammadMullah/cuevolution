@@ -162,6 +162,60 @@ defmodule CuevolutionWeb.AdminComponents do
       <main class="min-w-0 flex-1 p-[18px] sm:p-6 lg:p-9">
         {render_slot(@inner_block)}
       </main>
+
+      <.force_password_change_modal :if={@current_admin.must_change_password} />
+    </div>
+    """
+  end
+
+  # No close button, no click-away — intentionally non-dismissable, since
+  # every account this applies to shares the same known temporary password
+  # (see Cuevolution.Seeds.VenueRepresentatives) until it's changed. Handled
+  # by CuevolutionWeb.AdminAuth's `:force_password_change` hook, attached to
+  # every admin LiveView mount, not by this module — see
+  # `AdminAuth.on_mount/4`.
+  defp force_password_change_modal(assigns) do
+    ~H"""
+    <div class="fixed inset-0 z-[60] flex items-center justify-center bg-ink-950/70 px-4">
+      <div class="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="mb-1.5 text-[18px] font-bold text-ink-950">Set a new password</h2>
+        <p class="mb-5 text-sm text-ink-500">
+          Your account was created with a temporary password. Choose a new one to continue.
+        </p>
+        <.form
+          for={to_form(%{}, as: :admin)}
+          phx-submit="change_forced_password"
+          class="flex flex-col gap-3"
+        >
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-ink-500">New password</label>
+            <input
+              type="password"
+              name="admin[password]"
+              required
+              class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-ink-500">Confirm password</label>
+            <input
+              type="password"
+              name="admin[password_confirmation]"
+              required
+              class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+            />
+          </div>
+          <p class="text-xs text-ink-400">
+            8–15 characters, with an uppercase letter, a number, and a special character.
+          </p>
+          <button
+            type="submit"
+            class="mt-1.5 rounded-full bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink-900"
+          >
+            Update password
+          </button>
+        </.form>
+      </div>
     </div>
     """
   end

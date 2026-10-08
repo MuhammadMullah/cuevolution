@@ -25,6 +25,72 @@ defmodule CuevolutionWeb.AdminDashboardLiveTest do
     assert html =~ "Pipeline by stage"
   end
 
+  describe "forced password change" do
+    test "an admin without must_change_password never sees the modal", %{conn: conn} do
+      admin = insert(:admin, must_change_password: false)
+      token = Accounts.generate_admin_session_token(admin)
+      conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+
+      {:ok, _view, html} = live(conn, ~p"/admin/dashboard")
+
+      refute html =~ "Set a new password"
+    end
+
+    test "an admin with must_change_password sees a modal, and changing the password clears it",
+         %{conn: conn} do
+      admin =
+        insert(:admin,
+          hashed_password: Bcrypt.hash_pwd_salt("TempPass@26"),
+          must_change_password: true
+        )
+
+      token = Accounts.generate_admin_session_token(admin)
+      conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+
+      {:ok, view, html} = live(conn, ~p"/admin/dashboard")
+      assert html =~ "Set a new password"
+
+      html =
+        view
+        |> form("form[phx-submit='change_forced_password']", %{
+          "admin" => %{"password" => "BrandNew@1", "password_confirmation" => "BrandNew@1"}
+        })
+        |> render_submit()
+
+      refute html =~ "Set a new password"
+      assert html =~ "Password updated."
+
+      updated = Cuevolution.Repo.get!(Cuevolution.Accounts.Admin, admin.id)
+      refute updated.must_change_password
+      assert {:ok, _} = Accounts.authenticate_admin(admin.email, "BrandNew@1")
+    end
+
+    test "a mismatched confirmation keeps the modal up with an error flash", %{conn: conn} do
+      admin =
+        insert(:admin,
+          hashed_password: Bcrypt.hash_pwd_salt("TempPass@26"),
+          must_change_password: true
+        )
+
+      token = Accounts.generate_admin_session_token(admin)
+      conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/dashboard")
+
+      html =
+        view
+        |> form("form[phx-submit='change_forced_password']", %{
+          "admin" => %{"password" => "BrandNew@1", "password_confirmation" => "Different@1"}
+        })
+        |> render_submit()
+
+      assert html =~ "Set a new password"
+      assert html =~ "does not match"
+
+      assert Cuevolution.Repo.get!(Cuevolution.Accounts.Admin, admin.id).must_change_password
+    end
+  end
+
   test "clicking a region chart row opens its directory filter", %{conn: conn} do
     admin = insert(:admin)
     region = Cuevolution.Repo.get_by!(Cuevolution.Accounts.Region, slug: "nairobi-a")

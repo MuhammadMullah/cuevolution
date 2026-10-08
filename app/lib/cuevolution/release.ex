@@ -3,6 +3,8 @@ defmodule Cuevolution.Release do
   Used for executing DB release tasks when run in production without Mix
   installed.
   """
+  alias Cuevolution.Seeds.VenueRepresentatives
+
   @app :cuevolution
 
   def migrate do
@@ -130,6 +132,25 @@ defmodule Cuevolution.Release do
     IO.puts(
       "#{remaining} still failed/stuck — run again once you're sure there's send quota left."
     )
+
+    :ok
+  end
+
+  @doc """
+  One-off: creates/overrides the Central-region venue reps directly with a
+  shared temporary password instead of an email invite — see
+  `Cuevolution.Seeds.VenueRepresentatives.run_central_region_direct/0` for
+  the override/skip rules (only ever overrides an admin still pending;
+  never touches one who's already active). Safe to re-run — already-active
+  accounts from a prior run are just skipped. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.seed_central_region_venue_reps()'
+  """
+  def seed_central_region_venue_reps do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    VenueRepresentatives.run_central_region_direct()
 
     :ok
   end

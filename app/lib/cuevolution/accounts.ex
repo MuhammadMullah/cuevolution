@@ -197,6 +197,54 @@ defmodule Cuevolution.Accounts do
   end
 
   @doc """
+  Creates an admin directly with a known temporary password, no invite
+  email involved — or, if an admin with that email already exists and is
+  still pending (`Admin.pending?/1`), overrides them with the new role/
+  scope/password instead of creating a duplicate. An admin who has already
+  completed setup is left completely untouched, even if their email
+  appears in the input: returns `{:error, :already_active}` rather than
+  silently resetting a live account's password.
+
+  For one-off seed scripts (see `Cuevolution.Seeds.VenueRepresentatives`)
+  used when email delivery can't be relied on to get an account working.
+  """
+  def create_or_reset_pending_admin(attrs) do
+    email = attrs["email"] || attrs[:email]
+
+    case Repo.get_by(Admin, email: email) do
+      nil ->
+        %Admin{}
+        |> Admin.temporary_password_changeset(attrs)
+        |> Repo.insert()
+        |> tag_result(:created)
+
+      %Admin{} = existing ->
+        if Admin.pending?(existing) do
+          existing
+          |> Admin.temporary_password_changeset(attrs)
+          |> Repo.update()
+          |> tag_result(:overridden)
+        else
+          {:error, :already_active}
+        end
+    end
+  end
+
+  defp tag_result({:ok, admin}, tag), do: {:ok, tag, admin}
+  defp tag_result({:error, changeset}, _tag), do: {:error, changeset}
+
+  @doc """
+  Lets a logged-in admin set their own new password — used by the forced
+  password-change modal triggered by `must_change_password: true` (see
+  `CuevolutionWeb.AdminAuth.on_mount/4`).
+  """
+  def change_own_password(%Admin{} = admin, attrs) do
+    admin
+    |> Admin.force_password_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Invites a new admin: creates a pending record (email + role, no password
   yet), logs the action against `inviter` (spec 001 FR-005 audit trail), and
   enqueues the account-setup email. `setup_url_fun` receives the URL-safe

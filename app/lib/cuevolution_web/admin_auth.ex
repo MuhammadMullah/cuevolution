@@ -76,7 +76,16 @@ defmodule CuevolutionWeb.AdminAuth do
       end
 
     if admin do
-      {:cont, Phoenix.Component.assign(socket, :current_admin, admin)}
+      socket =
+        socket
+        |> Phoenix.Component.assign(:current_admin, admin)
+        |> Phoenix.LiveView.attach_hook(
+          :force_password_change,
+          :handle_event,
+          &handle_forced_password_change/3
+        )
+
+      {:cont, socket}
     else
       socket =
         socket
@@ -116,5 +125,39 @@ defmodule CuevolutionWeb.AdminAuth do
 
       {:halt, socket}
     end
+  end
+
+  # Attached to every admin LiveView mount (see :ensure_admin above) so the
+  # "set a new password" modal (CuevolutionWeb.AdminComponents.app_shell/1,
+  # shown whenever `current_admin.must_change_password` is true) works
+  # without every single admin LiveView needing its own handle_event clause
+  # for it. Falls through to the LiveView's own handlers for every other
+  # event.
+  defp handle_forced_password_change("change_forced_password", %{"admin" => params}, socket) do
+    case Accounts.change_own_password(socket.assigns.current_admin, params) do
+      {:ok, admin} ->
+        socket =
+          socket
+          |> Phoenix.Component.assign(:current_admin, admin)
+          |> Phoenix.LiveView.put_flash(:info, "Password updated.")
+
+        {:halt, socket}
+
+      {:error, changeset} ->
+        {:halt, Phoenix.LiveView.put_flash(socket, :error, password_error_message(changeset))}
+    end
+  end
+
+  defp handle_forced_password_change(_event, _params, socket), do: {:cont, socket}
+
+  defp password_error_message(changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.flat_map(fn {field, messages} -> Enum.map(messages, &"#{field} #{&1}") end)
+    |> Enum.join("; ")
   end
 end

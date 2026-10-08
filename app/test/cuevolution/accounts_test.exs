@@ -1235,4 +1235,148 @@ defmodule Cuevolution.AccountsTest do
       assert Repo.get!(Admin, completed.id).invite_email_status == "sent"
     end
   end
+
+  describe "Admin.invite_email_failed?/1" do
+    test "is true for a pending admin whose invite email bounced" do
+      pending = insert(:admin, hashed_password: nil, invite_email_status: "failed")
+      assert Admin.invite_email_failed?(pending)
+    end
+
+    test "is false once the admin is active, even with a stale failed status" do
+      active =
+        insert(:admin,
+          invite_email_status: "failed",
+          hashed_password: Bcrypt.hash_pwd_salt("SomePass@1")
+        )
+
+      refute Admin.invite_email_failed?(active)
+    end
+  end
+
+  describe "create_or_reset_pending_admin/1" do
+    test "creates a new active admin with the given password and forces a change" do
+      venue = insert(:venue)
+
+      attrs = %{
+        "email" => "new-rep@cuevolution.test",
+        "role" => "venue_representative",
+        "venue_id" => venue.id,
+        "mobile_number" => "0712345678",
+        "password" => "VenueRep@26"
+      }
+
+      assert {:ok, :created, admin} = Accounts.create_or_reset_pending_admin(attrs)
+
+      assert admin.email == "new-rep@cuevolution.test"
+      assert admin.must_change_password
+      refute Admin.pending?(admin)
+      assert {:ok, _} = Accounts.authenticate_admin(admin.email, "VenueRep@26")
+    end
+
+    test "overrides an existing pending admin instead of creating a duplicate" do
+      old_venue = insert(:venue)
+      new_venue = insert(:venue)
+
+      pending =
+        insert(:admin,
+          hashed_password: nil,
+          role: "venue_representative",
+          venue_id: old_venue.id,
+          email: "pending-rep@cuevolution.test"
+        )
+
+      attrs = %{
+        "email" => "pending-rep@cuevolution.test",
+        "role" => "venue_representative",
+        "venue_id" => new_venue.id,
+        "mobile_number" => "0712345678",
+        "password" => "VenueRep@26"
+      }
+
+      assert {:ok, :overridden, admin} = Accounts.create_or_reset_pending_admin(attrs)
+
+      assert admin.id == pending.id
+      assert admin.venue_id == new_venue.id
+      assert admin.must_change_password
+      refute Admin.pending?(admin)
+      assert Repo.aggregate(Admin, :count) == 1
+    end
+
+    test "leaves an already-active admin untouched" do
+      venue = insert(:venue)
+
+      active =
+        insert(:admin,
+          role: "venue_representative",
+          venue_id: venue.id,
+          email: "active-rep@cuevolution.test",
+          hashed_password: Bcrypt.hash_pwd_salt("TheirOwnPass@1")
+        )
+
+      attrs = %{
+        "email" => "active-rep@cuevolution.test",
+        "role" => "venue_representative",
+        "venue_id" => venue.id,
+        "mobile_number" => "0712345678",
+        "password" => "VenueRep@26"
+      }
+
+      assert {:error, :already_active} = Accounts.create_or_reset_pending_admin(attrs)
+
+      unchanged = Repo.get!(Admin, active.id)
+      assert unchanged.hashed_password == active.hashed_password
+      refute unchanged.must_change_password
+    end
+
+    test "rejects a temporary password that fails the strength rules" do
+      venue = insert(:venue)
+
+      attrs = %{
+        "email" => "weak-pass@cuevolution.test",
+        "role" => "venue_representative",
+        "venue_id" => venue.id,
+        "mobile_number" => "0712345678",
+        "password" => "weak"
+      }
+
+      assert {:error, %Ecto.Changeset{}} = Accounts.create_or_reset_pending_admin(attrs)
+      refute Repo.get_by(Admin, email: "weak-pass@cuevolution.test")
+    end
+  end
+
+  describe "change_own_password/2" do
+    test "updates the password and clears must_change_password" do
+      admin =
+        insert(:admin,
+          hashed_password: Bcrypt.hash_pwd_salt("OldTemp@26"),
+          must_change_password: true
+        )
+
+      assert {:ok, updated} =
+               Accounts.change_own_password(admin, %{
+                 "password" => "BrandNew@1",
+                 "password_confirmation" => "BrandNew@1"
+               })
+
+      refute updated.must_change_password
+      assert {:ok, _} = Accounts.authenticate_admin(admin.email, "BrandNew@1")
+    end
+
+    test "rejects a mismatched confirmation and leaves must_change_password set" do
+      admin =
+        insert(:admin,
+          hashed_password: Bcrypt.hash_pwd_salt("OldTemp@26"),
+          must_change_password: true
+        )
+
+      assert {:error, changeset} =
+               Accounts.change_own_password(admin, %{
+                 "password" => "BrandNew@1",
+                 "password_confirmation" => "Different@1"
+               })
+
+      refute changeset.valid?
+      assert Repo.get!(Admin, admin.id).must_change_password
+    end
+  end
 end

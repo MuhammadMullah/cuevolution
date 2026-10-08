@@ -17,7 +17,12 @@ defmodule CuevolutionWeb.AdminAuthTest do
   defp socket_with_flash do
     %Phoenix.LiveView.Socket{
       endpoint: CuevolutionWeb.Endpoint,
-      assigns: %{__changed__: %{}, flash: %{}}
+      assigns: %{__changed__: %{}, flash: %{}},
+      # `:ensure_admin` calls `attach_hook/4`, which requires this private
+      # key to already exist — real LiveView mounts set it up before any
+      # on_mount hook runs; a bare socket built by hand for a unit test
+      # has to do it itself.
+      private: %{live_temp: %{}, lifecycle: %Phoenix.LiveView.Lifecycle{}}
     }
   end
 

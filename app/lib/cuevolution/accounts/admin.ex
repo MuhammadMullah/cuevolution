@@ -47,6 +47,7 @@ defmodule Cuevolution.Accounts.Admin do
     field :invite_revoked_at, :utc_datetime
     field :invite_email_status, :string, default: "pending"
     field :invite_email_failed_at, :utc_datetime
+    field :must_change_password, :boolean, default: false
     field :hashed_password, :string
     field :password, :string, virtual: true
     field :password_confirmation, :string, virtual: true
@@ -101,8 +102,18 @@ defmodule Cuevolution.Accounts.Admin do
   def invite_revoked?(%__MODULE__{invite_revoked_at: %DateTime{}}), do: true
   def invite_revoked?(%__MODULE__{}), do: false
 
-  @doc "Whether the invitation email exhausted all delivery attempts without ever sending."
-  def invite_email_failed?(%__MODULE__{invite_email_status: "failed"}), do: true
+  @doc """
+  Whether the invitation email exhausted all delivery attempts without ever
+  sending. Guarded on `pending?/1` so a late-arriving bounce webhook (or a
+  direct password reset that bypassed email, e.g.
+  `Cuevolution.Seeds.VenueRepresentatives.run_central_region_direct/0`)
+  can't leave an active admin stuck showing "Invite email failed" forever —
+  once an admin has completed setup, how their invite email once fared is
+  no longer relevant to their status.
+  """
+  def invite_email_failed?(%__MODULE__{invite_email_status: "failed"} = admin),
+    do: pending?(admin)
+
   def invite_email_failed?(%__MODULE__{}), do: false
 
   @doc "Full registration changeset, including password hashing — used to create the initial super admin (see priv/repo/seeds)."
@@ -132,6 +143,47 @@ defmodule Cuevolution.Accounts.Admin do
     |> normalize_mobile_number()
     |> unique_constraint(:email)
     |> unique_constraint(:mobile_number)
+  end
+
+  @doc """
+  Creates or overrides a pending admin with a known, shared temporary
+  password and `must_change_password: true`, bypassing the invite-email
+  token entirely — for one-off seed scripts run when email delivery can't
+  be relied on (see `Cuevolution.Seeds.VenueRepresentatives`). The
+  temporary password still has to pass `PasswordValidator`, same as any
+  other account password; `must_change_password` is what forces a change
+  on first login (see `CuevolutionWeb.AdminAuth.on_mount/4` and
+  `CuevolutionWeb.AdminComponents.app_shell/1`).
+  """
+  def temporary_password_changeset(admin, attrs) do
+    admin
+    |> cast(attrs, [:email, :role, :venue_id, :region_id, :mobile_number, :password])
+    |> validate_required([:email, :role, :password])
+    |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
+    |> validate_inclusion(:role, @invitable_roles)
+    |> validate_scope_assignment()
+    |> normalize_mobile_number()
+    |> PasswordValidator.validate_password(:password)
+    |> unique_constraint(:email)
+    |> unique_constraint(:mobile_number)
+    |> hash_password()
+    |> put_change(:must_change_password, true)
+    |> put_change(:invite_revoked_at, nil)
+  end
+
+  @doc """
+  Lets a logged-in admin set their own new password — used by the forced
+  password-change modal that `must_change_password: true` triggers.
+  Clears the flag once the new password passes validation.
+  """
+  def force_password_changeset(admin, attrs) do
+    admin
+    |> cast(attrs, [:password, :password_confirmation])
+    |> validate_required([:password, :password_confirmation])
+    |> validate_confirmation(:password, message: "does not match")
+    |> PasswordValidator.validate_password(:password)
+    |> hash_password()
+    |> put_change(:must_change_password, false)
   end
 
   def venue_changeset(admin, attrs) do
