@@ -46,10 +46,14 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
     # Only loaded for a pure recorder (can_record_results? and not
     # can_approve_results?) — the only role combination whose Unplayed/Played
-    # tabs actually render these (see the template). A Super Admin also has
-    # can_record_results? == true, but never sees this tab, so skipping the
-    # fetch for them avoids two unbounded, deeply-preloaded, tournament-wide
-    # queries on every page load for data that was being thrown away.
+    # tabs actually render these (see the template). Super Admin and
+    # Tournament Director also have can_record_results? == true, but neither
+    # ever sees this tab (both hold `:approve_results` too, nationwide/
+    # unscoped), so skipping the fetch for them avoids two unbounded,
+    # deeply-preloaded, tournament-wide queries on every page load for data
+    # that was being thrown away. They record a specific fixture's result
+    # via `MatchEntryLive` instead (reached from Groups/Draws), which is
+    # scoped to one fixture rather than listing every unplayed one.
     show_record_tabs? = can_record_results? and not can_approve_results?
 
     unplayed =

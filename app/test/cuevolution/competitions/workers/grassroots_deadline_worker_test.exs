@@ -7,8 +7,8 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsDeadlineWorkerTest do
   alias Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker
   alias Cuevolution.Repo
 
-  defp overdue_group_fixture(status \\ "scheduled") do
-    stage = Repo.get_by!(Stage, name: "Grassroots")
+  defp overdue_group_fixture(status \\ "scheduled", stage_name \\ "Grassroots") do
+    stage = Repo.get_by!(Stage, name: stage_name)
     stage = Repo.update!(Ecto.Changeset.change(stage, completion_deadline: ~D[2020-01-01]))
     region = build(:region)
     venue = insert(:venue, region_id: region.id)
@@ -65,5 +65,14 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsDeadlineWorkerTest do
     assert :ok = GrassrootsDeadlineWorker.perform(%Oban.Job{})
     assert Repo.get!(Fixture, fixture.id).status == "postponed"
     assert Repo.aggregate(AdminActionLog, :count, :id) == 0
+  end
+
+  test "also converts overdue Grassroots Round 2 fixtures, against that stage's own deadline" do
+    fixture = overdue_group_fixture("scheduled", "Grassroots Round 2")
+
+    assert :ok = GrassrootsDeadlineWorker.perform(%Oban.Job{})
+    updated = Repo.get!(Fixture, fixture.id)
+    assert updated.status == "walkover"
+    assert updated.walkover_kind == "double"
   end
 end

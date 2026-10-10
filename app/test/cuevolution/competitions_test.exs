@@ -3,8 +3,11 @@ defmodule Cuevolution.CompetitionsTest do
 
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Fixture
+  alias Cuevolution.Competitions.Group
+  alias Cuevolution.Competitions.MatchResult
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
+  alias Cuevolution.Competitions.StageParticipation
 
   defp stage(name), do: Repo.get_by!(Stage, name: name)
 
@@ -29,9 +32,10 @@ defmodule Cuevolution.CompetitionsTest do
   end
 
   describe "list_stages/0" do
-    test "returns all 4 seeded stages in pipeline order" do
+    test "returns all 5 seeded stages in pipeline order" do
       assert Enum.map(Competitions.list_stages(), & &1.name) == [
                "Grassroots",
+               "Grassroots Round 2",
                "Regional",
                "Circuit",
                "Finals"
@@ -41,7 +45,8 @@ defmodule Cuevolution.CompetitionsTest do
 
   describe "next_stage/1" do
     test "returns the following stage" do
-      assert Competitions.next_stage(stage("Grassroots")).name == "Regional"
+      assert Competitions.next_stage(stage("Grassroots")).name == "Grassroots Round 2"
+      assert Competitions.next_stage(stage("Grassroots Round 2")).name == "Regional"
       assert Competitions.next_stage(stage("Circuit")).name == "Finals"
     end
 
@@ -239,6 +244,32 @@ defmodule Cuevolution.CompetitionsTest do
       assert "is required for Grassroots-stage groups" in errors_on(changeset).venue_id
     end
 
+    test "Grassroots Round 2 groups require a venue, same as Grassroots" do
+      region = build(:region)
+      venue = insert(:venue, region_id: region.id)
+
+      assert {:ok, group} =
+               Competitions.create_group(%{
+                 stage_id: stage("Grassroots Round 2").id,
+                 region_id: region.id,
+                 venue_id: venue.id,
+                 category: "male",
+                 name: "Pool A"
+               })
+
+      assert group.venue_id == venue.id
+
+      assert {:error, changeset} =
+               Competitions.create_group(%{
+                 stage_id: stage("Grassroots Round 2").id,
+                 region_id: region.id,
+                 category: "male",
+                 name: "Pool B"
+               })
+
+      assert "is required for Grassroots-stage groups" in errors_on(changeset).venue_id
+    end
+
     test "Regional groups are region-scoped, no venue, and never create a knockout bracket" do
       region = build(:region)
 
@@ -366,6 +397,463 @@ defmodule Cuevolution.CompetitionsTest do
         )
 
       assert {:ok, _membership} = Competitions.assign_to_group(participation, group)
+    end
+  end
+
+  describe "close_group_stage/5" do
+    defp cgs_group_with_players(count, name, venue) do
+      grassroots = stage("Grassroots")
+      region = build(:region)
+
+      group =
+        Repo.insert!(%Group{
+          stage_id: grassroots.id,
+          region_id: region.id,
+          venue_id: venue.id,
+          category: "male",
+          name: name
+        })
+
+      participants =
+        for _ <- 1..count do
+          participation =
+            insert(:stage_participation,
+              stage_id: grassroots.id,
+              region_id: region.id,
+              category: "male"
+            )
+
+          {:ok, _membership} = Competitions.assign_to_group(participation, group)
+          participation
+        end
+
+      {group, participants}
+    end
+
+    defp cgs_verified_result(group, venue, participant_a, participant_b, score) do
+      round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+      fixture =
+        insert(:fixture,
+          round_id: round.id,
+          participant_a_id: participant_a.id,
+          participant_b_id: participant_b.id,
+          venue_id: venue.id
+        )
+
+      result =
+        Repo.insert!(
+          MatchResult.create_changeset(
+            %MatchResult{},
+            %{
+              fixture_id: fixture.id,
+              winner_participation_id: score["winner_id"],
+              score: Map.delete(score, "winner_id"),
+              recorded_by_admin_id: insert(:admin).id
+            }
+          )
+        )
+
+      Repo.update!(Ecto.Changeset.change(fixture, result_id: result.id, status: "verified"))
+    end
+
+    defp cgs_double_walkover(group, venue, participant_a, participant_b) do
+      round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+      fixture =
+        insert(:fixture,
+          round_id: round.id,
+          participant_a_id: participant_a.id,
+          participant_b_id: participant_b.id,
+          venue_id: venue.id,
+          status: "walkover",
+          walkover_kind: "double"
+        )
+
+      result =
+        Repo.insert!(%MatchResult{
+          fixture_id: fixture.id,
+          winner_participation_id: nil,
+          score: %{
+            "points_a" => 0,
+            "points_b" => 0,
+            "walkover" => true,
+            "walkover_kind" => "double"
+          }
+        })
+
+      Repo.update!(Ecto.Changeset.change(fixture, result_id: result.id))
+    end
+
+    test "a group where nobody played contributes no top-N qualifiers, even past the deadline" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      {live_group, [a1, a2]} = cgs_group_with_players(2, "Live", venue)
+      {dead_group, [x, y]} = cgs_group_with_players(2, "Dead", venue)
+
+      cgs_verified_result(live_group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      # Nobody ever played in the dead group — this is what the deadline
+      # worker produces once the completion deadline passes unplayed.
+      cgs_double_walkover(dead_group, venue, x, y)
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      expected_ids = [a1.id]
+
+      assert {:ok, [advanced]} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 expected_ids
+               )
+
+      assert advanced.id == a1.id
+      assert advanced.stage_id == stage("Grassroots Round 2").id
+
+      # x and y were never touched — nobody in the dead group earned a slot.
+      refute Repo.get!(StageParticipation, x.id).stage_id ==
+               stage("Grassroots Round 2").id
+
+      refute Repo.get!(StageParticipation, y.id).stage_id ==
+               stage("Grassroots Round 2").id
+    end
+
+    test "rejects a confirmed list that still includes a non-playing participant" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      {dead_group, [x, y]} = cgs_group_with_players(2, "Dead", venue)
+      cgs_double_walkover(dead_group, venue, x, y)
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      assert {:error, :invalid_qualifiers} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [x.id]
+               )
+    end
+
+    test "an admin can manually substitute a played participant who ranked below the cutoff" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      {group, [a1, a2, a3]} = cgs_group_with_players(3, "Manual Substitute", venue)
+
+      cgs_verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      cgs_verified_result(group, venue, a2, a3, %{
+        "winner_id" => a2.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      # a1 is the automatic top-1; manually swap in a3 (played, but ranked
+      # below the cutoff) instead of a1.
+      assert {:ok, advanced} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a3.id]
+               )
+
+      assert Enum.map(advanced, & &1.id) == [a3.id]
+      refute Repo.get!(StageParticipation, a1.id).stage_id == stage("Grassroots Round 2").id
+    end
+
+    test "rejects a participant from a different venue's final group" do
+      venue_a = insert(:venue, region_id: build(:region).id)
+      venue_b = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      {group_a, [a1, a2]} = cgs_group_with_players(2, "Venue A Group", venue_a)
+      {group_b, [b1, b2]} = cgs_group_with_players(2, "Venue B Group", venue_b)
+
+      cgs_verified_result(group_a, venue_a, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      cgs_verified_result(group_b, venue_b, b1, b2, %{
+        "winner_id" => b1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      # Closing venue_a can't be used to sneak in venue_b's qualifier.
+      assert {:error, :invalid_qualifiers} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue_a.id},
+                 admin,
+                 [a1.id, b1.id]
+               )
+
+      refute Repo.get!(StageParticipation, b1.id).stage_id == stage("Grassroots Round 2").id
+    end
+
+    defp regional_group_with_result(region) do
+      regional = stage("Regional")
+
+      group =
+        Repo.insert!(%Group{
+          stage_id: regional.id,
+          region_id: region.id,
+          category: "male",
+          name: "Capacity Test"
+        })
+
+      [p1, p2] =
+        for _ <- 1..2 do
+          player = insert(:player, region_id: region.id)
+
+          participation =
+            insert(:stage_participation,
+              player_id: player.id,
+              stage_id: regional.id,
+              region_id: region.id,
+              category: "male"
+            )
+
+          {:ok, _} = Competitions.assign_to_group(participation, group)
+          participation
+        end
+
+      venue = insert(:venue, region_id: region.id)
+      round = insert(:round, stage_id: regional.id, group_id: group.id)
+
+      fixture =
+        insert(:fixture,
+          round_id: round.id,
+          participant_a_id: p1.id,
+          participant_b_id: p2.id,
+          venue_id: venue.id
+        )
+
+      result =
+        Repo.insert!(
+          MatchResult.create_changeset(%MatchResult{}, %{
+            fixture_id: fixture.id,
+            winner_participation_id: p1.id,
+            score: %{"participant_a_frames" => 3, "participant_b_frames" => 0},
+            recorded_by_admin_id: insert(:admin).id
+          })
+        )
+
+      Repo.update!(Ecto.Changeset.change(fixture, result_id: result.id, status: "verified"))
+
+      {group, p1, p2}
+    end
+
+    test "advances a capacity-capped batch atomically — all fit, or none do" do
+      region = build(:region)
+      admin = insert(:admin, role: "super_admin")
+      regional = stage("Regional")
+      circuit = stage("Circuit")
+      {_group, p1, p2} = regional_group_with_result(region)
+
+      config = Competitions.get_or_create_group_config(regional.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 2})
+
+      circuit_config = Competitions.capacity_config(circuit.id, "male")
+
+      {:ok, _} =
+        Competitions.update_capacity_config(circuit_config, %{
+          capacity_limit: circuit_config.current_count + 1
+        })
+
+      # Only 1 slot available, but both are trying to advance together —
+      # the whole batch is refused, not just whoever claims the last slot.
+      assert {:error, :capacity_exceeded} =
+               Competitions.close_group_stage(
+                 regional.id,
+                 "male",
+                 {:region_id, region.id},
+                 admin,
+                 [p1.id, p2.id]
+               )
+
+      refute Repo.get!(StageParticipation, p1.id).stage_id == circuit.id
+      refute Repo.get!(StageParticipation, p2.id).stage_id == circuit.id
+
+      assert Competitions.capacity_config(circuit.id, "male").current_count ==
+               circuit_config.current_count
+
+      {:ok, _} =
+        Competitions.update_capacity_config(Competitions.capacity_config(circuit.id, "male"), %{
+          capacity_limit: circuit_config.current_count + 2
+        })
+
+      assert {:ok, advanced} =
+               Competitions.close_group_stage(
+                 regional.id,
+                 "male",
+                 {:region_id, region.id},
+                 admin,
+                 [p1.id, p2.id]
+               )
+
+      assert length(advanced) == 2
+      assert Repo.get!(StageParticipation, p1.id).stage_id == circuit.id
+      assert Repo.get!(StageParticipation, p2.id).stage_id == circuit.id
+
+      assert Competitions.capacity_config(circuit.id, "male").current_count ==
+               circuit_config.current_count + 2
+    end
+
+    test "refuses the whole batch, advancing nobody, when one participant is tournament-ineligible" do
+      region = build(:region)
+      admin = insert(:admin, role: "super_admin")
+      regional = stage("Regional")
+      {_group, p1, p2} = regional_group_with_result(region)
+
+      # Backdate p2's player past the cutoff with no override — ineligible.
+      p2_player = Repo.get!(Cuevolution.Accounts.Player, p2.player_id)
+
+      Repo.update!(Ecto.Changeset.change(p2_player, inserted_at: ~N[2026-10-01 00:00:00]))
+
+      config = Competitions.get_or_create_group_config(regional.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 2})
+
+      assert {:error, :registration_closed} =
+               Competitions.close_group_stage(
+                 regional.id,
+                 "male",
+                 {:region_id, region.id},
+                 admin,
+                 [p1.id, p2.id]
+               )
+
+      refute Repo.get!(StageParticipation, p1.id).stage_id == stage("Circuit").id
+      refute Repo.get!(StageParticipation, p2.id).stage_id == stage("Circuit").id
+    end
+  end
+
+  describe "advance_all_entrants/4" do
+    defp venue_entrant(venue) do
+      player =
+        insert(:player,
+          preferred_venue_id: venue.id,
+          region_id: venue.region_id,
+          tournament_eligibility_override: true,
+          gender: "male"
+        )
+
+      insert(:stage_participation,
+        player_id: player.id,
+        stage_id: stage("Grassroots").id,
+        region_id: venue.region_id,
+        category: "male"
+      )
+    end
+
+    test "advances everyone when the entrant count is at or below the advancer count" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+      a1 = venue_entrant(venue)
+      a2 = venue_entrant(venue)
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 2})
+
+      assert {:ok, advanced} =
+               Competitions.advance_all_entrants(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin
+               )
+
+      assert Enum.sort(Enum.map(advanced, & &1.id)) == Enum.sort([a1.id, a2.id])
+      round_2 = stage("Grassroots Round 2")
+      assert Repo.get!(StageParticipation, a1.id).stage_id == round_2.id
+      assert Repo.get!(StageParticipation, a2.id).stage_id == round_2.id
+    end
+
+    test "refuses once there are more entrants than the advancer count" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+      venue_entrant(venue)
+      venue_entrant(venue)
+      venue_entrant(venue)
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 2})
+
+      assert {:error, :too_many_entrants} =
+               Competitions.advance_all_entrants(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin
+               )
+    end
+
+    test "refuses when there's nobody to advance" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+      grassroots = stage("Grassroots")
+
+      assert {:error, :no_entrants} =
+               Competitions.advance_all_entrants(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin
+               )
     end
   end
 

@@ -1,5 +1,5 @@
 defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
-  @moduledoc "Reminds eligible players to finish scheduled Grassroots fixtures before the deadline."
+  @moduledoc "Reminds eligible players to finish scheduled Grassroots-round fixtures before each round's deadline."
 
   use Oban.Worker, queue: :notifications, max_attempts: 3
 
@@ -10,16 +10,17 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    stage = Competitions.grassroots_stage()
-
-    if reminder_active?(stage.completion_deadline) do
-      deadline_date = stage.completion_deadline
-      deadline = Date.to_iso8601(deadline_date)
-
-      dispatch_in_batches(deadline, 0)
-    end
+    [Competitions.grassroots_stage(), Competitions.grassroots_round_2_stage()]
+    |> Enum.each(&maybe_dispatch_for_stage/1)
 
     :ok
+  end
+
+  defp maybe_dispatch_for_stage(stage) do
+    if reminder_active?(stage.completion_deadline) do
+      deadline = Date.to_iso8601(stage.completion_deadline)
+      dispatch_in_batches(stage.id, deadline, 0)
+    end
   end
 
   defp reminder_active?(nil), do: false
@@ -32,12 +33,13 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
     DateTime.utc_now() |> DateTime.add(3 * 60 * 60, :second) |> DateTime.to_date()
   end
 
-  defp dispatch_reminder(player, deadline, reminder_kind) do
+  defp dispatch_reminder(player, stage_id, deadline, reminder_kind) do
     Notifications.dispatch(
       player,
       :grassroots_match_reminder,
       %{deadline: deadline},
-      idempotency_key: "grassroots-match-reminder:#{reminder_kind}:#{player.id}:#{deadline}"
+      idempotency_key:
+        "grassroots-match-reminder:#{reminder_kind}:#{stage_id}:#{player.id}:#{deadline}"
     )
   rescue
     error ->
@@ -51,17 +53,17 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker do
       :ok
   end
 
-  defp dispatch_in_batches(deadline, offset) do
-    players = Competitions.players_with_grassroots_match_backlog(@batch_size, offset)
+  defp dispatch_in_batches(stage_id, deadline, offset) do
+    players = Competitions.players_with_grassroots_match_backlog(stage_id, @batch_size, offset)
 
     case players do
       [] ->
         :ok
 
       players ->
-        Enum.each(players, &dispatch_reminder(&1, deadline, "initial"))
+        Enum.each(players, &dispatch_reminder(&1, stage_id, deadline, "initial"))
 
-        dispatch_in_batches(deadline, offset + length(players))
+        dispatch_in_batches(stage_id, deadline, offset + length(players))
     end
   end
 end

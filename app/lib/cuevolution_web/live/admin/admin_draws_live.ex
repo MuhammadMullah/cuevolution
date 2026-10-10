@@ -12,6 +12,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.Stage
   alias Cuevolution.Teams
   alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
@@ -241,7 +242,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
   # Grassroots/Regional rounds attach to an already-created group
   # (GroupManagementLive); Circuit/Finals rounds attach to a knockout
   # bracket, one per category, auto-created on first use.
-  defp group_stage?(%{name: name}), do: name in ["Grassroots", "Regional"]
+  defp group_stage?(%Stage{} = stage), do: Stage.round_robin?(stage)
 
   defp load_round_context_options(socket) do
     if group_stage?(socket.assigns.new_round_stage) do
@@ -520,11 +521,12 @@ defmodule CuevolutionWeb.AdminDrawsLive do
   defp round_label(round), do: "#{round.stage.name} — #{round.name}"
 
   defp generated_draw?(%{
-         stage: %{name: "Grassroots"},
+         stage: %Stage{} = stage,
          group: %{category: category, draw: %{state: "published"}}
        })
-       when category in ~w(male female),
-       do: true
+       when category in ~w(male female) do
+    Stage.grassroots?(stage)
+  end
 
   defp generated_draw?(_round), do: false
 

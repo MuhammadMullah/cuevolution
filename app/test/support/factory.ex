@@ -86,7 +86,7 @@ defmodule Cuevolution.Factory do
     }
   end
 
-  @doc "Cycles through the 4 seeded stages (Grassroots/Regional/Circuit/Finals), same fixed-domain pattern as `region_factory/0`."
+  @doc "Cycles through the 5 seeded stages (Grassroots/Grassroots Round 2/Regional/Circuit/Finals), same fixed-domain pattern as `region_factory/0`."
   def stage_factory do
     stages = Cuevolution.Repo.all(from s in Stage, order_by: s.order)
     index = sequence(:stage_cycle, & &1)
@@ -94,15 +94,16 @@ defmodule Cuevolution.Factory do
   end
 
   @doc """
-  Cycles through the 6 open-stage/category combos (Grassroots+Regional ×
-  male/female/team) that have no seeded config row — Circuit/Finals are
-  already seeded by the migration (spec 006 FR-005/FR-006), so building
-  against those would collide with the `[:stage_id, :category]` unique
-  index. Only good for 6 inserts before it starts repeating combos.
+  Cycles through the 9 open-stage/category combos (Grassroots+Grassroots
+  Round 2+Regional × male/female/team) that have no seeded config row —
+  Circuit/Finals are already seeded by the migration (spec 006 FR-005/
+  FR-006), so building against those would collide with the
+  `[:stage_id, :category]` unique index. Only good for 9 inserts before it
+  starts repeating combos.
   """
   def stage_capacity_config_factory do
     open_stages =
-      Cuevolution.Repo.all(from s in Stage, where: s.order in [1, 2], order_by: s.order)
+      Cuevolution.Repo.all(from s in Stage, where: s.order in [1, 2, 3], order_by: s.order)
 
     combos = for s <- open_stages, category <- ~w(male female team), do: {s, category}
     index = sequence(:stage_capacity_config_cycle, & &1)
@@ -154,7 +155,7 @@ defmodule Cuevolution.Factory do
   """
   def knockout_bracket_factory do
     bracket_stages =
-      Cuevolution.Repo.all(from s in Stage, where: s.order in [3, 4], order_by: s.order)
+      Cuevolution.Repo.all(from s in Stage, where: s.order in [4, 5], order_by: s.order)
 
     combos = for s <- bracket_stages, category <- ~w(male female team), do: {s, category}
     index = sequence(:knockout_bracket_cycle, & &1)

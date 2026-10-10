@@ -1,5 +1,5 @@
 defmodule Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker do
-  @moduledoc "Converts overdue scheduled Grassroots fixtures to winnerless double walkovers."
+  @moduledoc "Converts overdue scheduled Grassroots-round fixtures to winnerless double walkovers."
 
   use Oban.Worker, queue: :deadline_enforcement, max_attempts: 3
 
@@ -35,7 +35,8 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker do
         join: s in Stage,
         on: s.id == g.stage_id,
         where:
-          s.name == "Grassroots" and f.status == "scheduled" and s.completion_deadline < ^deadline,
+          s.name in ^Stage.grassroots_round_names() and f.status == "scheduled" and
+            s.completion_deadline < ^deadline,
         select: f.id
       )
       |> Repo.all()

@@ -60,10 +60,13 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
                  recorder
                )
 
+      # A Tournament Director holds both `:record_results` and
+      # `:approve_results` (unlike a pure recorder, who only holds the
+      # former) — they can record a walkover themselves.
       approval_admin = insert(:admin, role: "tournament_director")
       walkover_fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M13")
 
-      assert {:error, :unauthorized} =
+      assert {:ok, _} =
                Competitions.record_walkover(
                  walkover_fixture,
                  approval_admin,

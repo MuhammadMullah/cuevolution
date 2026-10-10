@@ -509,6 +509,7 @@ defmodule CuevolutionWeb.AdminDashboardLive do
 
     colors = %{
       "Grassroots" => "#189A63",
+      "Grassroots Round 2" => "#C98A1E",
       "Regional" => "#5761B4",
       "Circuit" => "#D9A02B",
       "Finals" => "#0D0C22"

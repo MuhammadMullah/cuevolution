@@ -48,10 +48,10 @@
   </div>
 
   <div
-    :if={@stage.name == "Grassroots"}
+    :if={grassroots_stage?(@stage)}
     class="mb-4.5 flex flex-wrap items-center gap-2.5 rounded-2xl border border-ink-200 bg-white px-[18px] py-3.5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <span class="text-sm font-semibold text-ink-950">Grassroots deadline:</span>
+    <span class="text-sm font-semibold text-ink-950">{@stage.name} deadline:</span>
     <.form
       for={@deadline_form}
       id="grassroots-deadline-form"
@@ -77,7 +77,7 @@
       Not set — set a deadline
     </span>
     <span class="basis-full text-[12.5px] text-ink-500">
-      Applies to every Grassroots venue and category. Fixtures still unplayed when it passes become a double walkover (no result). Publishing a draw never sets this automatically; clear the date to remove it.
+      Applies to every {@stage.name} venue and category. Fixtures still unplayed when it passes become a double walkover (no result). Publishing a draw never sets this automatically; clear the date to remove it.
     </span>
   </div>
 
@@ -206,7 +206,7 @@
       <p class="mb-3.5 text-[13.5px] text-ink-500">
         Grassroots and Regional are open, round-robin stages — this configures group size and how many advance, not a capacity limit.
       </p>
-      <p :if={@stage.name == "Grassroots"} class="-mt-2 mb-3.5 text-[13.5px] text-ink-500">
+      <p :if={grassroots_stage?(@stage)} class="-mt-2 mb-3.5 text-[13.5px] text-ink-500">
         Target/min size and minimum entrants drive the automatic draw formula; overriding the group count on a specific draw doesn't change these defaults.
       </p>
       <div class="mb-3.5 overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
@@ -222,7 +222,7 @@
               <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
                 Top N advance
               </th>
-              <%= if @stage.name == "Grassroots" do %>
+              <%= if grassroots_stage?(@stage) do %>
                 <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
                   Target size
                 </th>
@@ -254,7 +254,7 @@
                   editing_field={@editing_field}
                 />
               </td>
-              <%= if @stage.name == "Grassroots" do %>
+              <%= if grassroots_stage?(@stage) do %>
                 <%= if config.category == "team" do %>
                   <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
                   <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
@@ -289,7 +289,7 @@
       </div>
 
       <div
-        :if={@stage.name == "Grassroots"}
+        :if={grassroots_stage?(@stage)}
         class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
       >
         <table class="w-full border-collapse">

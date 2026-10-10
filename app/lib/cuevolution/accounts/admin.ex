@@ -17,7 +17,12 @@ defmodule Cuevolution.Accounts.Admin do
       "regional_coordinator",
       "venue_representative"
     ],
-    record_results: ["super_admin", "regional_coordinator", "venue_representative"],
+    record_results: [
+      "super_admin",
+      "tournament_director",
+      "regional_coordinator",
+      "venue_representative"
+    ],
     approve_results: ["super_admin", "tournament_director"],
     manage_stages: ["super_admin", "tournament_director", "regional_coordinator"],
     manage_groups: ["super_admin", "tournament_director", "regional_coordinator"],

@@ -31,7 +31,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   alias Cuevolution.Accounts
   alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
-  alias Cuevolution.Competitions.{Draw, StageParticipation}
+  alias Cuevolution.Competitions.{Draw, Stage, StageParticipation}
   alias Cuevolution.Repo
   alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
@@ -45,9 +45,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
     stages =
       Competitions.list_stages()
-      |> Enum.filter(&(&1.name in ["Grassroots", "Regional"]))
+      |> Enum.filter(&Stage.round_robin?/1)
 
-    stages = if venue_rep?, do: Enum.filter(stages, &(&1.name == "Grassroots")), else: stages
+    stages = if venue_rep?, do: Enum.filter(stages, &Stage.grassroots?/1), else: stages
 
     regions =
       if venue_rep? && current_admin.venue && current_admin.venue.region,
@@ -87,6 +87,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
        redraw_open: false,
        redraw_reason: "",
        confirm_close: false,
+       qualifier_search: "",
+       qualifier_candidates: [],
        tie_resolution: nil
      )
      |> load_venues()
@@ -416,14 +418,62 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   def handle_event("confirm_close", _params, socket) do
     if socket.assigns.can_close_stage? do
-      {:noreply, assign(socket, :confirm_close, true)}
+      {:noreply,
+       assign(socket, confirm_close: true, qualifier_search: "", qualifier_candidates: [])}
     else
       {:noreply, put_flash(socket, :error, "You don't have permission to close this stage.")}
     end
   end
 
+  def handle_event("noop", _params, socket), do: {:noreply, socket}
+
   def handle_event("cancel_close", _params, socket),
-    do: {:noreply, assign(socket, :confirm_close, false)}
+    do:
+      {:noreply,
+       assign(socket, confirm_close: false, qualifier_search: "", qualifier_candidates: [])}
+
+  # Lets the admin drop a name the automatic top-N/best-of-rest suggestion
+  # included — e.g. a reason the system can't see (DQ, withdrawal).
+  def handle_event("remove_qualifier", %{"id" => id}, socket) do
+    qualifiers = Enum.reject(socket.assigns.qualifiers, &(&1.participant_id == id))
+    {:noreply, assign(socket, :qualifiers, qualifiers)}
+  end
+
+  def handle_event("search_qualifier_candidate", %{"query" => query}, socket) do
+    candidates =
+      if String.trim(query) == "" do
+        []
+      else
+        %{stage: stage, category: category} = socket.assigns
+
+        stage.id
+        |> Competitions.search_eligible_qualifiers(category, draw_scope(socket.assigns), query)
+        |> Enum.reject(fn p ->
+          Enum.any?(socket.assigns.qualifiers, &(&1.participant_id == p.id))
+        end)
+      end
+
+    {:noreply, assign(socket, qualifier_search: query, qualifier_candidates: candidates)}
+  end
+
+  # Lets the admin add someone the automatic suggestion left out — most
+  # notably, filling a slot a dead group (nobody played) left empty.
+  def handle_event("add_qualifier", %{"id" => id}, socket) do
+    case Enum.find(socket.assigns.qualifier_candidates, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      participation ->
+        row = %{participant_id: participation.id, name: participant_name(participation)}
+
+        {:noreply,
+         assign(socket,
+           qualifiers: socket.assigns.qualifiers ++ [row],
+           qualifier_search: "",
+           qualifier_candidates: []
+         )}
+    end
+  end
 
   def handle_event("close_stage", _params, socket) do
     if socket.assigns.can_close_stage? do
@@ -432,12 +482,15 @@ defmodule CuevolutionWeb.GroupManagementLive do
       case Competitions.close_group_stage(
              socket.assigns.stage.id,
              socket.assigns.category,
+             draw_scope(socket.assigns),
              socket.assigns.current_admin,
              ids
            ) do
         {:ok, _} ->
           {:noreply,
-           socket |> put_flash(:info, "Qualifiers advanced.") |> assign(:confirm_close, false)}
+           socket
+           |> assign(:confirm_close, false)
+           |> advance_to_next_stage_view()}
 
         {:error, reason} ->
           {:noreply, put_flash(socket, :error, "Could not close stage: #{inspect(reason)}")}
@@ -447,13 +500,68 @@ defmodule CuevolutionWeb.GroupManagementLive do
     end
   end
 
+  def handle_event("advance_all_entrants", _params, socket) do
+    if socket.assigns.can_close_stage? do
+      case Competitions.advance_all_entrants(
+             socket.assigns.stage.id,
+             socket.assigns.category,
+             draw_scope(socket.assigns),
+             socket.assigns.current_admin
+           ) do
+        {:ok, _} ->
+          {:noreply, advance_to_next_stage_view(socket)}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Could not advance everyone: #{inspect(reason)}")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to advance participants.")}
+    end
+  end
+
+  # After a successful close, the admin's next move is almost always to go
+  # draw the stage they just fed — so land them there directly (same
+  # venue/region/category carried over) instead of leaving them staring at
+  # the same "Close stage" screen, now with nothing left to confirm.
+  defp advance_to_next_stage_view(socket) do
+    case Competitions.next_stage(socket.assigns.stage) do
+      nil ->
+        socket |> put_flash(:info, "Qualifiers advanced.") |> load_gr_standings()
+
+      next_stage ->
+        categories = categories_for_stage(next_stage)
+
+        category =
+          if socket.assigns.category in categories,
+            do: socket.assigns.category,
+            else: List.first(categories)
+
+        prior_venue = socket.assigns[:venue]
+
+        socket
+        |> put_flash(:info, "Qualifiers advanced to #{next_stage.name}.")
+        |> assign(stage: next_stage, categories: categories, category: category)
+        |> load_venues()
+        |> keep_venue_if_valid(prior_venue)
+        |> load_scope()
+    end
+  end
+
+  defp keep_venue_if_valid(socket, %{id: id} = venue) do
+    if Enum.any?(socket.assigns.venues, &(&1.id == id)),
+      do: assign(socket, :venue, venue),
+      else: socket
+  end
+
+  defp keep_venue_if_valid(socket, _venue), do: socket
+
   ## Loading
 
   # Takes an assigns map, not a socket — deliberately, so the exact same
   # function works both from `handle_event`/loaders (`grassroots?(socket.assigns)`)
   # and directly from the template (`auto_draw_eligible?(assigns)`), which
   # only ever sees `assigns`, never `socket`.
-  defp grassroots?(assigns), do: assigns.stage.name == "Grassroots"
+  defp grassroots?(assigns), do: Stage.grassroots?(assigns.stage)
 
   defp regional?(assigns), do: assigns.stage.name == "Regional"
 
@@ -467,6 +575,12 @@ defmodule CuevolutionWeb.GroupManagementLive do
       regional?(assigns) -> assigns.category in ~w(female team)
       true -> false
     end
+  end
+
+  defp everyone_qualifies?(stage, category, scope) do
+    config = Competitions.get_or_create_group_config(stage.id, category)
+    count = Competitions.draw_entrant_count(stage.id, scope, category)
+    count > 0 and count <= config.advancer_count
   end
 
   # `{:venue_id, id} | {:region_id, id}` for whichever scope dimension
@@ -484,8 +598,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp scope_attrs({:venue_id, id}), do: %{venue_id: id}
   defp scope_attrs({:region_id, id}), do: %{region_id: id}
 
-  defp categories_for_stage(%{name: "Grassroots"}), do: ~w(male)
-  defp categories_for_stage(_stage), do: @categories
+  defp categories_for_stage(%Stage{} = stage) do
+    if Stage.grassroots?(stage), do: ~w(male), else: @categories
+  end
 
   defp load_venues(socket) do
     if socket.assigns.venue_rep? do
@@ -529,9 +644,21 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   defp load_gr(socket) do
     %{stage: stage, category: category} = socket.assigns
-    draw = Competitions.latest_draw(stage.id, draw_scope(socket.assigns), category)
+    scope = draw_scope(socket.assigns)
+    draw = Competitions.latest_draw(stage.id, scope, category)
     dealt? = draw && draw.state != "draft"
     groups = if(dealt?, do: Competitions.list_groups_for_draw(draw.id), else: [])
+    draw_pending? = is_nil(draw) or draw.state == "draft"
+
+    # Once the entrant pool is this small, a draw has nothing left to
+    # decide — everyone in it qualifies regardless of result (see
+    # `Competitions.advance_all_entrants/4`). Only worth computing before a
+    # draw exists; once one's dealt, the groups already own that decision.
+    socket =
+      assign(socket,
+        everyone_qualifies?: draw_pending? and everyone_qualifies?(stage, category, scope),
+        gr_next_stage: draw_pending? && Competitions.next_stage(stage)
+      )
 
     # Every group's fixtures, loaded once here rather than per-card in the
     # template — needed for the always-visible per-member progress and
@@ -560,38 +687,88 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp load_gr_standings(socket) do
     %{stage: stage, category: category, groups: groups} = socket.assigns
     config = Competitions.get_or_create_group_config(stage.id, category)
+    scope = draw_scope(socket.assigns)
+    final_groups_in_scope = Competitions.final_groups(stage.id, category, scope)
+
+    # One query for every group this render needs "who actually played"
+    # for, instead of one query per group repeated across the per-card
+    # tables and the qualifier suggestion below — a venue's worth of
+    # groups otherwise means a dozen-plus near-identical round trips on
+    # every single standings render.
+    played_by_group =
+      (groups ++ final_groups_in_scope)
+      |> Enum.map(& &1.id)
+      |> Enum.uniq()
+      |> Competitions.played_participant_ids_by_group()
 
     tables =
       Enum.map(groups, fn group ->
         rows = group |> Competitions.grassroots_group_standings() |> name_rows()
         fixtures = Competitions.list_fixtures_for_group(group.id)
         final? = fixtures != [] and Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
-        top = if final?, do: Enum.take(rows, config.advancer_count), else: []
+
+        top =
+          if final? do
+            played_ids = Map.get(played_by_group, group.id, MapSet.new())
+
+            rows
+            |> Enum.filter(&MapSet.member?(played_ids, &1.participant_id))
+            |> Enum.take(config.advancer_count)
+          else
+            []
+          end
+
         %{group: group, rows: rows, final?: final?, top: top}
       end)
 
     best_rest =
-      stage.id |> Competitions.best_of_rest_qualifiers(category) |> name_rows()
+      stage.id |> Competitions.best_of_rest_qualifiers(category, scope) |> name_rows()
 
     all_top =
-      stage.id
-      |> Competitions.final_groups(category)
+      final_groups_in_scope
       |> Enum.flat_map(fn g ->
-        g |> Competitions.grassroots_group_standings() |> Enum.take(config.advancer_count)
+        played_ids = Map.get(played_by_group, g.id, MapSet.new())
+
+        g
+        |> Competitions.grassroots_group_standings()
+        |> Enum.filter(&MapSet.member?(played_ids, &1.participant_id))
+        |> Enum.take(config.advancer_count)
       end)
       |> name_rows()
 
-    qualifiers = Enum.uniq_by(all_top ++ best_rest, & &1.participant_id)
+    qualifiers =
+      Enum.uniq_by(all_top ++ best_rest, & &1.participant_id)
+      |> reject_already_advanced(stage.id)
+
     names = tables |> Enum.flat_map(& &1.rows) |> Map.new(&{&1.participant_id, &1.name})
 
     assign(socket,
       standings_tables: tables,
+      any_final_group?: final_groups_in_scope != [],
       overall_rows: overall_rows(tables),
       standings_names: names,
       config: config,
       best_rest_qualifiers: best_rest,
       qualifiers: qualifiers
     )
+  end
+
+  # Closing is scoped to this venue/region, but re-selecting the same
+  # scope after a prior close would otherwise recompute the exact same
+  # qualifier list from group standings. Excluding anyone whose
+  # `StageParticipation` no longer sits at this stage is what makes
+  # "Close stage & advance qualifiers" disappear once there's truly
+  # nothing left to advance here, instead of reappearing with the same
+  # names.
+  defp reject_already_advanced(rows, stage_id) do
+    ids = Enum.map(rows, & &1.participant_id)
+
+    current_stage_ids =
+      from(sp in StageParticipation, where: sp.id in ^ids, select: {sp.id, sp.stage_id})
+      |> Repo.all()
+      |> Map.new()
+
+    Enum.filter(rows, &(Map.get(current_stage_ids, &1.participant_id) == stage_id))
   end
 
   defp load_groups(socket) do
@@ -666,12 +843,13 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp participant_name(%{player: player}), do: "#{player.first_name} #{player.last_name}"
 
   defp scope_label(assigns) do
-    venue_or_region =
-      if assigns.stage.name == "Grassroots" && assigns.venue,
-        do: assigns.venue.name,
-        else: assigns.region.name
+    "#{assigns.stage.name} · #{scope_name(assigns)} · #{category_label(assigns.category)}"
+  end
 
-    "#{assigns.stage.name} · #{venue_or_region} · #{category_label(assigns.category)}"
+  defp scope_name(assigns) do
+    if Stage.grassroots?(assigns.stage) && assigns.venue,
+      do: assigns.venue.name,
+      else: assigns.region.name
   end
 
   defp category_label("male"), do: "Individual Male"
@@ -753,6 +931,10 @@ defmodule CuevolutionWeb.GroupManagementLive do
   # actual app design system — gray/Kenya-Green/Kenya-Red/ink-950), not the
   # Grassroots/Regional colors in the reference mockup's latest revision.
   defp stage_tab_active_class("Grassroots"), do: "border-ink-500 bg-ink-100 text-ink-700"
+
+  defp stage_tab_active_class("Grassroots Round 2"),
+    do: "border-amber-500 bg-amber-100 text-amber-700"
+
   defp stage_tab_active_class("Regional"), do: "border-green-500 bg-green-100 text-green-700"
   defp stage_tab_active_class(_stage), do: "border-red-500 bg-red-50 text-red-700"
 end

@@ -1,8 +1,9 @@
 defmodule CuevolutionWeb.StageManagementLive do
   @moduledoc """
   Admin "Stages" page (spec 006) — advance individual/team participations
-  through the pipeline (Grassroots → Regional → Circuit → Finals), and edit
-  Circuit/Finals capacity limits. Two panels on one route: `:participants`
+  through the pipeline (Grassroots → Grassroots Round 2 → Regional →
+  Circuit → Finals), and edit Circuit/Finals capacity limits. Two panels
+  on one route: `:participants`
   (default) and `:capacity`, toggled via `push_patch` rather than a second
   full mount, since capacity editing is a small settings form.
   """
@@ -215,7 +216,11 @@ defmodule CuevolutionWeb.StageManagementLive do
   end
 
   defp save_deadline(socket, deadline) do
-    case Competitions.set_grassroots_deadline(socket.assigns.current_admin, deadline) do
+    case Competitions.set_stage_deadline(
+           socket.assigns.current_admin,
+           socket.assigns.stage,
+           deadline
+         ) do
       {:ok, stage} ->
         stages = Enum.map(socket.assigns.stages, &if(&1.id == stage.id, do: stage, else: &1))
 
@@ -225,7 +230,7 @@ defmodule CuevolutionWeb.StageManagementLive do
          |> assign_deadline_form(stage)
          |> put_flash(
            :info,
-           if(deadline, do: "Grassroots deadline saved.", else: "Grassroots deadline cleared.")
+           if(deadline, do: "Deadline saved.", else: "Deadline cleared.")
          )}
 
       {:error, :unauthorized} ->
@@ -284,6 +289,12 @@ defmodule CuevolutionWeb.StageManagementLive do
   # Matches CuevolutionWeb.PlayerComponents' @stage_styles palette (the
   # actual app design system), not the mockup's latest (incorrect) colors.
   defp stage_tab_active_class("Grassroots"), do: "border-ink-500 bg-ink-100 text-ink-700"
+
+  defp stage_tab_active_class("Grassroots Round 2"),
+    do: "border-amber-500 bg-amber-100 text-amber-700"
+
   defp stage_tab_active_class("Regional"), do: "border-green-500 bg-green-100 text-green-700"
   defp stage_tab_active_class(_stage), do: "border-red-500 bg-red-50 text-red-700"
+
+  defp grassroots_stage?(%Stage{} = stage), do: Stage.grassroots?(stage)
 end

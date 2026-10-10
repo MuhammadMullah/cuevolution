@@ -17,7 +17,7 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
     assert {:error, {:redirect, %{to: "/admin/login"}}} = live(conn, ~p"/admin/stages")
   end
 
-  test "shows all 4 stages and lists participants for the selected one", %{conn: conn} do
+  test "shows all 5 stages and lists participants for the selected one", %{conn: conn} do
     grassroots = Repo.get_by!(Stage, name: "Grassroots")
     region = List.first(Accounts.list_regions())
     player = insert(:player, region_id: region.id)
@@ -33,6 +33,7 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
     {:ok, _view, html} = live(conn, ~p"/admin/stages")
 
     assert html =~ "Grassroots"
+    assert html =~ "Grassroots Round 2"
     assert html =~ "Regional"
     assert html =~ "Circuit"
     assert html =~ "Finals"
@@ -60,8 +61,24 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
       |> element("button[phx-value-id='#{participation.id}']", "Advance")
       |> render_click()
 
-    assert html =~ "Advanced to Regional"
+    assert html =~ "Advanced to Grassroots Round 2"
     refute html =~ player.first_name
+  end
+
+  test "Grassroots Round 2 deadline box and formula columns work the same as Grassroots", %{
+    conn: conn
+  } do
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/stages")
+
+    html = view |> element("button", "Grassroots Round 2") |> render_click()
+    assert html =~ "Grassroots Round 2 deadline:"
+
+    html = view |> element("button", "Group settings") |> render_click()
+    assert html =~ "Target size"
+    assert html =~ "Min size"
+    assert html =~ "Min entrants"
+    assert html =~ "Best-of-rest qualifiers"
   end
 
   test "switching to the capacity panel shows the stage's configured limits", %{conn: conn} do

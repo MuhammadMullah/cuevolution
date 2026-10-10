@@ -7,10 +7,10 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
 
   defp stage(name), do: Repo.get_by!(Stage, name: name)
 
-  defp group_with_players(count, name) do
+  defp group_with_players(count, name, venue \\ nil) do
     grassroots = stage("Grassroots")
     region = build(:region)
-    venue = insert(:venue, region_id: region.id)
+    venue = venue || insert(:venue, region_id: region.id)
 
     group =
       Repo.insert!(%Group{
@@ -59,6 +59,69 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
       )
 
     Repo.update!(Ecto.Changeset.change(fixture, result_id: result.id, status: "verified"))
+  end
+
+  # Mirrors what `GrassrootsDeadlineWorker` produces for a fixture nobody
+  # ever played: no winner, zero score on both sides.
+  defp double_walkover_fixture(group, venue, participant_a, participant_b) do
+    round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+    fixture =
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: participant_a.id,
+        participant_b_id: participant_b.id,
+        venue_id: venue.id,
+        status: "walkover",
+        walkover_kind: "double"
+      )
+
+    result =
+      Repo.insert!(%MatchResult{
+        fixture_id: fixture.id,
+        winner_participation_id: nil,
+        score: %{
+          "participant_a_frames" => 0,
+          "participant_b_frames" => 0,
+          "points_a" => 0,
+          "points_b" => 0,
+          "walkover" => true,
+          "walkover_kind" => "double"
+        }
+      })
+
+    Repo.update!(Ecto.Changeset.change(fixture, result_id: result.id))
+  end
+
+  # The present participant wins by walkover — the absent one didn't show.
+  defp single_walkover_fixture(group, venue, present, absent) do
+    round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+    fixture =
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: present.id,
+        participant_b_id: absent.id,
+        venue_id: venue.id,
+        status: "walkover",
+        walkover_kind: "single"
+      )
+
+    result =
+      Repo.insert!(%MatchResult{
+        fixture_id: fixture.id,
+        winner_participation_id: present.id,
+        score: %{
+          "participant_a_frames" => 3,
+          "participant_b_frames" => 0,
+          "points_a" => 3,
+          "points_b" => 0,
+          "walkover" => true,
+          "walkover_kind" => "single"
+        }
+      })
+
+    Repo.update!(Ecto.Changeset.change(fixture, result_id: result.id))
   end
 
   test "Grassroots standings apply points, head-to-head, wins and frame difference" do
@@ -153,7 +216,7 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
 
   test "best of rest ranks candidates by points per match across uneven groups" do
     {group_a, [a1, a2, a3], venue_a} = group_with_players(3, "Best Rest A")
-    {group_b, [b1, b2], venue_b} = group_with_players(2, "Best Rest B")
+    {group_b, [b1, b2], venue_a} = group_with_players(2, "Best Rest B", venue_a)
     config = Competitions.get_or_create_group_config(group_a.stage_id, "male")
 
     {:ok, _} =
@@ -179,7 +242,7 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
       "bonus_b" => 0
     })
 
-    verified_result(group_b, venue_b, b1, b2, %{
+    verified_result(group_b, venue_a, b1, b2, %{
       "winner_id" => b1.id,
       "participant_a_frames" => 5,
       "participant_b_frames" => 0,
@@ -189,9 +252,102 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
       "bonus_b" => 0
     })
 
-    qualifiers = Competitions.best_of_rest_qualifiers(group_a.stage_id, "male")
+    qualifiers =
+      Competitions.best_of_rest_qualifiers(group_a.stage_id, "male", {:venue_id, venue_a.id})
+
     a2_id = a2.id
     assert [%{participant_id: ^a2_id, points_per_match: 2.0}] = qualifiers
+  end
+
+  test "played_participant_ids/1 counts verified matches and single-walkover winners, not double-walkover sides" do
+    {group, [a, b, c, d], venue} = group_with_players(4, "Played Ids")
+
+    verified_result(group, venue, a, b, %{
+      "winner_id" => a.id,
+      "participant_a_frames" => 3,
+      "participant_b_frames" => 0,
+      "points_a" => 3,
+      "points_b" => 0,
+      "bonus_a" => 0,
+      "bonus_b" => 0
+    })
+
+    single_walkover_fixture(group, venue, c, d)
+
+    played = Competitions.played_participant_ids(group.id)
+
+    assert MapSet.member?(played, a.id)
+    assert MapSet.member?(played, b.id)
+    assert MapSet.member?(played, c.id)
+    refute MapSet.member?(played, d.id)
+  end
+
+  test "played_participant_ids_by_group/1 batches the same result across multiple groups in one call" do
+    {group_a, [a, b], venue_a} = group_with_players(2, "Batch A")
+    {group_b, [c, d], venue_b} = group_with_players(2, "Batch B")
+
+    verified_result(group_a, venue_a, a, b, %{
+      "winner_id" => a.id,
+      "participant_a_frames" => 3,
+      "participant_b_frames" => 0,
+      "points_a" => 3,
+      "points_b" => 0,
+      "bonus_a" => 0,
+      "bonus_b" => 0
+    })
+
+    single_walkover_fixture(group_b, venue_b, c, d)
+
+    by_group = Competitions.played_participant_ids_by_group([group_a.id, group_b.id])
+
+    assert MapSet.equal?(by_group[group_a.id], MapSet.new([a.id, b.id]))
+    assert MapSet.equal?(by_group[group_b.id], MapSet.new([c.id]))
+
+    # Matches calling the single-group function once per group.
+    assert by_group[group_a.id] == Competitions.played_participant_ids(group_a.id)
+    assert by_group[group_b.id] == Competitions.played_participant_ids(group_b.id)
+  end
+
+  test "a group where nobody played contributes zero best-of-rest qualifiers, even though a double walkover counts as a loss in standings" do
+    {dead_group, [x, y], venue} = group_with_players(2, "Dead Group")
+    {live_group, [a1, a2, a3], venue} = group_with_players(3, "Live Group", venue)
+    config = Competitions.get_or_create_group_config(dead_group.stage_id, "male")
+
+    {:ok, _} =
+      Competitions.update_group_config(config, %{advancer_count: 1, extra_qualifier_count: 2})
+
+    # Nobody ever played in the dead group — this is what the deadline
+    # worker produces once the completion deadline passes unplayed.
+    double_walkover_fixture(dead_group, venue, x, y)
+
+    verified_result(live_group, venue, a1, a2, %{
+      "winner_id" => a1.id,
+      "participant_a_frames" => 5,
+      "participant_b_frames" => 0,
+      "points_a" => 6,
+      "points_b" => 0,
+      "bonus_a" => 1,
+      "bonus_b" => 0
+    })
+
+    verified_result(live_group, venue, a2, a3, %{
+      "winner_id" => a2.id,
+      "participant_a_frames" => 4,
+      "participant_b_frames" => 1,
+      "points_a" => 4,
+      "points_b" => 1,
+      "bonus_a" => 0,
+      "bonus_b" => 0
+    })
+
+    qualifiers =
+      Competitions.best_of_rest_qualifiers(dead_group.stage_id, "male", {:venue_id, venue.id})
+
+    qualifier_ids = Enum.map(qualifiers, & &1.participant_id)
+
+    refute x.id in qualifier_ids
+    refute y.id in qualifier_ids
+    assert a2.id in qualifier_ids
   end
 
   test "grassroots standings read verified and walkover results only" do

@@ -451,13 +451,16 @@ defmodule CuevolutionWeb.PlayerComponents do
 
   @stage_styles %{
     "grassroots" => {"bg-ink-100", "text-ink-700", "bg-ink-500"},
+    "grassroots round 2" => {"bg-amber-100", "text-amber-700", "bg-amber-500"},
     "regional" => {"bg-green-100", "text-green-700", "bg-green-500"},
     "circuit" => {"bg-red-50", "text-red-700", "bg-red-500"},
     "finals" => {"bg-ink-950", "text-ink-25", "bg-ink-25"}
   }
 
   @doc "The colored dot + label badge for a qualification pipeline stage."
-  attr :stage, :string, required: true, doc: "one of: grassroots, regional, circuit, finals"
+  attr :stage, :string,
+    required: true,
+    doc: "one of: grassroots, grassroots round 2, regional, circuit, finals"
 
   def stage_badge(assigns) do
     {bg, text, dot} =

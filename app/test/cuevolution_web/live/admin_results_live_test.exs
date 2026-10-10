@@ -195,12 +195,10 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
     {:ok, _result} =
       Competitions.record_result(fixture, admin, %{"winner_participation_id" => pa.id})
 
-    # `record_points/3` requires `:record_results` (Tournament Director has
-    # only `:approve_results` — see `Admin.permissions/0`), so initial points
-    # entry stays with the recorder/Super Admin; a Tournament Director can
-    # still correct an existing entry (`correct_points/3`, gated on
-    # `:approve_results`). Reuse the super admin who recorded the result to
-    # exercise the entry form here.
+    # Reuse the super admin who recorded the result to exercise the entry
+    # form here (a Tournament Director also has `:record_results` and
+    # `:approve_results` now — see `Admin.permissions/0` — so either role
+    # would work for this assertion).
     conn = log_in_admin(conn, id: admin.id, role: admin.role)
     {:ok, view, _html} = live(conn, ~p"/admin/results")
 

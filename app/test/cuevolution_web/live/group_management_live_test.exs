@@ -6,7 +6,7 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
-  alias Cuevolution.Competitions.{Draw, Group, MatchResult, Stage}
+  alias Cuevolution.Competitions.{Draw, Group, MatchResult, Stage, StageParticipation}
   alias Cuevolution.Repo
 
   defp log_in_admin(conn) do
@@ -254,6 +254,28 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
   end
 
   describe "Grassroots Individual Male/Female — formula-driven draw, inline on this page" do
+    test "offers a direct advance instead of a draw when entrants are at or below the advancer count",
+         %{conn: conn} do
+      {_grassroots, _venue} = create_draw_with_players(2)
+
+      conn = log_in_admin(conn)
+      {:ok, view, html} = live(conn, ~p"/admin/groups")
+
+      assert html =~ "everyone registered here already qualifies for Grassroots Round 2"
+      refute html =~ "Propose draw"
+
+      html =
+        view
+        |> element("button", "Advance everyone to Grassroots Round 2 directly")
+        |> render_click()
+
+      assert html =~ "Qualifiers advanced to Grassroots Round 2."
+
+      round_2 = Repo.get_by!(Stage, name: "Grassroots Round 2")
+      participations = Repo.all(Cuevolution.Competitions.StageParticipation)
+      assert Enum.all?(participations, &(&1.stage_id == round_2.id))
+    end
+
     test "proposes a draw, the stepper live-updates group sizes, and dealing creates groups",
          %{conn: conn} do
       {_grassroots, _venue} = create_draw_with_players(8)
@@ -526,6 +548,50 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     end
   end
 
+  describe "Grassroots Round 2 — same venue-scoped auto-draw experience as Grassroots" do
+    defp create_round_2_draw_with_players(count) do
+      round_2 = Repo.get_by!(Stage, name: "Grassroots Round 2")
+      region = List.first(Accounts.list_regions())
+      venue = insert(:venue, region_id: region.id)
+
+      for _ <- 1..count do
+        player =
+          insert(:player, region_id: region.id, preferred_venue_id: venue.id, gender: "male")
+
+        insert(:stage_participation,
+          stage_id: round_2.id,
+          region_id: region.id,
+          category: "male",
+          player_id: player.id
+        )
+      end
+
+      {round_2, venue}
+    end
+
+    test "proposing and dealing a draw works the same as Grassroots", %{conn: conn} do
+      create_round_2_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, html} = live(conn, ~p"/admin/groups")
+
+      assert html =~ "Grassroots Round 2"
+
+      html = view |> element("button", "Grassroots Round 2") |> render_click()
+      refute html =~ "Create group"
+
+      html = view |> element("button", "Propose draw") |> render_click()
+      assert html =~ "4 entrants → 1 group"
+
+      html = view |> element("button", "Deal draw") |> render_click()
+      assert html =~ "Draw dealt."
+      assert html =~ "Group A"
+
+      group = Repo.get_by!(Group, stage_id: Repo.get_by!(Stage, name: "Grassroots Round 2").id)
+      assert group.venue_id
+    end
+  end
+
   describe "Group standings tab" do
     defp group_with_players(count, name) do
       grassroots = Repo.get_by!(Stage, name: "Grassroots")
@@ -633,10 +699,88 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       assert html =~ "pts/match"
 
       html = view |> element("button", "Close stage & advance qualifiers") |> render_click()
-      assert html =~ "Confirm advancement of every listed qualifier?"
+      assert html =~ "Review before advancing."
 
       html = view |> element("button", "Confirm & advance") |> render_click()
-      assert html =~ "Qualifiers advanced."
+      assert html =~ "Qualifiers advanced to Grassroots Round 2."
+
+      # Lands on Grassroots Round 2 with nothing left to confirm — advancing
+      # is a one-time action, not something the admin can accidentally repeat.
+      refute html =~ "Close stage &amp; advance qualifiers"
+    end
+
+    test "an admin can manually remove a suggested qualifier and add a different one before confirming",
+         %{conn: conn} do
+      {group_a, [a1, a2, a3], venue_a} = group_with_players(3, "Manual Edit A")
+
+      verified_result(group_a, venue_a, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 5,
+        "participant_b_frames" => 0,
+        "points_a" => 6,
+        "points_b" => 0,
+        "bonus_a" => 1,
+        "bonus_b" => 0
+      })
+
+      verified_result(group_a, venue_a, a2, a3, %{
+        "winner_id" => a2.id,
+        "participant_a_frames" => 4,
+        "participant_b_frames" => 1,
+        "points_a" => 4,
+        "points_b" => 1,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      a3 = Repo.preload(a3, :player)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{group_a.region_id}']") |> render_click()
+      view |> element("button[phx-value-id='#{venue_a.id}']") |> render_click()
+      view |> element("button", "Group standings") |> render_click()
+      view |> element("button", "Close stage & advance qualifiers") |> render_click()
+
+      assert has_element?(
+               view,
+               "button[phx-click='remove_qualifier'][phx-value-id='#{a2.id}']"
+             )
+
+      # Remove a2 (an automatic top-N qualifier) and add a3 (who ranked
+      # below the cutoff) instead, before confirming.
+      view
+      |> element("button[phx-click='remove_qualifier'][phx-value-id='#{a2.id}']")
+      |> render_click()
+
+      refute has_element?(
+               view,
+               "button[phx-click='remove_qualifier'][phx-value-id='#{a2.id}']"
+             )
+
+      view
+      |> form("form[phx-change='search_qualifier_candidate']", %{"query" => a3.player.username})
+      |> render_change()
+
+      assert has_element?(view, "button[phx-click='add_qualifier'][phx-value-id='#{a3.id}']")
+
+      view
+      |> element("button[phx-click='add_qualifier'][phx-value-id='#{a3.id}']")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               "button[phx-click='remove_qualifier'][phx-value-id='#{a3.id}']"
+             )
+
+      html = view |> element("button", "Confirm & advance") |> render_click()
+      assert html =~ "Qualifiers advanced to Grassroots Round 2."
+
+      round_2 = Repo.get_by!(Stage, name: "Grassroots Round 2")
+      assert Repo.get!(StageParticipation, a1.id).stage_id == round_2.id
+      assert Repo.get!(StageParticipation, a3.id).stage_id == round_2.id
+      refute Repo.get!(StageParticipation, a2.id).stage_id == round_2.id
     end
 
     test "Venue overall toggle combines every group's standings into one ranked table",

@@ -32,7 +32,7 @@ defmodule Cuevolution.Accounts.AdminPermissionsTest do
     assert Admin.can?(venue_rep, :manage_fixtures)
     assert Admin.can?(venue_rep, :record_results)
     refute Admin.can?(director, :manage_fixtures)
-    refute Admin.can?(director, :record_results)
+    assert Admin.can?(director, :record_results)
   end
 
   test "tournament directors cannot manage super admins" do

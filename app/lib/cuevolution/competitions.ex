@@ -37,13 +37,13 @@ defmodule Cuevolution.Competitions do
   # EAT = East Africa Time, UTC+3, fixed offset (no DST) — spec 007 FR-008.
   @eat_offset_seconds 3 * 60 * 60
 
-  @doc "All 4 seeded stages, in pipeline order (Grassroots → Finals)."
+  @doc "All 5 seeded stages, in pipeline order (Grassroots → Grassroots Round 2 → Regional → Circuit → Finals)."
   def list_stages do
     Repo.all(from s in Stage, order_by: s.order)
   end
 
-  @doc "Sets the stage-wide Grassroots completion deadline."
-  def set_grassroots_deadline(%Admin{} = admin, deadline) do
+  @doc "Sets `stage`'s completion deadline (Grassroots/Grassroots Round 2 use this for their deadline-driven group-size formula; any stage may have one)."
+  def set_stage_deadline(%Admin{} = admin, %Stage{} = stage, deadline) do
     cond do
       not Admin.can?(admin, :manage_stages) ->
         {:error, :unauthorized}
@@ -52,7 +52,7 @@ defmodule Cuevolution.Competitions do
         {:error, :invalid_date}
 
       true ->
-        grassroots_stage()
+        stage
         |> Stage.changeset(%{completion_deadline: deadline})
         |> Repo.update()
     end
@@ -65,39 +65,44 @@ defmodule Cuevolution.Competitions do
 
   @doc "The first stage in pipeline order — individual male players enter here (spec 006)."
   def grassroots_stage do
-    Repo.one!(from s in Stage, where: s.order == 1)
+    Repo.one!(from s in Stage, where: s.name == "Grassroots")
   end
 
-  @doc "The second stage in pipeline order — individual ladies and every team enter here directly, never passing through Grassroots."
+  @doc "The second Grassroots round — male players who qualify out of Grassroots groups play a second venue-scoped round-robin round here before advancing to Regional."
+  def grassroots_round_2_stage do
+    Repo.one!(from s in Stage, where: s.name == "Grassroots Round 2")
+  end
+
+  @doc "The Regional stage — individual ladies and every team enter here directly, never passing through Grassroots."
   def regional_stage do
-    Repo.one!(from s in Stage, where: s.order == 2)
+    Repo.one!(from s in Stage, where: s.name == "Regional")
   end
 
-  @doc "Players who have played fewer than half of their active Grassroots fixtures."
-  def players_with_grassroots_match_backlog do
-    query_grassroots_match_backlog()
+  @doc "Players who have played fewer than half of their active fixtures at `stage_id` (a Grassroots-round stage)."
+  def players_with_grassroots_match_backlog(stage_id) do
+    stage_id
+    |> query_grassroots_match_backlog()
     |> Repo.all()
   end
 
-  @doc "Returns a page of Grassroots match-backlog players for batched notification delivery."
-  def players_with_grassroots_match_backlog(limit, offset)
+  @doc "Returns a page of match-backlog players at `stage_id` for batched notification delivery."
+  def players_with_grassroots_match_backlog(stage_id, limit, offset)
       when is_integer(limit) and limit > 0 and is_integer(offset) and offset >= 0 do
-    query_grassroots_match_backlog()
+    stage_id
+    |> query_grassroots_match_backlog()
     |> limit(^limit)
     |> offset(^offset)
     |> Repo.all()
   end
 
-  defp query_grassroots_match_backlog do
+  defp query_grassroots_match_backlog(stage_id) do
     scheduled_from_a =
       from f in Fixture,
         join: sp in StageParticipation,
         on: sp.id == f.participant_a_id,
         join: r in Round,
         on: r.id == f.round_id,
-        join: s in Stage,
-        on: s.id == r.stage_id,
-        where: f.status == "scheduled" and s.name == "Grassroots",
+        where: f.status == "scheduled" and r.stage_id == ^stage_id,
         select: %{player_id: sp.player_id}
 
     scheduled_from_b =
@@ -106,9 +111,7 @@ defmodule Cuevolution.Competitions do
         on: sp.id == f.participant_b_id,
         join: r in Round,
         on: r.id == f.round_id,
-        join: s in Stage,
-        on: s.id == r.stage_id,
-        where: f.status == "scheduled" and s.name == "Grassroots",
+        where: f.status == "scheduled" and r.stage_id == ^stage_id,
         select: %{player_id: sp.player_id}
 
     scheduled_player_ids =
@@ -128,11 +131,9 @@ defmodule Cuevolution.Competitions do
         on: sp.id == f.participant_a_id,
         join: r in Round,
         on: r.id == f.round_id,
-        join: s in Stage,
-        on: s.id == r.stage_id,
         where:
           f.status in ["scheduled", "live", "completed", "verified", "walkover"] and
-            s.name == "Grassroots",
+            r.stage_id == ^stage_id,
         select: %{player_id: sp.player_id, fixture_id: f.id, status: f.status}
 
     grassroots_from_b =
@@ -141,11 +142,9 @@ defmodule Cuevolution.Competitions do
         on: sp.id == f.participant_b_id,
         join: r in Round,
         on: r.id == f.round_id,
-        join: s in Stage,
-        on: s.id == r.stage_id,
         where:
           f.status in ["scheduled", "live", "completed", "verified", "walkover"] and
-            s.name == "Grassroots",
+            r.stage_id == ^stage_id,
         select: %{player_id: sp.player_id, fixture_id: f.id, status: f.status}
 
     grassroots_matches =
@@ -647,6 +646,45 @@ defmodule Cuevolution.Competitions do
     |> Repo.preload([:player, team: [:region, :roster]])
   end
 
+  @doc """
+  Members of any *final* (fully played) group at `stage_id`/`category`/
+  `scope`, who've actually played at least once, matching `query` by
+  name/username/team — the candidate pool for manually adding someone to
+  the "Close stage & advance qualifiers" list (see `close_group_stage/5`,
+  which enforces the exact same two rules). An admin curating the list can
+  only pull from people who actually competed in this venue/region's
+  finished groups — never from another venue, never from a group still
+  mid-play, and never one of a dead group's own zero-play participants.
+  """
+  def search_eligible_qualifiers(stage_id, category, scope, query) do
+    groups = final_groups(stage_id, category, scope)
+    group_ids = Enum.map(groups, & &1.id)
+    played_by_group = played_participant_ids_by_group(group_ids)
+
+    played_ids =
+      groups |> Enum.flat_map(&played_group_member_ids(&1, played_by_group)) |> MapSet.new()
+
+    pattern = "%" <> escape_like_pattern(query) <> "%"
+
+    from(gm in GroupMembership,
+      join: p in StageParticipation,
+      on: p.id == gm.stage_participation_id,
+      left_join: player in assoc(p, :player),
+      left_join: team in assoc(p, :team),
+      where: gm.group_id in ^group_ids,
+      where:
+        ilike(fragment("? || ' ' || ?", player.first_name, player.last_name), ^pattern) or
+          ilike(player.username, ^pattern) or
+          ilike(team.name, ^pattern),
+      order_by: [asc: player.first_name, asc: team.name],
+      select: p
+    )
+    |> Repo.all()
+    |> Enum.filter(&MapSet.member?(played_ids, &1.id))
+    |> Enum.take(8)
+    |> Repo.preload([:player, team: [:region, :roster]])
+  end
+
   defp escape_like_pattern(value), do: String.replace(value, ~w(% _), fn c -> "\\" <> c end)
 
   @doc """
@@ -689,16 +727,16 @@ defmodule Cuevolution.Competitions do
     |> Repo.insert()
   end
 
-  defp validate_group_venue(changeset, %Stage{name: "Grassroots"}) do
-    Ecto.Changeset.validate_required(changeset, [:venue_id],
-      message: "is required for Grassroots-stage groups"
-    )
-  end
-
-  defp validate_group_venue(changeset, _stage) do
-    case Ecto.Changeset.get_field(changeset, :venue_id) do
-      nil -> changeset
-      _ -> Ecto.Changeset.add_error(changeset, :venue_id, "must be blank outside Grassroots")
+  defp validate_group_venue(changeset, %Stage{} = stage) do
+    if Stage.grassroots?(stage) do
+      Ecto.Changeset.validate_required(changeset, [:venue_id],
+        message: "is required for Grassroots-stage groups"
+      )
+    else
+      case Ecto.Changeset.get_field(changeset, :venue_id) do
+        nil -> changeset
+        _ -> Ecto.Changeset.add_error(changeset, :venue_id, "must be blank outside Grassroots")
+      end
     end
   end
 
@@ -760,6 +798,47 @@ defmodule Cuevolution.Competitions do
     case propose_group_sizes(config, length(entrants)) do
       {:ok, proposal} -> {:ok, Map.put(proposal, :entrants, entrants)}
       error -> error
+    end
+  end
+
+  @doc "Count of not-yet-grouped entrants for `stage_id`/`scope`/`category` — used to decide whether a draw is even worth running (see `advance_all_entrants/4`) before the admin commits to proposing one."
+  def draw_entrant_count(stage_id, scope, category) do
+    stage_id |> draw_entrants(scope, category) |> length()
+  end
+
+  @doc """
+  Directly advances every registered (not-yet-grouped) entrant at
+  `stage_id`/`scope`/`category` into the next stage, skipping the draw
+  entirely. Only valid once the entrant count is at or below the stage's
+  `advancer_count` — at that size, every entrant would qualify regardless
+  of result, so a draw has nothing left to decide. Refuses
+  (`:too_many_entrants`) once the pool is larger, so this shortcut can't
+  be used to skip a draw that would actually matter; refuses
+  (`:no_entrants`) if there's nobody to advance.
+
+  Restricted to `:advance_participants` (Tournament Director/Super Admin
+  only), same as `close_group_stage/5` which this mirrors for the
+  no-draw-needed case.
+  """
+  def advance_all_entrants(stage_id, category, scope, %Admin{} = admin) do
+    config = get_or_create_group_config(stage_id, category)
+    entrants = draw_entrants(stage_id, scope, category)
+
+    with true <- Admin.can?(admin, :advance_participants),
+         %Stage{} = stage <- Repo.get(Stage, stage_id),
+         :ok <- if(Stage.round_robin?(stage), do: :ok, else: :not_round_robin),
+         next_stage when not is_nil(next_stage) <- next_stage(stage),
+         :ok <- if(entrants == [], do: :no_entrants, else: :ok),
+         :ok <- if(length(entrants) <= config.advancer_count, do: :ok, else: :too_many_entrants) do
+      advance_qualifiers(entrants, admin, next_stage)
+    else
+      false -> {:error, :unauthorized}
+      nil -> {:error, :stage_not_found}
+      :not_round_robin -> {:error, :invalid_qualifiers}
+      :no_entrants -> {:error, :no_entrants}
+      :too_many_entrants -> {:error, :too_many_entrants}
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :invalid_qualifiers}
     end
   end
 
@@ -2618,12 +2697,10 @@ defmodule Cuevolution.Competitions do
     group = Repo.preload(group, :stage)
     participant_ids = group_member_participant_ids(group.id)
 
-    case group.stage.name do
-      "Grassroots" ->
-        do_grassroots_group_standings(group, participant_ids)
-
-      _ ->
-        StandingsCalculator.rank(participant_ids, group_matches(group.id), cascade: :wins_first)
+    if Stage.grassroots?(group.stage) do
+      do_grassroots_group_standings(group, participant_ids)
+    else
+      StandingsCalculator.rank(participant_ids, group_matches(group.id), cascade: :wins_first)
     end
   end
 
@@ -2645,7 +2722,7 @@ defmodule Cuevolution.Competitions do
   # `group_standings/1` reuses what it already has instead of calling back
   # into `grassroots_group_standings/1` and repeating the same two queries.
   defp do_grassroots_group_standings(%Group{} = group, participant_ids) do
-    if group.stage.name in ["Grassroots", "Regional"] do
+    if Stage.round_robin?(group.stage) do
       StandingsCalculator.rank(participant_ids, group_matches(group.id),
         cascade: :points_first,
         tie_breakers: Enum.chunk_every(group.tie_breakers || [], 2)
@@ -2691,15 +2768,32 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  @doc "Ranks non-top-N Grassroots participants across groups by normalized performance."
-  def best_of_rest_qualifiers(stage_id, category) do
-    groups = Repo.all(from g in Group, where: g.stage_id == ^stage_id and g.category == ^category)
+  @doc """
+  Ranks non-top-N participants across groups by normalized performance,
+  scoped to `scope` (`{:venue_id, id}` or `{:region_id, id}`, same as
+  `propose_draw/3`) — each venue/region's own extra qualifier slots are
+  decided from its own groups alone, independent of every other venue.
+  """
+  def best_of_rest_qualifiers(stage_id, category, scope) do
+    groups =
+      Group
+      |> where([g], g.stage_id == ^stage_id and g.category == ^category)
+      |> filter_by_group_scope(scope)
+      |> Repo.all()
+
     config = get_or_create_group_config(stage_id, category)
     top_count = config.advancer_count
+    played_by_group = played_participant_ids_by_group(Enum.map(groups, & &1.id))
 
     groups
     |> Enum.flat_map(fn group ->
-      standings = grassroots_group_standings(group)
+      played_ids = Map.get(played_by_group, group.id, MapSet.new())
+
+      standings =
+        group
+        |> grassroots_group_standings()
+        |> Enum.filter(&MapSet.member?(played_ids, &1.participant_id))
+
       top_ids = standings |> Enum.take(top_count) |> MapSet.new(& &1.participant_id)
 
       Enum.flat_map(standings, &best_rest_row(&1, top_ids, group.id))
@@ -2710,10 +2804,15 @@ defmodule Cuevolution.Competitions do
     |> Enum.take(config.extra_qualifier_count)
   end
 
+  # `standings` is already filtered to participants who've actually played
+  # (see `played_participant_ids/1`), so `wins + losses` here is always
+  # >= 1 — safe as the points/frame-diff-per-match denominator.
   defp best_rest_row(row, top_ids, group_id) do
-    played = row.wins + row.losses
+    if MapSet.member?(top_ids, row.participant_id) do
+      []
+    else
+      played = row.wins + row.losses
 
-    if played > 0 and not MapSet.member?(top_ids, row.participant_id) do
       [
         Map.merge(row, %{
           matches_played: played,
@@ -2722,25 +2821,24 @@ defmodule Cuevolution.Competitions do
           group_id: group_id
         })
       ]
-    else
-      []
     end
   end
 
   @doc """
-  Groups within `stage_id`/`category` whose fixtures are all complete
-  (verified/walkover) — the only groups whose standings are settled enough
-  to contribute automatic top-N qualifiers. Deliberately cross-venue (a
-  Grassroots category closes across every venue at once), but excludes:
-  a venue's superseded groups left behind by a redraw (they never got
-  fixtures at all, so `final?` is false), and any group still mid-play.
-  Without this, a freshly redrawn, unplayed group's all-tied-at-zero
-  standings would "qualify" arbitrary participants who haven't played a
-  single fixture.
+  Groups within `stage_id`/`category`/`scope` (`{:venue_id, id}` or
+  `{:region_id, id}`) whose fixtures are all complete (verified/walkover)
+  — the only groups whose standings are settled enough to contribute
+  automatic top-N qualifiers. Scoped to one venue/region at a time — each
+  closes independently of every other — but excludes: a venue's
+  superseded groups left behind by a redraw (they never got fixtures at
+  all, so `final?` is false), and any group still mid-play. Without this,
+  a freshly redrawn, unplayed group's all-tied-at-zero standings would
+  "qualify" arbitrary participants who haven't played a single fixture.
   """
-  def final_groups(stage_id, category) do
+  def final_groups(stage_id, category, scope) do
     Group
     |> where([g], g.stage_id == ^stage_id and g.category == ^category)
+    |> filter_by_group_scope(scope)
     |> Repo.all()
     |> Enum.filter(&group_final?/1)
   end
@@ -2753,47 +2851,207 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  Advances the reviewed top-N and best-of-rest qualifiers into the next
-  stage — works for either round-robin group stage (Grassroots or Regional).
+  Advances `confirmed_ids` into the next stage, scoped to one `scope`
+  (`{:venue_id, id}` or `{:region_id, id}`) at a time — works for either
+  round-robin group stage (Grassroots or Regional). Each venue/region
+  closes independently of every other: a venue that's finished playing
+  isn't held back by one that hasn't, and closing one never touches
+  another's already-settled groups.
+
+  `confirmed_ids` is the admin's final, reviewed list — normally the
+  automatic top-N/best-of-rest suggestion (`GroupManagementLive` computes
+  that default), but the admin may freely add or remove names before
+  confirming (e.g. to promote a 3rd-place finisher instead of 2nd, or drop
+  someone for a reason the system can't see). Two hard rules bound that
+  freedom, both enforced here rather than trusted to the caller: every id
+  must belong to a group that's actually final within this
+  `stage_id`/`category`/`scope` (never another venue's qualifier, never
+  someone from a group still mid-play), and must have actually played at
+  least one match there (see `played_participant_ids/1`) — a dead group's
+  empty slot can be filled by someone who legitimately played elsewhere,
+  never by one of that dead group's own zero-play participants.
+
   Restricted to `:advance_participants` (Tournament Director/Super Admin
   only), same as `advance_to_stage/3` which this calls per qualifier.
   """
-  def close_group_stage(stage_id, category, %Admin{} = admin, confirmed_ids)
+  def close_group_stage(stage_id, category, scope, %Admin{} = admin, confirmed_ids)
       when is_list(confirmed_ids) do
     with true <- Admin.can?(admin, :advance_participants),
-         %Stage{name: name} = stage when name in ["Grassroots", "Regional"] <-
-           Repo.get(Stage, stage_id),
+         %Stage{} = stage <- Repo.get(Stage, stage_id),
+         :ok <- if(Stage.round_robin?(stage), do: :ok, else: :not_round_robin),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
-         groups <- final_groups(stage_id, category),
-         config <- get_or_create_group_config(stage_id, category),
-         top_ids <-
-           Enum.flat_map(groups, fn group ->
-             Enum.take(group_standings(group), config.advancer_count)
-           end)
-           |> Enum.map(& &1.participant_id),
-         best_ids <- Enum.map(best_of_rest_qualifiers(stage_id, category), & &1.participant_id),
-         expected <- Enum.uniq(top_ids ++ best_ids),
-         true <-
-           Enum.sort(Enum.map(confirmed_ids, &to_string/1)) ==
-             Enum.sort(Enum.map(expected, &to_string/1)) do
-      participations = Repo.all(from sp in StageParticipation, where: sp.id in ^expected)
+         groups <- final_groups(stage_id, category, scope),
+         played_by_group <- played_participant_ids_by_group(Enum.map(groups, & &1.id)),
+         eligible_ids <- Enum.flat_map(groups, &played_group_member_ids(&1, played_by_group)),
+         :ok <- if(all_eligible?(confirmed_ids, eligible_ids), do: :ok, else: :ineligible) do
+      participations = Repo.all(from sp in StageParticipation, where: sp.id in ^confirmed_ids)
 
       advance_qualifiers(participations, admin, next_stage)
     else
       false -> {:error, :unauthorized}
       nil -> {:error, :stage_not_found}
+      :not_round_robin -> {:error, :invalid_qualifiers}
+      :ineligible -> {:error, :invalid_qualifiers}
       {:error, reason} -> {:error, reason}
       _ -> {:error, :invalid_qualifiers}
     end
   end
 
+  defp all_eligible?(confirmed_ids, eligible_ids) do
+    eligible_set = MapSet.new(eligible_ids, &to_string/1)
+    Enum.all?(confirmed_ids, &MapSet.member?(eligible_set, to_string(&1)))
+  end
+
+  # A group's members who actually played at least once — never its
+  # zero-play participants, even though they're technically "members" of
+  # a now-final (deadline-closed) group. Shared by `close_group_stage/5`'s
+  # eligibility gate and `search_eligible_qualifiers/4`'s candidate pool,
+  # so a name the admin can search up is always one `close_group_stage/5`
+  # will actually accept.
+  defp played_group_member_ids(%Group{id: group_id}, played_by_group) do
+    played_ids = Map.get(played_by_group, group_id, MapSet.new())
+    group_id |> group_member_participant_ids() |> Enum.filter(&MapSet.member?(played_ids, &1))
+  end
+
+  defp advance_qualifiers([], _admin, _next_stage), do: {:ok, []}
+
+  # Batches every step of advancing a whole qualifier list into one
+  # transaction, instead of calling `advance_to_stage/3` (its own
+  # transaction, ~4 round trips) once per participant — looping that for
+  # a few dozen qualifiers pins a DB connection for a few dozen sequential
+  # transactions, the same shape of problem already fixed in draw/fixture
+  # generation and notification dispatch (see those functions' comments).
+  # It's also strictly more correct: the old loop committed each
+  # participant's advance independently, so a capacity/eligibility
+  # failure partway through left the first N already advanced and the
+  # rest not — this is genuinely all-or-nothing, matching the single
+  # confirmed list the admin actually reviewed.
   defp advance_qualifiers(participations, admin, next_stage) do
-    Enum.reduce_while(participations, {:ok, []}, fn participation, {:ok, advanced} ->
-      case advance_to_stage(participation, admin, next_stage) do
-        {:ok, advanced_participation} -> {:cont, {:ok, [advanced_participation | advanced]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+    category = hd(participations).category
+
+    Multi.new()
+    |> Multi.run(:eligible, fn repo, _changes ->
+      bulk_eligible_participations(repo, participations)
     end)
+    |> Multi.run(:capacity, fn repo, %{eligible: eligible} ->
+      bulk_claim_capacity(repo, next_stage.id, category, length(eligible))
+    end)
+    |> Multi.run(:advance, fn repo, %{eligible: eligible} ->
+      ids = Enum.map(eligible, & &1.id)
+
+      repo.update_all(
+        from(sp in StageParticipation, where: sp.id in ^ids),
+        set: [stage_id: next_stage.id, updated_at: now]
+      )
+
+      {:ok, Enum.map(eligible, &%{&1 | stage_id: next_stage.id})}
+    end)
+    |> Multi.run(:logs, fn repo, %{eligible: eligible} ->
+      entity_type = StageParticipation |> to_string() |> String.trim_leading("Elixir.")
+
+      rows =
+        Enum.map(eligible, fn participation ->
+          %{
+            id: Ecto.UUID.generate(),
+            admin_id: admin.id,
+            actor_type: "admin",
+            action_type: "advance_to_stage",
+            entity_type: entity_type,
+            entity_id: participation.id,
+            prior_value: %{"stage_id" => participation.stage_id},
+            new_value: %{"stage_id" => next_stage.id},
+            inserted_at: now
+          }
+        end)
+
+      {count, _} = repo.insert_all(Cuevolution.Accounts.AdminActionLog, rows)
+      {:ok, count}
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{advance: advanced}} -> {:ok, advanced}
+      {:error, :eligible, :registration_closed, _changes} -> {:error, :registration_closed}
+      {:error, :capacity, :capacity_exceeded, _changes} -> {:error, :capacity_exceeded}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  # Bulk equivalent of `eligible_for_tournament?/2` — two queries total
+  # (one for player-owned participations, one for team-owned) rather than
+  # one `exists?` round trip per participant. All-or-nothing: if any
+  # participant in the batch is ineligible, the whole advance is refused,
+  # same as the per-participant version would have refused at that one
+  # participant.
+  defp bulk_eligible_participations(repo, participations) do
+    cutoff = Accounts.tournament_registration_cutoff()
+    {player_sps, team_sps} = Enum.split_with(participations, &(&1.team_id == nil))
+
+    eligible_player_ids =
+      if player_sps == [] do
+        MapSet.new()
+      else
+        player_ids = Enum.map(player_sps, & &1.player_id)
+
+        from(p in Player,
+          where:
+            p.id in ^player_ids and
+              (p.inserted_at < ^cutoff or p.tournament_eligibility_override),
+          select: p.id
+        )
+        |> repo.all()
+        |> MapSet.new()
+      end
+
+    ineligible_team_ids =
+      if team_sps == [] do
+        MapSet.new()
+      else
+        team_ids = Enum.map(team_sps, & &1.team_id)
+
+        from(p in Player,
+          where:
+            p.team_id in ^team_ids and p.inserted_at >= ^cutoff and
+              not p.tournament_eligibility_override,
+          select: p.team_id,
+          distinct: true
+        )
+        |> repo.all()
+        |> MapSet.new()
+      end
+
+    eligible =
+      Enum.filter(player_sps, &MapSet.member?(eligible_player_ids, &1.player_id)) ++
+        Enum.reject(team_sps, &MapSet.member?(ineligible_team_ids, &1.team_id))
+
+    if length(eligible) == length(participations),
+      do: {:ok, eligible},
+      else: {:error, :registration_closed}
+  end
+
+  # Bulk equivalent of `check_and_claim_capacity/2` + `claim_capacity/2` —
+  # claims `needed_count` slots in one atomic conditional UPDATE instead of
+  # incrementing by 1 per participant. Uncapped stages (no config row,
+  # e.g. Grassroots/Grassroots Round 2/Regional) always succeed.
+  defp bulk_claim_capacity(repo, stage_id, category, needed_count) do
+    case repo.one(
+           from c in StageCapacityConfig,
+             where: c.stage_id == ^stage_id and c.category == ^category
+         ) do
+      nil ->
+        {:ok, :uncapped}
+
+      %StageCapacityConfig{id: config_id} ->
+        {count, _} =
+          repo.update_all(
+            from(c in StageCapacityConfig,
+              where: c.id == ^config_id and c.current_count + ^needed_count <= c.capacity_limit
+            ),
+            inc: [current_count: needed_count]
+          )
+
+        if count == 1, do: {:ok, :claimed}, else: {:error, :capacity_exceeded}
+    end
   end
 
   @doc """
@@ -2850,6 +3108,50 @@ defmodule Cuevolution.Competitions do
     )
     |> Repo.all()
     |> Enum.map(&to_calculator_match/1)
+  end
+
+  @doc """
+  Participant ids in `group_id` who've actually played at least one match —
+  a verified result, or the present side of a *single* walkover. A
+  *double* walkover (nobody showed, no winner) counts toward neither side:
+  it exists only to let the deadline-enforcement worker close out a dead
+  fixture, not to prove either participant competed. Used to keep
+  `close_group_stage/5`/`best_of_rest_qualifiers/3` from auto-qualifying
+  someone out of a group where nobody actually played — an arbitrary
+  zero-all tiebreak order is not a legitimate win.
+
+  Thin single-group wrapper around `played_participant_ids_by_group/1` —
+  prefer that one when checking more than one group (the Groups admin
+  page's standings view, `best_of_rest_qualifiers/3`), since this fetches
+  with its own query every time it's called in a loop.
+  """
+  def played_participant_ids(group_id) do
+    Map.get(played_participant_ids_by_group([group_id]), group_id, MapSet.new())
+  end
+
+  @doc "Same as `played_participant_ids/1`, batched across every group in `group_ids` — one query total instead of one per group. Returns `%{group_id => MapSet.t()}`; a group with no qualifying matches simply has no key."
+  def played_participant_ids_by_group(group_ids) do
+    from(mr in MatchResult,
+      join: f in Fixture,
+      on: f.id == mr.fixture_id,
+      join: r in Round,
+      on: r.id == f.round_id,
+      where: r.group_id in ^group_ids and f.status in ["verified", "walkover"],
+      select:
+        {r.group_id, f.participant_a_id, f.participant_b_id, f.walkover_kind,
+         mr.winner_participation_id}
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn
+      {_group_id, _a, _b, "double", _winner}, acc ->
+        acc
+
+      {group_id, _a, _b, "single", winner}, acc ->
+        Map.update(acc, group_id, MapSet.new([winner]), &MapSet.put(&1, winner))
+
+      {group_id, a, b, nil, _winner}, acc ->
+        Map.update(acc, group_id, MapSet.new([a, b]), &(&1 |> MapSet.put(a) |> MapSet.put(b)))
+    end)
   end
 
   defp to_calculator_match(%MatchResult{fixture: fixture} = result) do

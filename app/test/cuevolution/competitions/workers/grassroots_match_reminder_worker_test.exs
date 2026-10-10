@@ -39,7 +39,9 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
     no_played_participation = insert(:stage_participation, player_id: no_played_player.id)
     add_scheduled_fixture(no_played_participation, grassroots)
 
-    backlog_ids = Enum.map(Competitions.players_with_grassroots_match_backlog(), & &1.id)
+    backlog_ids =
+      Enum.map(Competitions.players_with_grassroots_match_backlog(grassroots.id), & &1.id)
+
     assert target.id in backlog_ids
     assert no_played_player.id in backlog_ids
     assert length(backlog_ids) == 5
@@ -89,7 +91,42 @@ defmodule Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorkerTest do
     add_played_fixture(participation, grassroots, "verified")
     add_scheduled_fixture(participation, grassroots)
 
-    refute player.id in Enum.map(Competitions.players_with_grassroots_match_backlog(), & &1.id)
+    refute player.id in Enum.map(
+             Competitions.players_with_grassroots_match_backlog(grassroots.id),
+             & &1.id
+           )
+  end
+
+  test "reminds Grassroots Round 2 backlog players independently of Round 1's deadline" do
+    grassroots = Repo.get_by!(Stage, name: "Grassroots")
+    round_2 = Repo.get_by!(Stage, name: "Grassroots Round 2")
+
+    # Round 1's deadline has passed — it should contribute no reminders.
+    Repo.update!(
+      Ecto.Changeset.change(grassroots, completion_deadline: Date.add(Date.utc_today(), -1))
+    )
+
+    round_2 =
+      Repo.update!(
+        Ecto.Changeset.change(round_2, completion_deadline: Date.add(Date.utc_today(), 3))
+      )
+
+    player = insert(:player)
+
+    participation =
+      insert(:stage_participation, player_id: player.id, stage_id: round_2.id, category: "male")
+
+    add_scheduled_fixture(participation, round_2)
+
+    assert :ok = GrassrootsMatchReminderWorker.perform(%Oban.Job{})
+
+    assert Enum.any?(
+             Repo.all(
+               from n in Notification,
+                 where: n.player_id == ^player.id and n.event_type == "grassroots_match_reminder"
+             ),
+             &(&1.payload["deadline"] == Date.to_iso8601(round_2.completion_deadline))
+           )
   end
 
   defp add_played_fixture(participation, stage, status) do
