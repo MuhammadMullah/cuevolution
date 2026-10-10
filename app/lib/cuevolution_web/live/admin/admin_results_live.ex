@@ -41,30 +41,17 @@ defmodule CuevolutionWeb.AdminResultsLive do
     current_admin = socket.assigns.current_admin
     can_approve_results? = Admin.can?(current_admin, :approve_results)
     can_record_results? = Admin.can?(current_admin, :record_results)
-    regions = if can_approve_results?, do: Accounts.list_regions(), else: []
-    approval_venues = if can_approve_results?, do: Venues.list_venues(%{active: true}), else: []
 
     # Only loaded for a pure recorder (can_record_results? and not
     # can_approve_results?) — the only role combination whose Unplayed/Played
     # tabs actually render these (see the template). Super Admin and
     # Tournament Director also have can_record_results? == true, but neither
     # ever sees this tab (both hold `:approve_results` too, nationwide/
-    # unscoped), so skipping the fetch for them avoids two unbounded,
-    # deeply-preloaded, tournament-wide queries on every page load for data
-    # that was being thrown away. They record a specific fixture's result
-    # via `MatchEntryLive` instead (reached from Groups/Draws), which is
-    # scoped to one fixture rather than listing every unplayed one.
+    # unscoped), so skipping the fetch for them avoids the query entirely.
+    # They record a specific fixture's result via `MatchEntryLive` instead
+    # (reached from Groups/Draws), which is scoped to one fixture rather
+    # than listing every unplayed one.
     show_record_tabs? = can_record_results? and not can_approve_results?
-
-    unplayed =
-      if show_record_tabs?,
-        do: Competitions.list_unplayed_fixtures_for_admin(current_admin),
-        else: []
-
-    played =
-      if show_record_tabs?,
-        do: Competitions.list_played_fixtures_for_admin(current_admin),
-        else: []
 
     socket =
       socket
@@ -81,22 +68,50 @@ defmodule CuevolutionWeb.AdminResultsLive do
         can_record_results?: can_record_results?,
         show_record_tabs?: show_record_tabs?,
         missing_scope?: missing_scope?(current_admin),
-        approval_regions: regions,
-        approval_venues: approval_venues,
+        approval_regions: [],
+        approval_venues: [],
         approval_region_id: nil,
         approval_venue_id: nil,
         approval_search: nil,
         approval_page: 1,
+        approval_total_pages: 1,
         approved_page: 1,
+        approved_total_pages: 1,
+        unplayed_page: 1,
+        unplayed_total_pages: 1,
+        played_page: 1,
+        played_total_pages: 1,
         selected_result_ids: MapSet.new(),
-        unplayed_empty?: unplayed == [],
-        played_empty?: played == []
+        pending_results_empty?: true,
+        approved_results_empty?: true,
+        unplayed_empty?: true,
+        played_empty?: true
       )
       |> assign_approval_search_form()
-      |> load_pending_results()
-      |> load_approved_results()
-      |> stream(:unplayed, unplayed)
-      |> stream(:played, played)
+      |> stream(:pending_results, [])
+      |> stream(:approved_results, [])
+      |> stream(:unplayed, [])
+      |> stream(:played, [])
+
+    # Deferred past the disconnected (HTTP) render so a visit to this page
+    # doesn't run these queries twice — once disconnected, once again right
+    # after the socket connects. All of these are now cheap/paginated, but
+    # there's still no reason to pay for them twice on every single visit.
+    socket =
+      if connected?(socket) do
+        socket
+        |> assign(
+          approval_regions: if(can_approve_results?, do: Accounts.list_regions(), else: []),
+          approval_venues:
+            if(can_approve_results?, do: Venues.list_venues(%{active: true}), else: [])
+        )
+        |> load_pending_results()
+        |> load_approved_results()
+        |> load_unplayed_fixtures()
+        |> load_played_fixtures()
+      else
+        socket
+      end
 
     {:ok, socket}
   end
@@ -185,6 +200,24 @@ defmodule CuevolutionWeb.AdminResultsLive do
      |> load_approved_results()}
   end
 
+  def handle_event("change_unplayed_page", %{"page" => page}, socket) do
+    page = parse_page(page, socket.assigns.unplayed_total_pages)
+
+    {:noreply,
+     socket
+     |> assign(:unplayed_page, page)
+     |> load_unplayed_fixtures()}
+  end
+
+  def handle_event("change_played_page", %{"page" => page}, socket) do
+    page = parse_page(page, socket.assigns.played_total_pages)
+
+    {:noreply,
+     socket
+     |> assign(:played_page, page)
+     |> load_played_fixtures()}
+  end
+
   # Super Admin-only toggle inside the approval section: "pending" (the
   # existing checkbox approval queue) vs "approved" (browse already-final
   # results to edit — see `can_correct_result?/2`). Switching tabs clears
@@ -250,19 +283,11 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
         case Competitions.record_result(fixture, socket.assigns.current_admin, attrs) do
           {:ok, _result} ->
-            played =
-              Competitions.get_played_fixture_for_admin(socket.assigns.current_admin, fixture.id)
-
             {:noreply,
              socket
-             |> stream_delete(:unplayed, fixture)
-             |> stream_insert(:played, played, at: 0)
              |> assign(:selected_unplayed, nil)
-             |> assign(
-               :unplayed_empty?,
-               Competitions.list_unplayed_fixtures_for_admin(socket.assigns.current_admin) == []
-             )
-             |> assign(:played_empty?, false)
+             |> load_unplayed_fixtures()
+             |> load_played_fixtures()
              |> put_flash(:info, "Result recorded.")}
 
           {:error, :unauthorized} ->
@@ -590,6 +615,54 @@ defmodule CuevolutionWeb.AdminResultsLive do
       |> assign(:approved_total_pages, 1)
       |> assign(:approved_results_empty?, true)
       |> stream(:approved_results, [], reset: true)
+    end
+  end
+
+  defp load_unplayed_fixtures(socket) do
+    if socket.assigns.show_record_tabs? do
+      admin = socket.assigns.current_admin
+      per_page = Competitions.admin_fixtures_per_page()
+      total_count = Competitions.count_unplayed_fixtures_for_admin(admin)
+      total_pages = max(1, ceil(total_count / per_page))
+      page = socket.assigns.unplayed_page |> max(1) |> min(total_pages)
+
+      unplayed = Competitions.list_unplayed_fixtures_for_admin(admin, page)
+
+      socket
+      |> assign(:unplayed_page, page)
+      |> assign(:unplayed_total_pages, total_pages)
+      |> assign(:unplayed_empty?, total_count == 0)
+      |> stream(:unplayed, unplayed, reset: true)
+    else
+      socket
+      |> assign(:unplayed_page, 1)
+      |> assign(:unplayed_total_pages, 1)
+      |> assign(:unplayed_empty?, true)
+      |> stream(:unplayed, [], reset: true)
+    end
+  end
+
+  defp load_played_fixtures(socket) do
+    if socket.assigns.show_record_tabs? do
+      admin = socket.assigns.current_admin
+      per_page = Competitions.admin_fixtures_per_page()
+      total_count = Competitions.count_played_fixtures_for_admin(admin)
+      total_pages = max(1, ceil(total_count / per_page))
+      page = socket.assigns.played_page |> max(1) |> min(total_pages)
+
+      played = Competitions.list_played_fixtures_for_admin(admin, page)
+
+      socket
+      |> assign(:played_page, page)
+      |> assign(:played_total_pages, total_pages)
+      |> assign(:played_empty?, total_count == 0)
+      |> stream(:played, played, reset: true)
+    else
+      socket
+      |> assign(:played_page, 1)
+      |> assign(:played_total_pages, 1)
+      |> assign(:played_empty?, true)
+      |> stream(:played, [], reset: true)
     end
   end
 

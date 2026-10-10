@@ -282,6 +282,41 @@ defmodule Cuevolution.AccountsTest do
     end
   end
 
+  describe "update_admin_role/3" do
+    test "clears the stale region_id when moving a regional coordinator to tournament director" do
+      actor = insert(:admin, role: "super_admin")
+      region = build(:region)
+      target = insert(:admin, role: "regional_coordinator", region_id: region.id)
+
+      assert {:ok, updated} = Accounts.update_admin_role(actor, target, "tournament_director")
+
+      assert updated.role == "tournament_director"
+      refute updated.region_id
+    end
+
+    test "clears the stale venue_id when moving a venue rep to regional coordinator" do
+      actor = insert(:admin, role: "super_admin")
+      venue = insert(:venue)
+      target = insert(:admin, role: "venue_representative", venue_id: venue.id)
+
+      assert {:ok, updated} = Accounts.update_admin_role(actor, target, "regional_coordinator")
+
+      assert updated.role == "regional_coordinator"
+      refute updated.venue_id
+    end
+
+    test "clears both scope fields when moving to a role that needs neither" do
+      actor = insert(:admin, role: "super_admin")
+      venue = insert(:venue)
+      target = insert(:admin, role: "venue_representative", venue_id: venue.id)
+
+      assert {:ok, updated} = Accounts.update_admin_role(actor, target, "super_admin")
+
+      refute updated.venue_id
+      refute updated.region_id
+    end
+  end
+
   describe "revoke_invite/2 and resend_invite/3" do
     test "revoking a pending invite marks it revoked and invalidates its setup token" do
       actor = insert(:admin, role: "super_admin")

@@ -364,27 +364,60 @@
     :if={@show_record_tabs?}
     class={["grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]", @tab != "unplayed" && "hidden"]}
   >
-    <div
-      id="unplayed-fixtures"
-      phx-update="stream"
-      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
-    >
+    <div>
       <div
-        :for={{dom_id, fixture} <- @streams.unplayed}
-        id={dom_id}
-        phx-click="select_fixture"
-        phx-value-id={fixture.id}
-        class={[
-          "cursor-pointer border-b border-ink-100 px-4.5 py-3.5 text-[14px] last:border-0 hover:bg-ink-50",
-          @selected_unplayed && @selected_unplayed.id == fixture.id && "bg-red-50"
-        ]}
+        id="unplayed-fixtures"
+        phx-update="stream"
+        class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
       >
-        <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
-        <div class="text-[12.5px] text-ink-500">{fixture_venue_label(fixture)}</div>
+        <div
+          :for={{dom_id, fixture} <- @streams.unplayed}
+          id={dom_id}
+          phx-click="select_fixture"
+          phx-value-id={fixture.id}
+          class={[
+            "cursor-pointer border-b border-ink-100 px-4.5 py-3.5 text-[14px] last:border-0 hover:bg-ink-50",
+            @selected_unplayed && @selected_unplayed.id == fixture.id && "bg-red-50"
+          ]}
+        >
+          <div class="font-semibold text-ink-950">{fixture_label(fixture)}</div>
+          <div class="text-[12.5px] text-ink-500">{fixture_venue_label(fixture)}</div>
+        </div>
       </div>
-    </div>
-    <div :if={@unplayed_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
-      No unplayed fixtures.
+      <div :if={@unplayed_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
+        No unplayed fixtures.
+      </div>
+
+      <nav
+        :if={@unplayed_total_pages > 1}
+        id="unplayed-pagination"
+        aria-label="Unplayed fixture pages"
+        class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 sm:flex-row"
+      >
+        <button
+          id="unplayed-previous-page"
+          type="button"
+          phx-click="change_unplayed_page"
+          phx-value-page={@unplayed_page - 1}
+          disabled={@unplayed_page == 1}
+          class="min-h-10 w-full rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          Previous
+        </button>
+        <span class="text-sm text-ink-500">
+          Page {@unplayed_page} of {@unplayed_total_pages}
+        </span>
+        <button
+          id="unplayed-next-page"
+          type="button"
+          phx-click="change_unplayed_page"
+          phx-value-page={@unplayed_page + 1}
+          disabled={@unplayed_page == @unplayed_total_pages}
+          class="min-h-10 w-full rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          Next
+        </button>
+      </nav>
     </div>
 
     <div
@@ -458,6 +491,37 @@
     <div :if={@played_empty?} class="px-2 py-9 text-center text-sm text-ink-400">
       No played fixtures yet.
     </div>
+
+    <nav
+      :if={@played_total_pages > 1}
+      id="played-pagination"
+      aria-label="Played fixture pages"
+      class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-ink-200 p-3 sm:flex-row"
+    >
+      <button
+        id="played-previous-page"
+        type="button"
+        phx-click="change_played_page"
+        phx-value-page={@played_page - 1}
+        disabled={@played_page == 1}
+        class="min-h-10 w-full rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-950 hover:text-ink-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+      >
+        Previous
+      </button>
+      <span class="text-sm text-ink-500">
+        Page {@played_page} of {@played_total_pages}
+      </span>
+      <button
+        id="played-next-page"
+        type="button"
+        phx-click="change_played_page"
+        phx-value-page={@played_page + 1}
+        disabled={@played_page == @played_total_pages}
+        class="min-h-10 w-full rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+      >
+        Next
+      </button>
+    </nav>
 
     <.result_detail_panel
       :if={@selected_played}

@@ -355,13 +355,26 @@ defmodule Cuevolution.Accounts do
          role in (Admin.invitable_roles() ++ ["super_admin"]) and
          (actor.role == "super_admin" or role != "super_admin") do
       target
-      |> Ecto.Changeset.change(role: role)
+      |> Ecto.Changeset.change(scope_changes_for_role(role))
       |> Repo.update()
       |> log_admin_change(actor, target, "update_admin_role", role)
     else
       {:error, :unauthorized}
     end
   end
+
+  # Moving a role away from venue_representative/regional_coordinator leaves
+  # its scope field meaningless (and fails validation on the next
+  # password-flow changeset, which does enforce it) unless cleared here —
+  # `Ecto.Changeset.change/2` skips all validations, so this was otherwise
+  # silently left stale on every role change.
+  defp scope_changes_for_role("venue_representative"),
+    do: %{role: "venue_representative", region_id: nil}
+
+  defp scope_changes_for_role("regional_coordinator"),
+    do: %{role: "regional_coordinator", venue_id: nil}
+
+  defp scope_changes_for_role(role), do: %{role: role, venue_id: nil, region_id: nil}
 
   def update_admin_venue(%Admin{} = actor, %Admin{} = target, venue_id) do
     if Admin.can?(actor, :manage_admins) and Admin.manageable_by?(actor, target) and

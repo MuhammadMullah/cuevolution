@@ -1,56 +1,56 @@
 defmodule CuevolutionWeb.VenueFixturesLive do
   use CuevolutionWeb, :live_view
 
+  alias Cuevolution.Accounts.Admin
   alias Cuevolution.Competitions
   alias Cuevolution.Repo
   alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
 
-  @fixtures_per_page 10
-
   def mount(_params, _session, socket) do
     admin = Repo.preload(socket.assigns.current_admin, [:venue, :region])
 
-    {fixtures, venue, region_venues, venue_filter_id} =
+    {venue, region_venues} =
       case admin.role do
         "regional_coordinator" ->
           venues =
             if admin.region_id, do: Venues.list_active_for_region(admin.region_id), else: []
 
-          fixtures =
-            if admin.region_id,
-              do: Competitions.list_fixtures_for_region(admin.region_id),
-              else: []
-
-          {fixtures, nil, venues, nil}
+          {nil, venues}
 
         "venue_representative" ->
-          fixtures =
-            if admin.venue_id, do: Competitions.list_fixtures_for_venue(admin.venue_id), else: []
-
-          {fixtures, admin.venue, [], admin.venue_id}
+          {admin.venue, []}
 
         _ ->
-          {[], nil, [], nil}
+          {nil, []}
       end
 
-    {:ok,
-     assign(socket,
-       page_title: "Venue Fixtures",
-       current_admin: admin,
-       venue: venue,
-       region: admin.region,
-       region_venues: region_venues,
-       venue_filter_id: venue_filter_id,
-       all_fixtures: fixtures,
-       fixtures: fixtures,
-       available_groups: group_options(fixtures),
-       group_filter: "",
-       player_search: "",
-       page: 1,
-       page_fixtures: page_fixtures(fixtures, 1),
-       total_pages: total_pages(fixtures)
-     )}
+    socket =
+      assign(socket,
+        page_title: "Venue Fixtures",
+        current_admin: admin,
+        venue: venue,
+        region: admin.region,
+        region_venues: region_venues,
+        venue_filter_id: scope_venue_filter_id(admin, nil),
+        available_groups: [],
+        group_filter: "",
+        player_search: "",
+        page: 1,
+        total_pages: 1,
+        total_fixtures_count: 0,
+        page_fixtures: []
+      )
+
+    # Deferred past the disconnected (HTTP) render so a visit to this page
+    # doesn't query twice per visit — once disconnected, once again right
+    # after the socket connects.
+    socket =
+      if connected?(socket),
+        do: socket |> load_available_groups() |> load_fixtures(),
+        else: socket
+
+    {:ok, socket}
   end
 
   def handle_event("filter_venue", params, socket), do: apply_filters(params, socket)
@@ -64,10 +64,9 @@ defmodule CuevolutionWeb.VenueFixturesLive do
     page = parse_page(page, socket.assigns.total_pages)
 
     {:noreply,
-     assign(socket,
-       page: page,
-       page_fixtures: page_fixtures(socket.assigns.fixtures, page)
-     )}
+     socket
+     |> assign(:page, page)
+     |> load_fixtures()}
   end
 
   def render(assigns) do
@@ -88,8 +87,8 @@ defmodule CuevolutionWeb.VenueFixturesLive do
           </p>
         </div>
         <div class="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <span :if={@fixtures != []} class="font-mono text-xs text-ink-500">
-            {length(@fixtures)} fixtures
+          <span :if={@total_fixtures_count > 0} class="font-mono text-xs text-ink-500">
+            {@total_fixtures_count} fixtures
           </span>
           <a
             :if={@venue || @region}
@@ -194,13 +193,13 @@ defmodule CuevolutionWeb.VenueFixturesLive do
       </div>
 
       <div
-        :if={(@venue || @region) && @fixtures == []}
+        :if={(@venue || @region) && @total_fixtures_count == 0}
         class="rounded-2xl border border-ink-200 bg-white px-5 py-9 text-center text-sm text-ink-400 shadow-sm"
       >
         No fixtures have been scheduled at this venue yet.
       </div>
 
-      <div :if={@fixtures != []} class="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+      <div :if={@total_fixtures_count > 0} class="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
         <AdminComponents.card :for={fixture <- @page_fixtures} class="p-4 sm:p-5">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
@@ -357,12 +356,6 @@ defmodule CuevolutionWeb.VenueFixturesLive do
 
   defp download_path(venue_id), do: ~p"/admin/venue-fixtures/export.pdf?venue_id=#{venue_id}"
 
-  defp page_fixtures(fixtures, page),
-    do: Enum.slice(fixtures, (page - 1) * @fixtures_per_page, @fixtures_per_page)
-
-  defp total_pages([]), do: 0
-  defp total_pages(fixtures), do: ceil(length(fixtures) / @fixtures_per_page)
-
   defp parse_page(page, total_pages) when is_binary(page) do
     case Integer.parse(page) do
       {page, ""} -> parse_page(page, total_pages)
@@ -375,71 +368,122 @@ defmodule CuevolutionWeb.VenueFixturesLive do
 
   defp parse_page(_page, _total_pages), do: 1
 
+  # The admin's fixed scope for the download link and (for a regional
+  # coordinator) the venue sub-filter — a venue rep's own venue_id always,
+  # never reset by filtering, since their export always covers just their
+  # venue regardless of what's selected in the (regional-coordinator-only)
+  # venue dropdown.
+  defp scope_venue_filter_id(%Admin{role: "venue_representative", venue_id: venue_id}, _selected),
+    do: venue_id
+
+  defp scope_venue_filter_id(%Admin{role: "regional_coordinator"}, selected), do: selected
+  defp scope_venue_filter_id(%Admin{}, _selected), do: nil
+
   defp apply_filters(params, socket) do
     admin = socket.assigns.current_admin
     venue_id = Map.get(params, "venue_id", "")
     selected_venue_id = valid_region_venue_id(socket.assigns.region_venues, venue_id)
 
-    base_fixtures =
-      if admin.role == "regional_coordinator" and admin.region_id do
-        Competitions.list_fixtures_for_region(admin.region_id, selected_venue_id)
-      else
-        socket.assigns.all_fixtures
-      end
+    socket =
+      socket
+      |> assign(:page, 1)
+      |> assign(:venue_filter_id, scope_venue_filter_id(admin, selected_venue_id))
+      |> load_available_groups()
 
-    available_groups = group_options(base_fixtures)
     requested_group = Map.get(params, "group_name", "")
-    group_filter = if requested_group in ["" | available_groups], do: requested_group, else: ""
+
+    group_filter =
+      if requested_group in ["" | socket.assigns.available_groups], do: requested_group, else: ""
+
     player_search = Map.get(params, "player_search", "") |> String.trim()
 
-    fixtures =
-      Enum.filter(base_fixtures, fn fixture ->
-        (group_filter == "" or fixture_group(fixture) == group_filter) and
-          fixture_matches_search?(fixture, player_search)
-      end)
-
     {:noreply,
-     assign(socket,
-       fixtures: fixtures,
-       available_groups: available_groups,
-       venue_filter_id: selected_venue_id,
-       group_filter: group_filter,
-       player_search: player_search,
-       page: 1,
-       page_fixtures: page_fixtures(fixtures, 1),
-       total_pages: total_pages(fixtures)
-     )}
+     socket
+     |> assign(:group_filter, group_filter)
+     |> assign(:player_search, player_search)
+     |> load_fixtures()}
   end
 
-  defp group_options(fixtures) do
-    fixtures
-    |> Enum.map(&fixture_group/1)
-    |> Enum.uniq()
-    |> Enum.sort()
+  # Dropdown options reflect the venue selection only (not the group/player
+  # filters) — same scope `load_fixtures/1` uses when it isn't also
+  # narrowed by group_name/player_search, matching the pre-pagination
+  # behaviour where this was computed from the venue-filtered set before
+  # the group/player filters were applied.
+  defp load_available_groups(socket) do
+    %{current_admin: admin, venue_filter_id: venue_filter_id} = socket.assigns
+
+    available_groups =
+      case admin.role do
+        "regional_coordinator" ->
+          if admin.region_id,
+            do: Competitions.list_region_fixture_group_names(admin.region_id, venue_filter_id),
+            else: []
+
+        "venue_representative" ->
+          if admin.venue_id,
+            do: Competitions.list_venue_fixture_group_names(admin.venue_id),
+            else: []
+
+        _ ->
+          []
+      end
+
+    assign(socket, :available_groups, available_groups)
   end
 
-  defp fixture_matches_search?(_fixture, ""), do: true
+  defp load_fixtures(socket) do
+    %{
+      current_admin: admin,
+      group_filter: group_filter,
+      player_search: player_search,
+      venue_filter_id: venue_filter_id,
+      page: page
+    } = socket.assigns
 
-  defp fixture_matches_search?(fixture, query) do
-    query = String.downcase(query)
+    shared_opts = [group_name: group_filter, player_search: player_search]
 
-    participant_matches_search?(fixture.participant_a, query) or
-      participant_matches_search?(fixture.participant_b, query)
+    {total_count, fetch_page} =
+      case admin.role do
+        "regional_coordinator" ->
+          if admin.region_id do
+            opts = Keyword.put(shared_opts, :venue_id, venue_filter_id)
+
+            {Competitions.count_region_fixtures(admin.region_id, opts),
+             fn page ->
+               Competitions.list_region_fixtures_page(
+                 admin.region_id,
+                 Keyword.put(opts, :page, page)
+               )
+             end}
+          else
+            {0, fn _page -> [] end}
+          end
+
+        "venue_representative" ->
+          if admin.venue_id do
+            {Competitions.count_venue_fixtures(admin.venue_id, shared_opts),
+             fn page ->
+               Competitions.list_venue_fixtures_page(
+                 admin.venue_id,
+                 Keyword.put(shared_opts, :page, page)
+               )
+             end}
+          else
+            {0, fn _page -> [] end}
+          end
+
+        _ ->
+          {0, fn _page -> [] end}
+      end
+
+    per_page = Competitions.venue_fixtures_per_page()
+    total_pages = max(1, ceil(total_count / per_page))
+    page = page |> max(1) |> min(total_pages)
+
+    socket
+    |> assign(:page, page)
+    |> assign(:total_pages, total_pages)
+    |> assign(:total_fixtures_count, total_count)
+    |> assign(:page_fixtures, fetch_page.(page))
   end
-
-  defp participant_matches_search?(participant, query) do
-    participant
-    |> participant_search_values()
-    |> Enum.any?(&String.contains?(String.downcase(&1), query))
-  end
-
-  defp participant_search_values(%{
-         player: %{first_name: first, last_name: last, username: username}
-       }),
-       do: [first, last, "#{first} #{last}", username]
-
-  defp participant_search_values(%{team: %{name: name, captain: captain}}),
-    do: [name | participant_search_values(captain)]
-
-  defp participant_search_values(_participant), do: []
 end

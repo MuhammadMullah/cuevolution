@@ -1990,6 +1990,189 @@ defmodule Cuevolution.Competitions do
     where(query, [f, _r, g, _v], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
   end
 
+  @venue_fixtures_per_page 10
+
+  @doc "How many fixtures are shown per page on the venue-rep/regional-coordinator fixtures list."
+  def venue_fixtures_per_page, do: @venue_fixtures_per_page
+
+  @doc """
+  One page of a venue's fixtures, scoped the same way as
+  `list_fixtures_for_venue/1`, optionally filtered by `:group_name` and
+  `:player_search`. `list_fixtures_for_venue/1` stays unpaginated (the PDF
+  export and the admin dashboard both genuinely need every fixture at once);
+  this is for `VenueFixturesLive`, whose mount was re-running that unbounded,
+  deeply-preloaded query on every page load — a growing cost as more rounds
+  get played, and the kind of thing that compounds badly when many venue
+  reps hit the page at once.
+  """
+  def list_venue_fixtures_page(venue_id, opts \\ []) do
+    page = Keyword.get(opts, :page, 1)
+
+    venue_id
+    |> venue_scoped_fixtures_query(opts)
+    |> order_by([f], asc: f.scheduled_at, asc: f.inserted_at)
+    |> limit(^@venue_fixtures_per_page)
+    |> offset(^((max(page, 1) - 1) * @venue_fixtures_per_page))
+    |> preload(^venue_fixture_preloads())
+    |> Repo.all()
+  end
+
+  @doc "Total count of a venue's fixtures matching the same filters, for pagination."
+  def count_venue_fixtures(venue_id, opts \\ []) do
+    venue_id |> venue_scoped_fixtures_query(opts) |> Repo.aggregate(:count, :id)
+  end
+
+  @doc "Distinct group labels (including the synthetic \"Knockout\" default) among a venue's fixtures."
+  def list_venue_fixture_group_names(venue_id) do
+    Fixture
+    |> join(:left, [f], r in Round, on: r.id == f.round_id, as: :round)
+    |> join(:left, [f, round: r], g in Group, on: g.id == r.group_id, as: :group)
+    |> where([f, group: g], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
+    |> select([group: g], g.name)
+    |> distinct(true)
+    |> Repo.all()
+    |> group_names_with_knockout_default()
+  end
+
+  @doc """
+  One page of a region's fixtures, scoped the same way as
+  `list_fixtures_for_region/2`, optionally filtered by `:venue_id`,
+  `:group_name`, and `:player_search` — see `list_venue_fixtures_page/2` for
+  why this exists alongside the unpaginated version.
+  """
+  def list_region_fixtures_page(region_id, opts \\ []) do
+    page = Keyword.get(opts, :page, 1)
+
+    region_id
+    |> region_scoped_fixtures_query(opts)
+    |> order_by([f], asc: f.scheduled_at, asc: f.inserted_at)
+    |> limit(^@venue_fixtures_per_page)
+    |> offset(^((max(page, 1) - 1) * @venue_fixtures_per_page))
+    |> preload(^venue_fixture_preloads())
+    |> Repo.all()
+  end
+
+  @doc "Total count of a region's fixtures matching the same filters, for pagination."
+  def count_region_fixtures(region_id, opts \\ []) do
+    region_id |> region_scoped_fixtures_query(opts) |> Repo.aggregate(:count, :id)
+  end
+
+  @doc "Distinct group labels (including the synthetic \"Knockout\" default) among a region's fixtures."
+  def list_region_fixture_group_names(region_id, venue_id \\ nil) do
+    Fixture
+    |> join(:left, [f], r in Round, on: r.id == f.round_id, as: :round)
+    |> join(:left, [f, round: r], g in Group, on: g.id == r.group_id, as: :group)
+    |> join(:left, [f], v in assoc(f, :venue), as: :venue)
+    |> where([venue: v, group: g], v.region_id == ^region_id or g.region_id == ^region_id)
+    |> filter_fixtures_by_venue(venue_id)
+    |> select([group: g], g.name)
+    |> distinct(true)
+    |> Repo.all()
+    |> group_names_with_knockout_default()
+  end
+
+  defp group_names_with_knockout_default(names) do
+    names
+    |> Enum.map(&(&1 || "Knockout"))
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp venue_fixture_preloads do
+    [
+      :venue,
+      :result,
+      participant_a: [:player, :stage, team: :captain],
+      participant_b: [:player, :stage, team: :captain],
+      round: [group: [:venue, :stage], stage: []]
+    ]
+  end
+
+  defp venue_scoped_fixtures_query(venue_id, opts) do
+    Fixture
+    |> join(:left, [f], r in Round, on: r.id == f.round_id, as: :round)
+    |> join(:left, [f, round: r], g in Group, on: g.id == r.group_id, as: :group)
+    |> where([f, group: g], f.venue_id == ^venue_id or g.venue_id == ^venue_id)
+    |> filter_fixtures_by_group_name(Keyword.get(opts, :group_name))
+    |> filter_fixtures_by_player_name_search(Keyword.get(opts, :player_search))
+  end
+
+  defp region_scoped_fixtures_query(region_id, opts) do
+    Fixture
+    |> join(:left, [f], r in Round, on: r.id == f.round_id, as: :round)
+    |> join(:left, [f, round: r], g in Group, on: g.id == r.group_id, as: :group)
+    |> join(:left, [f], v in assoc(f, :venue), as: :venue)
+    |> where([venue: v, group: g], v.region_id == ^region_id or g.region_id == ^region_id)
+    |> filter_fixtures_by_venue(Keyword.get(opts, :venue_id))
+    |> filter_fixtures_by_group_name(Keyword.get(opts, :group_name))
+    |> filter_fixtures_by_player_name_search(Keyword.get(opts, :player_search))
+  end
+
+  defp filter_fixtures_by_group_name(query, term) when term in [nil, ""], do: query
+
+  defp filter_fixtures_by_group_name(query, "Knockout") do
+    where(query, [group: g], is_nil(g.name))
+  end
+
+  defp filter_fixtures_by_group_name(query, group_name) do
+    where(query, [group: g], g.name == ^group_name)
+  end
+
+  # Mirrors VenueFixturesLive's old in-memory `participant_search_values/1`:
+  # a player-participant matches on first/last/username, a team-participant
+  # on its team name or its captain's first/last/username.
+  defp filter_fixtures_by_player_name_search(query, term) when term in [nil, ""], do: query
+
+  defp filter_fixtures_by_player_name_search(query, term) do
+    pattern = "%#{term}%"
+
+    query
+    |> join_participant_search_associations()
+    |> where(^participant_a_name_match(pattern))
+    |> or_where(^participant_b_name_match(pattern))
+  end
+
+  defp join_participant_search_associations(query) do
+    query
+    |> join(:left, [f], pa in assoc(f, :participant_a), as: :participant_a)
+    |> join(:left, [participant_a: pa], pap in assoc(pa, :player), as: :participant_a_player)
+    |> join(:left, [participant_a: pa], pat in assoc(pa, :team), as: :participant_a_team)
+    |> join(:left, [participant_a_team: pat], pac in assoc(pat, :captain),
+      as: :participant_a_captain
+    )
+    |> join(:left, [f], pb in assoc(f, :participant_b), as: :participant_b)
+    |> join(:left, [participant_b: pb], pbp in assoc(pb, :player), as: :participant_b_player)
+    |> join(:left, [participant_b: pb], pbt in assoc(pb, :team), as: :participant_b_team)
+    |> join(:left, [participant_b_team: pbt], pbc in assoc(pbt, :captain),
+      as: :participant_b_captain
+    )
+  end
+
+  # Split from `filter_fixtures_by_player_name_search/2` into one function
+  # per participant — Credo's cyclomatic-complexity check counts every `or`
+  # in a function body, and the combined 13-clause condition tripped it.
+  defp participant_a_name_match(pattern) do
+    dynamic(
+      [participant_a_player: pap, participant_a_team: pat, participant_a_captain: pac],
+      ilike(pap.username, ^pattern) or ilike(pap.first_name, ^pattern) or
+        ilike(pap.last_name, ^pattern) or
+        ilike(pat.name, ^pattern) or
+        ilike(pac.username, ^pattern) or ilike(pac.first_name, ^pattern) or
+        ilike(pac.last_name, ^pattern)
+    )
+  end
+
+  defp participant_b_name_match(pattern) do
+    dynamic(
+      [participant_b_player: pbp, participant_b_team: pbt, participant_b_captain: pbc],
+      ilike(pbp.username, ^pattern) or ilike(pbp.first_name, ^pattern) or
+        ilike(pbp.last_name, ^pattern) or
+        ilike(pbt.name, ^pattern) or
+        ilike(pbc.username, ^pattern) or ilike(pbc.first_name, ^pattern) or
+        ilike(pbc.last_name, ^pattern)
+    )
+  end
+
   defp fixture_ids_for_player_query(player_id) do
     participation_ids = participation_ids_for_player_query(player_id)
 
@@ -3307,14 +3490,43 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
-  @doc "Unplayed fixtures visible to an admin's venue or region scope."
-  def list_unplayed_fixtures_for_admin(%Admin{} = admin) do
+  @admin_fixtures_per_page 20
+
+  @doc "How many fixtures are shown per page on the recorder's Unplayed/Played tabs."
+  def admin_fixtures_per_page, do: @admin_fixtures_per_page
+
+  @doc """
+  One page of unplayed fixtures visible to an admin's venue or region scope,
+  most imminent first — paginated rather than returning every unplayed
+  fixture in scope at once, since that list only grows as the tournament
+  progresses and was being fully re-fetched (deeply preloaded) on every
+  mount of the recorder's Unplayed tab.
+  """
+  def list_unplayed_fixtures_for_admin(%Admin{} = admin, page \\ 1) do
     Fixture
     |> scope_fixtures_for_admin(admin)
     |> where([f, _r, _g, _v], is_nil(f.result_id))
     |> order_by([f, _r, _g, _v], asc: f.scheduled_at)
+    |> limit(^@admin_fixtures_per_page)
+    |> offset(^((max(page, 1) - 1) * @admin_fixtures_per_page))
     |> preload([:venue, participant_a: [:player, :team], participant_b: [:player, :team]])
     |> Repo.all()
+  end
+
+  @doc "Whether `admin` has any unplayed fixture in scope — a cheap existence check, not a full fetch."
+  def unplayed_fixtures_for_admin?(%Admin{} = admin) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], is_nil(f.result_id))
+    |> Repo.exists?()
+  end
+
+  @doc "Total count of unplayed fixtures in `admin`'s scope, for pagination."
+  def count_unplayed_fixtures_for_admin(%Admin{} = admin) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], is_nil(f.result_id))
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
@@ -3345,12 +3557,18 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
-  @doc "Played fixtures visible to an admin's venue or region scope."
-  def list_played_fixtures_for_admin(%Admin{} = admin) do
+  @doc """
+  One page of played fixtures visible to an admin's venue or region scope,
+  most recently played first — see `list_unplayed_fixtures_for_admin/2` for
+  why this is paginated.
+  """
+  def list_played_fixtures_for_admin(%Admin{} = admin, page \\ 1) do
     Fixture
     |> scope_fixtures_for_admin(admin)
     |> where([f, _r, _g, _v], not is_nil(f.result_id))
     |> order_by([f, _r, _g, _v], desc: f.scheduled_at)
+    |> limit(^@admin_fixtures_per_page)
+    |> offset(^((max(page, 1) - 1) * @admin_fixtures_per_page))
     |> preload([
       :venue,
       [result: :winner_participation],
@@ -3358,6 +3576,14 @@ defmodule Cuevolution.Competitions do
       participant_b: [:player, :team, :stage]
     ])
     |> Repo.all()
+  end
+
+  @doc "Total count of played fixtures in `admin`'s scope, for pagination."
+  def count_played_fixtures_for_admin(%Admin{} = admin) do
+    Fixture
+    |> scope_fixtures_for_admin(admin)
+    |> where([f, _r, _g, _v], not is_nil(f.result_id))
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
