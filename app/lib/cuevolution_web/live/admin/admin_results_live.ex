@@ -556,8 +556,9 @@ defmodule CuevolutionWeb.AdminResultsLive do
     end
   end
 
-  defp refresh_approved_stream(socket, %{status: "verified"} = fixture),
-    do: stream_insert(socket, :approved_results, fixture, at: -1)
+  defp refresh_approved_stream(socket, %{status: status} = fixture)
+       when status in ["verified", "walkover"],
+       do: stream_insert(socket, :approved_results, fixture, at: -1)
 
   defp refresh_approved_stream(socket, %{}), do: socket
 
@@ -676,6 +677,12 @@ defmodule CuevolutionWeb.AdminResultsLive do
               class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800"
             >
               Approved and final.
+            </div>
+            <div
+              :if={@selected_played.status == "walkover"}
+              class="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800"
+            >
+              Walkover — final, no approval required.
             </div>
             <button
               :if={

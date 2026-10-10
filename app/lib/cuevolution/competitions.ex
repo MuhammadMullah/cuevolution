@@ -3413,9 +3413,11 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  Approved (verified) result fixtures, optionally filtered by region and
-  venue, one page at a time — the Super Admin-only "Approved" view used to
-  edit a result after it has already been finalized.
+  Approved (verified or walkover) result fixtures, optionally filtered by
+  region and venue, one page at a time — the Super Admin-only "Approved"
+  view used to edit a result after it has already been finalized. A
+  walkover never passes through "completed" (no approval step), so it's
+  treated as already-final here alongside "verified".
   """
   def list_approved_result_fixtures(region_id \\ nil, venue_id \\ nil, page \\ 1, search \\ nil) do
     Fixture
@@ -3440,19 +3442,19 @@ defmodule Cuevolution.Competitions do
   end
 
   defp pending_results_query(query, region_id, venue_id, search) do
-    results_by_status_query(query, "completed", region_id, venue_id, search)
+    results_by_status_query(query, ["completed"], region_id, venue_id, search)
   end
 
   defp approved_results_query(query, region_id, venue_id, search) do
-    results_by_status_query(query, "verified", region_id, venue_id, search)
+    results_by_status_query(query, ["verified", "walkover"], region_id, venue_id, search)
   end
 
-  defp results_by_status_query(query, status, region_id, venue_id, search) do
+  defp results_by_status_query(query, statuses, region_id, venue_id, search) do
     query
     |> join(:left, [f], r in Round, on: r.id == f.round_id)
     |> join(:left, [f, r], g in Group, on: g.id == r.group_id)
     |> join(:left, [f, _r, _g], v in assoc(f, :venue))
-    |> where([f, _r, _g, _v], f.status == ^status and not is_nil(f.result_id))
+    |> where([f, _r, _g, _v], f.status in ^statuses and not is_nil(f.result_id))
     |> filter_pending_results_by_region(region_id)
     |> filter_pending_results_by_venue(venue_id)
     |> filter_results_by_player_search(search)
