@@ -112,6 +112,37 @@ defmodule Cuevolution.Release do
   end
 
   @doc """
+  One-off: backfills `points_a`/`points_b` onto walkover `match_results`
+  recorded before the 2026-10-06 fix that set a walkover win to 3 points —
+  those rows still fall through `StandingsCalculator`'s frames-based
+  fallback and credit the winner with however many frames their score
+  happened to record instead. See
+  `Cuevolution.Competitions.backfill_walkover_points/0` for how the winning
+  side is determined and what gets skipped. Idempotent — already-corrected
+  rows are left alone. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.backfill_walkover_points()'
+  """
+  def backfill_walkover_points do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    %{corrected: corrected, skipped: skipped} =
+      Cuevolution.Competitions.backfill_walkover_points()
+
+    IO.puts("Corrected #{corrected} walkover result(s).")
+
+    if skipped != [] do
+      IO.puts(
+        :stderr,
+        "Skipped #{length(skipped)} result(s) with no determinable winner: #{inspect(skipped)}"
+      )
+    end
+
+    :ok
+  end
+
+  @doc """
   Re-queues up to `limit` failed/stuck "draw_published" email
   notifications for another delivery attempt after a provider rejection or
   outage (see `Cuevolution.Notifications.redrive_failed/3`). Defaults to 400;

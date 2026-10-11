@@ -349,6 +349,55 @@ defmodule Cuevolution.Competitions do
     %{moved: moved, skipped_drawn: skipped_drawn}
   end
 
+  @doc """
+  One-off data correction: backfills `points_a`/`points_b` onto `score` for
+  every walkover `MatchResult` recorded before the 2026-10-06 fix that made
+  a walkover win worth 3 points instead of the frames-based default. Those
+  older rows have no `points_a`/`points_b` key at all, so
+  `StandingsCalculator.points_for/2` falls through to its frames-based
+  fallback and still credits the winner with however many frames their
+  score happened to record (seen in production as 3, 5, or even a
+  non-walkover-looking 3-2) instead of the intended flat 3. Frame values
+  are left untouched — only `points_a`/`points_b` are added — and the
+  winning side is read from `winner_participation_id`, not from frames,
+  since frame values in this historical data aren't a reliable signal of
+  who won. A result with no winner (a double walkover) or whose winner
+  matches neither fixture side is skipped rather than guessed at.
+  Idempotent: a `score` that already has `points_a` is left alone. Returns
+  `%{corrected: count, skipped: [match_result_id]}`.
+  """
+  def backfill_walkover_points do
+    from(mr in MatchResult,
+      join: f in Fixture,
+      on: f.id == mr.fixture_id,
+      where: f.status == "walkover",
+      select: {mr, f.participant_a_id, f.participant_b_id}
+    )
+    |> Repo.all()
+    |> Enum.reject(fn {mr, _a_id, _b_id} -> Map.has_key?(mr.score || %{}, "points_a") end)
+    |> Enum.reduce(%{corrected: 0, skipped: []}, fn {mr, a_id, b_id}, acc ->
+      case walkover_points(mr.winner_participation_id, a_id, b_id) do
+        {:ok, points_a, points_b} ->
+          mr
+          |> Ecto.Changeset.change(
+            score: Map.merge(mr.score || %{}, %{"points_a" => points_a, "points_b" => points_b})
+          )
+          |> Repo.update!()
+
+          %{acc | corrected: acc.corrected + 1}
+
+        :error ->
+          %{acc | skipped: [mr.id | acc.skipped]}
+      end
+    end)
+  end
+
+  defp walkover_points(nil, _a_id, _b_id), do: :error
+
+  defp walkover_points(winner_id, a_id, _b_id) when winner_id == a_id, do: {:ok, 3, 0}
+  defp walkover_points(winner_id, _a_id, b_id) when winner_id == b_id, do: {:ok, 0, 3}
+  defp walkover_points(_winner_id, _a_id, _b_id), do: :error
+
   @doc "The stage a participation currently sits in (spec 006)."
   def current_stage(%StageParticipation{} = participation) do
     participation |> Repo.preload(:stage) |> Map.fetch!(:stage)

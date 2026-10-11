@@ -1979,6 +1979,101 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
+  describe "backfill_walkover_points/0" do
+    defp legacy_walkover_fixture(fixture, score, winner_id) do
+      admin = insert(:admin)
+
+      {:ok, result} =
+        %MatchResult{}
+        |> MatchResult.create_changeset(%{
+          fixture_id: fixture.id,
+          winner_participation_id: winner_id,
+          score: score,
+          recorded_by_admin_id: admin.id
+        })
+        |> Repo.insert()
+
+      Repo.update!(
+        Ecto.Changeset.change(fixture,
+          result_id: result.id,
+          status: "walkover",
+          walkover_kind: "single"
+        )
+      )
+
+      result
+    end
+
+    test "adds points_a/points_b based on winner_participation_id, leaving frames untouched" do
+      fixture = insert(:fixture) |> Repo.preload([:participant_a, :participant_b])
+
+      result =
+        legacy_walkover_fixture(
+          fixture,
+          %{"participant_a_frames" => 0, "participant_b_frames" => 5, "walkover" => true},
+          fixture.participant_b_id
+        )
+
+      assert %{corrected: 1, skipped: []} = Competitions.backfill_walkover_points()
+
+      updated = Repo.get!(MatchResult, result.id)
+      assert updated.score["points_a"] == 0
+      assert updated.score["points_b"] == 3
+      assert updated.score["participant_a_frames"] == 0
+      assert updated.score["participant_b_frames"] == 5
+    end
+
+    test "is idempotent — leaves a result alone once it already has points_a" do
+      fixture = insert(:fixture) |> Repo.preload([:participant_a, :participant_b])
+
+      result =
+        legacy_walkover_fixture(
+          fixture,
+          %{
+            "participant_a_frames" => 5,
+            "participant_b_frames" => 0,
+            "points_a" => 3,
+            "points_b" => 0,
+            "walkover" => true
+          },
+          fixture.participant_a_id
+        )
+
+      assert %{corrected: 0, skipped: []} = Competitions.backfill_walkover_points()
+      assert Repo.get!(MatchResult, result.id).score["points_a"] == 3
+    end
+
+    test "skips a double walkover (no winner) instead of guessing a side" do
+      fixture = insert(:fixture) |> Repo.preload([:participant_a, :participant_b])
+      admin = insert(:admin)
+
+      {:ok, result} =
+        %MatchResult{}
+        |> MatchResult.system_double_walkover_changeset(%{
+          fixture_id: fixture.id,
+          score: %{
+            "participant_a_frames" => 0,
+            "participant_b_frames" => 0,
+            "walkover" => true,
+            "walkover_kind" => "double"
+          }
+        })
+        |> Ecto.Changeset.put_change(:recorded_by_admin_id, admin.id)
+        |> Repo.insert()
+
+      Repo.update!(
+        Ecto.Changeset.change(fixture,
+          result_id: result.id,
+          status: "walkover",
+          walkover_kind: "double"
+        )
+      )
+
+      assert %{corrected: 0, skipped: [skipped_id]} = Competitions.backfill_walkover_points()
+      assert skipped_id == result.id
+    end
+  end
+
   describe "list_pending_result_fixtures/4 and count_pending_result_fixtures/3 (search)" do
     test "matches by participant_a's player username" do
       player = insert(:player, username: "findable-rep", first_name: "Alpha", last_name: "One")
