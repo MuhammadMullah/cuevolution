@@ -13,7 +13,7 @@ defmodule CuevolutionWeb.NotificationLogLive do
   alias Cuevolution.Repo
   alias CuevolutionWeb.AdminComponents
 
-  @statuses ~w(pending sending sent failed)
+  @statuses ~w(pending sending sent failed abandoned)
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -50,5 +50,6 @@ defmodule CuevolutionWeb.NotificationLogLive do
   @doc false
   def status_badge_class("sent"), do: "bg-[#DCF3E4] text-[#0E6A30]"
   def status_badge_class("failed"), do: "bg-red-50 text-red-700"
+  def status_badge_class("abandoned"), do: "bg-ink-200 text-ink-600"
   def status_badge_class(_pending_or_sending), do: "bg-ink-100 text-ink-700"
 end

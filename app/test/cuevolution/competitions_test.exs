@@ -778,6 +778,71 @@ defmodule Cuevolution.CompetitionsTest do
       refute Repo.get!(StageParticipation, p1.id).stage_id == stage("Circuit").id
       refute Repo.get!(StageParticipation, p2.id).stage_id == stage("Circuit").id
     end
+
+    test "a group with an unresolved fixture isn't closable before the deadline, but is after" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+      grassroots = stage("Grassroots")
+
+      {group, [a1, a2, a3, a4]} = cgs_group_with_players(4, "Partial", venue)
+
+      cgs_verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      # a3 vs a4 never gets played — stays "scheduled".
+      round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: a3.id,
+        participant_b_id: a4.id,
+        venue_id: venue.id
+      )
+
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      assert Competitions.final_groups(grassroots.id, "male", {:venue_id, venue.id}) == []
+
+      assert {:error, :invalid_qualifiers} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id]
+               )
+
+      {:ok, _} =
+        Competitions.set_stage_deadline(admin, grassroots, Date.add(Date.utc_today(), -2))
+
+      assert [%{id: group_id}] =
+               Competitions.final_groups(grassroots.id, "male", {:venue_id, venue.id})
+
+      assert group_id == group.id
+
+      # a1 (the only one who actually played and won) can now advance —
+      # a3/a4 still can't, since neither of them ever played.
+      assert {:ok, [advanced]} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id]
+               )
+
+      assert advanced.id == a1.id
+      refute Repo.get!(StageParticipation, a3.id).stage_id == stage("Grassroots Round 2").id
+      refute Repo.get!(StageParticipation, a4.id).stage_id == stage("Grassroots Round 2").id
+    end
   end
 
   describe "advance_all_entrants/4" do

@@ -701,11 +701,16 @@ defmodule CuevolutionWeb.GroupManagementLive do
       |> Enum.uniq()
       |> Competitions.played_participant_ids_by_group()
 
+    deadline_passed? = Competitions.deadline_passed?(stage.completion_deadline)
+
     tables =
       Enum.map(groups, fn group ->
         rows = group |> Competitions.grassroots_group_standings() |> name_rows()
         fixtures = Competitions.list_fixtures_for_group(group.id)
-        final? = fixtures != [] and Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
+
+        final? =
+          fixtures != [] and
+            (deadline_passed? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"])))
 
         top =
           if final? do

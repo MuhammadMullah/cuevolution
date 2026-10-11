@@ -172,6 +172,27 @@ defmodule Cuevolution.Notifications do
   end
 
   @doc """
+  Marks every `event_type`/`channel` notification still in "failed" or
+  "sending" as permanently "abandoned" instead of retrying it — for a
+  backlog whose content is now stale (e.g. a `draw_published` email for a
+  round that's since moved on) and isn't worth resending late. Unlike
+  `redrive_failed/3`, this never enqueues a job and happens in one
+  statement, since there's no provider call to throttle. An abandoned
+  notification stops appearing in `redrive_failed/3`'s candidates (it only
+  looks at "failed"/"sending") and in any other stuck-backlog count.
+  Returns the abandoned count.
+  """
+  def abandon_stuck(event_type, channel) when channel in ["email", "sms"] do
+    {count, _} =
+      Notification
+      |> where([n], n.event_type == ^event_type and n.channel == ^channel)
+      |> where([n], n.status in ["failed", "sending"])
+      |> Repo.update_all(set: [status: "abandoned"])
+
+    count
+  end
+
+  @doc """
   Marks the most recently sent email `Notification` to `email` as failed —
   called from `CuevolutionWeb.PostmarkWebhookController` on a
   Bounce/SpamComplaint webhook. `Mailer.deliver/1` returning `{:ok, _}`

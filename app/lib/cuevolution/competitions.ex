@@ -3009,27 +3009,58 @@ defmodule Cuevolution.Competitions do
 
   @doc """
   Groups within `stage_id`/`category`/`scope` (`{:venue_id, id}` or
-  `{:region_id, id}`) whose fixtures are all complete (verified/walkover)
-  — the only groups whose standings are settled enough to contribute
-  automatic top-N qualifiers. Scoped to one venue/region at a time — each
-  closes independently of every other — but excludes: a venue's
-  superseded groups left behind by a redraw (they never got fixtures at
-  all, so `final?` is false), and any group still mid-play. Without this,
-  a freshly redrawn, unplayed group's all-tied-at-zero standings would
-  "qualify" arbitrary participants who haven't played a single fixture.
+  `{:region_id, id}`) that are settled enough to contribute automatic
+  top-N qualifiers — the only groups whose standings are final. A group
+  counts as final once every one of its fixtures is complete (verified/
+  walkover), *or*, once `stage_id`'s completion deadline has passed,
+  regardless of whether every fixture got there — a match stuck
+  "completed" (recorded but never approved) or "postponed" would
+  otherwise block the whole venue from ever closing, past its deadline,
+  just because one result was never signed off. `group_standings/1`
+  already only counts verified/walkover results either way, so a fixture
+  that never got that far simply doesn't count toward anyone's
+  standings — this only changes whether the *group* is treated as done,
+  not what counts within it.
+
+  Still excludes a venue's superseded groups left behind by a redraw
+  (they never got fixtures at all, so `final?` is false regardless of
+  deadline), and, before the deadline, any group still mid-play — without
+  that, a freshly redrawn, unplayed group's all-tied-at-zero standings
+  would "qualify" arbitrary participants who haven't played a single
+  fixture.
   """
   def final_groups(stage_id, category, scope) do
+    deadline_passed? = stage_deadline_passed?(stage_id)
+
     Group
     |> where([g], g.stage_id == ^stage_id and g.category == ^category)
     |> filter_by_group_scope(scope)
     |> Repo.all()
-    |> Enum.filter(&group_final?/1)
+    |> Enum.filter(&group_final?(&1, deadline_passed?))
   end
 
-  defp group_final?(group) do
+  defp stage_deadline_passed?(stage_id) do
+    case Repo.get(Stage, stage_id) do
+      nil -> false
+      %Stage{completion_deadline: deadline} -> deadline_passed?(deadline)
+    end
+  end
+
+  @doc "Whether `deadline` (a stage's `completion_deadline`) has passed, EAT — `nil` never counts as passed. Pure (no query), so a caller already holding the `%Stage{}` (e.g. a LiveView) can call this directly instead of `stage_deadline_passed?`'s id-based lookup."
+  def deadline_passed?(nil), do: false
+  def deadline_passed?(%Date{} = deadline), do: Date.compare(deadline, eat_today()) == :lt
+
+  defp eat_today do
+    DateTime.utc_now() |> DateTime.add(@eat_offset_seconds, :second) |> DateTime.to_date()
+  end
+
+  defp group_final?(group, deadline_passed?) do
     case list_fixtures_for_group(group.id) do
-      [] -> false
-      fixtures -> Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
+      [] ->
+        false
+
+      fixtures ->
+        deadline_passed? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
     end
   end
 

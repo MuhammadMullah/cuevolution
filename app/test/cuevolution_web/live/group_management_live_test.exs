@@ -546,6 +546,40 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       refute html =~ "Close stage &amp; advance qualifiers"
       refute html =~ "qualifies from this group"
     end
+
+    test "a partially-played draw becomes closable once the stage deadline has passed", %{
+      conn: conn
+    } do
+      {_grassroots, venue} = create_draw_with_players(4)
+      grassroots = Repo.get_by!(Stage, name: "Grassroots")
+      admin = insert(:admin, role: "super_admin")
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      html = view |> element("button", "Group standings") |> render_click()
+      refute html =~ "Close stage &amp; advance qualifiers"
+
+      # Record just one of the group's fixtures — the rest stay scheduled.
+      group = Repo.get_by!(Group, stage_id: grassroots.id, venue_id: venue.id)
+      [fixture | _] = Competitions.list_fixtures_for_group(group.id)
+      {:ok, _} = Competitions.record_frames(fixture, admin, [:a, :a, :a, :b, :b])
+      fixture = Repo.reload!(fixture)
+      {:ok, _} = Competitions.verify_result(fixture, admin)
+
+      {:ok, _} =
+        Competitions.set_stage_deadline(admin, grassroots, Date.add(Date.utc_today(), -1))
+
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+      html = view |> element("button", "Group standings") |> render_click()
+
+      assert html =~ "Close stage &amp; advance qualifiers"
+    end
   end
 
   describe "Grassroots Round 2 — same venue-scoped auto-draw experience as Grassroots" do

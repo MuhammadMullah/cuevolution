@@ -13,7 +13,7 @@ defmodule Cuevolution.Notifications.Notification do
   @foreign_key_type :binary_id
 
   @channels ~w(email sms)
-  @statuses ~w(pending sending sent failed)
+  @statuses ~w(pending sending sent failed abandoned)
 
   schema "notifications" do
     field :event_type, :string
