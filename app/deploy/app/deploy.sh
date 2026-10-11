@@ -39,6 +39,13 @@ docker compose --env-file .env run --rm -e POOL_SIZE=2 app bin/migrate
 
 docker compose --env-file .env up -d
 
+# Old image layers and build cache pile up with every deploy otherwise —
+# this filled the VM's 20G disk entirely (2026-10-10 incident, 11.68GB of
+# the 12.28GB of images on disk were unused). Safe here: containers are
+# already running the new image, so nothing still in use gets touched.
+docker image prune -a -f
+docker builder prune -f
+
 # Port 4000 is deliberately not published to the host (only reachable on the
 # "web" Docker network, which is how Caddy reaches it) — so the smoke test
 # has to run inside the app container itself, not against host localhost.

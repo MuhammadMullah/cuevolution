@@ -201,11 +201,42 @@ if config_env() == :prod do
         adapter: Swoosh.Adapters.Postmark,
         api_key: postmark_server_token
 
+    "smtp_auth" ->
+      mail_from_address =
+        System.get_env("MAIL_FROM_ADDRESS") ||
+          raise "MAIL_FROM_ADDRESS is required when MAIL_PROVIDER=smtp_auth"
+
+      smtp_username =
+        secret.("SMTP_USERNAME") ||
+          raise "SMTP_USERNAME is required when MAIL_PROVIDER=smtp_auth"
+
+      smtp_password =
+        secret.("SMTP_PASSWORD") ||
+          raise "SMTP_PASSWORD is required when MAIL_PROVIDER=smtp_auth"
+
+      config :cuevolution, :mail_from, {"Cuevolution", mail_from_address}
+
+      config :cuevolution, Cuevolution.Mailer,
+        adapter: Swoosh.Adapters.SMTP,
+        relay: System.get_env("SMTP_RELAY", "smtp.gmail.com"),
+        port: 587,
+        username: smtp_username,
+        password: smtp_password,
+        tls: :always,
+        auth: :always,
+        tls_options: [
+          versions: [:"tlsv1.2", :"tlsv1.3"],
+          verify: :verify_peer,
+          depth: 5,
+          cacerts: :public_key.cacerts_get(),
+          server_name_indication: ~c"smtp.gmail.com"
+        ]
+
     "local" ->
       config :cuevolution, Cuevolution.Mailer, adapter: Swoosh.Adapters.Local
 
     provider ->
-      raise "unsupported MAIL_PROVIDER=#{provider}; expected postmark or local"
+      raise "unsupported MAIL_PROVIDER=#{provider}; expected postmark, smtp_auth, or local"
   end
 
   # Not required to raise: until these two secrets exist in Secret Manager,
