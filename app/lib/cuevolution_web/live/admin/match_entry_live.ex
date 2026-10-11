@@ -158,6 +158,7 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
   defp format_error(:invalid_final_score), do: "scores must be whole numbers from 0 to 5"
   defp format_error(:reason_required), do: "a reason is required"
   defp format_error(:invalid_fixture_state), do: "this fixture is not in an editable state"
+  defp format_error(:results_recording_closed), do: "results recording has closed"
   defp format_error(:participant_required), do: "choose the participant who was present"
   defp format_error(reason), do: inspect(reason)
 

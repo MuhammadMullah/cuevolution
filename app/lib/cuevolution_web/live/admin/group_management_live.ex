@@ -66,6 +66,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
        venue_rep?: venue_rep?,
        can_manage_groups?: Admin.can?(current_admin, :manage_groups),
        can_close_stage?: Admin.can?(current_admin, :advance_participants),
+       can_upload_result_sheets?: Admin.can?(current_admin, :record_results),
+       result_sheets: [],
+       venue_ready_early?: false,
        stages: stages,
        regions: regions,
        categories: categories,
@@ -90,6 +93,11 @@ defmodule CuevolutionWeb.GroupManagementLive do
        qualifier_search: "",
        qualifier_candidates: [],
        tie_resolution: nil
+     )
+     |> allow_upload(:result_sheet,
+       accept: ~w(.jpg .jpeg .pdf),
+       max_entries: 1,
+       max_file_size: 15_000_000
      )
      |> load_venues()
      |> load_scope()}
@@ -500,6 +508,65 @@ defmodule CuevolutionWeb.GroupManagementLive do
     end
   end
 
+  # Lets a TD force this venue's groups into "final" before the stage
+  # deadline (e.g. every match was played but results weren't entered in
+  # time) — see `Competitions.mark_venue_ready_early/4`.
+  def handle_event("toggle_venue_ready_early", _params, socket) do
+    %{stage: stage, venue: venue, category: category, current_admin: admin} = socket.assigns
+
+    if socket.assigns.can_close_stage? and venue do
+      result =
+        if socket.assigns.venue_ready_early? do
+          Competitions.unmark_venue_ready_early(stage.id, venue.id, category, admin)
+        else
+          Competitions.mark_venue_ready_early(stage.id, venue.id, category, admin)
+        end
+
+      case result do
+        {:ok, _} ->
+          {:noreply,
+           socket |> load_result_sheets_and_readiness() |> load_gr_standings_if_needed()}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Couldn't update: #{format_error(reason)}")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to do that.")}
+    end
+  end
+
+  def handle_event("upload_result_sheet", _params, socket) do
+    %{stage: stage, venue: venue, current_admin: admin} = socket.assigns
+
+    if socket.assigns.can_upload_result_sheets? and venue do
+      results =
+        consume_uploaded_entries(socket, :result_sheet, fn %{path: path}, entry ->
+          store_result_sheet_entry(stage, venue, admin, path, entry)
+        end)
+
+      socket =
+        case results do
+          [{:ok, _result_sheet}] ->
+            socket
+            |> put_flash(:info, "Result sheet uploaded.")
+            |> load_result_sheets_and_readiness()
+
+          [{:error, :unsupported_content_type}] ->
+            put_flash(socket, :error, "Only JPG, JPEG or PDF files are accepted.")
+
+          [{:error, reason}] ->
+            put_flash(socket, :error, "Couldn't upload: #{format_error(reason)}")
+
+          [] ->
+            put_flash(socket, :error, "Choose a file first.")
+        end
+
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to upload result sheets.")}
+    end
+  end
+
   def handle_event("advance_all_entrants", _params, socket) do
     if socket.assigns.can_close_stage? do
       case Competitions.advance_all_entrants(
@@ -516,6 +583,22 @@ defmodule CuevolutionWeb.GroupManagementLive do
       end
     else
       {:noreply, put_flash(socket, :error, "You don't have permission to advance participants.")}
+    end
+  end
+
+  defp store_result_sheet_entry(stage, venue, admin, path, entry) do
+    body = File.read!(path)
+
+    case Competitions.upload_result_sheet(
+           stage,
+           venue,
+           admin,
+           body,
+           entry.client_type,
+           entry.client_name
+         ) do
+      {:ok, result_sheet} -> {:ok, {:ok, result_sheet}}
+      {:error, reason} -> {:ok, {:error, reason}}
     end
   end
 
@@ -636,10 +719,28 @@ defmodule CuevolutionWeb.GroupManagementLive do
         confirm_close: false,
         tie_resolution: nil
       )
+      |> load_result_sheets_and_readiness()
 
     if auto_draw_eligible?(socket.assigns),
       do: load_gr(socket),
       else: socket |> load_groups() |> load_unassigned()
+  end
+
+  # Both the "mark venue ready early" override and the result-sheet
+  # uploads below are venue+stage+category scoped (spec 012) — only
+  # meaningful for Grassroots, where groups are venue-scoped at all.
+  defp load_result_sheets_and_readiness(socket) do
+    %{stage: stage, category: category, venue: venue} = socket.assigns
+
+    if grassroots?(socket.assigns) and venue do
+      assign(socket,
+        result_sheets: Competitions.list_result_sheets(stage.id, venue.id),
+        venue_ready_early?:
+          Competitions.venue_marked_ready_early?(stage.id, category, {:venue_id, venue.id})
+      )
+    else
+      assign(socket, result_sheets: [], venue_ready_early?: false)
+    end
   end
 
   defp load_gr(socket) do
@@ -701,7 +802,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
       |> Enum.uniq()
       |> Competitions.played_participant_ids_by_group()
 
-    deadline_passed? = Competitions.deadline_passed?(stage.completion_deadline)
+    ready? =
+      Competitions.deadline_passed?(stage.completion_deadline) or
+        Competitions.venue_marked_ready_early?(stage.id, category, scope)
 
     tables =
       Enum.map(groups, fn group ->
@@ -710,7 +813,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
         final? =
           fixtures != [] and
-            (deadline_passed? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"])))
+            (ready? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"])))
 
         top =
           if final? do
@@ -931,6 +1034,11 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp format_error(:invalid_transition), do: "reshuffling is only available before approval"
   defp format_error(:reason_required), do: "a reason is required"
   defp format_error(reason), do: inspect(reason)
+
+  defp upload_error_message(:too_large), do: "File is too large (max 15MB)."
+  defp upload_error_message(:not_accepted), do: "Only JPG, JPEG or PDF files are accepted."
+  defp upload_error_message(:too_many_files), do: "Only one file at a time."
+  defp upload_error_message(reason), do: inspect(reason)
 
   # Matches CuevolutionWeb.PlayerComponents' @stage_styles palette (the
   # actual app design system — gray/Kenya-Green/Kenya-Red/ink-950), not the

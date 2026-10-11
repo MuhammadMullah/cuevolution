@@ -1,4 +1,4 @@
-defmodule Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester do
+defmodule Cuevolution.GCS.Requester do
   @moduledoc false
 
   @callback put(

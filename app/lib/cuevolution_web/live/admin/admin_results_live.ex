@@ -293,6 +293,14 @@ defmodule CuevolutionWeb.AdminResultsLive do
           {:error, :unauthorized} ->
             {:noreply, put_flash(socket, :error, "You don't have permission to record results.")}
 
+          {:error, :results_recording_closed} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Results recording has closed. This result can no longer be recorded."
+             )}
+
           {:error, changeset} ->
             {:noreply, assign(socket, :result_form, to_form(changeset, as: :result))}
         end
@@ -383,6 +391,14 @@ defmodule CuevolutionWeb.AdminResultsLive do
                socket,
                :error,
                "This result has already been approved — ask a tournament director to correct it."
+             )}
+
+          {:error, :results_recording_closed} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Results recording has closed. This result can no longer be corrected."
              )}
 
           {:error, changeset} ->

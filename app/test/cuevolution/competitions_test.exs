@@ -845,6 +845,228 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
+  describe "mark_venue_ready_early/4 and unmark_venue_ready_early/4" do
+    test "unlocks final_groups/close_group_stage for just this venue, before the deadline" do
+      venue = insert(:venue, region_id: build(:region).id)
+      other_venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      # 3 players: a1 vs a2 is verified, but a3's match never happened —
+      # that unplayed fixture is what keeps the group non-final until the
+      # override kicks in (mirrors the deadline-based test above).
+      {group, [a1, a2, a3]} = cgs_group_with_players(3, "Ready Early", venue)
+      {other_group, [b1, b2]} = cgs_group_with_players(2, "Still Playing", other_venue)
+
+      grassroots = stage("Grassroots")
+
+      cgs_verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      round = insert(:round, stage_id: grassroots.id, group_id: group.id)
+
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: a2.id,
+        participant_b_id: a3.id,
+        venue_id: venue.id
+      )
+
+      other_round = insert(:round, stage_id: grassroots.id, group_id: other_group.id)
+
+      insert(:fixture,
+        round_id: other_round.id,
+        participant_a_id: b1.id,
+        participant_b_id: b2.id,
+        venue_id: other_venue.id
+      )
+
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      refute Competitions.venue_marked_ready_early?(grassroots.id, "male", {:venue_id, venue.id})
+      assert Competitions.final_groups(grassroots.id, "male", {:venue_id, venue.id}) == []
+
+      assert {:ok, _} =
+               Competitions.mark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+
+      assert Competitions.venue_marked_ready_early?(grassroots.id, "male", {:venue_id, venue.id})
+
+      assert [%{id: group_id}] =
+               Competitions.final_groups(grassroots.id, "male", {:venue_id, venue.id})
+
+      assert group_id == group.id
+
+      # The other venue's still-mid-play group is untouched by this venue's
+      # override.
+      assert Competitions.final_groups(grassroots.id, "male", {:venue_id, other_venue.id}) == []
+
+      # a3 never played, so even with the override they still can't be
+      # confirmed — the override only unlocks the group, not eligibility.
+      assert {:error, :invalid_qualifiers} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id, a3.id]
+               )
+
+      assert {:ok, [advanced]} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id]
+               )
+
+      assert advanced.id == a1.id
+
+      assert {:ok, _} =
+               Competitions.unmark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+
+      refute Competitions.venue_marked_ready_early?(grassroots.id, "male", {:venue_id, venue.id})
+    end
+
+    test "marking is idempotent and unmarking a venue that was never marked is a no-op" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+      grassroots = stage("Grassroots")
+
+      assert {:ok, _} =
+               Competitions.mark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+
+      assert {:ok, :already_marked} =
+               Competitions.mark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+
+      assert {:ok, _} =
+               Competitions.unmark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+
+      assert {:ok, :not_marked} =
+               Competitions.unmark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+    end
+
+    test "is restricted to :advance_participants" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "venue_representative")
+      grassroots = stage("Grassroots")
+
+      assert {:error, :unauthorized} =
+               Competitions.mark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+
+      assert {:error, :unauthorized} =
+               Competitions.unmark_venue_ready_early(grassroots.id, venue.id, "male", admin)
+    end
+
+    test "venue_marked_ready_early?/3 is always false for a region scope" do
+      region = build(:region)
+      grassroots = stage("Grassroots")
+
+      refute Competitions.venue_marked_ready_early?(
+               grassroots.id,
+               "male",
+               {:region_id, region.id}
+             )
+    end
+  end
+
+  describe "upload_result_sheet/6, list_result_sheets/2, and result_sheet_url/1" do
+    test "stores the sheet and builds a venuename_stage_date object key" do
+      venue = insert(:venue, name: "Chessmen Lounge", region_id: build(:region).id)
+      admin = insert(:admin, role: "tournament_director")
+      grassroots = stage("Grassroots")
+
+      assert {:ok, result_sheet} =
+               Competitions.upload_result_sheet(
+                 grassroots,
+                 venue,
+                 admin,
+                 "jpeg-bytes",
+                 "image/jpeg",
+                 "scan.jpg"
+               )
+
+      today = Date.to_iso8601(Date.utc_today())
+      assert result_sheet.object_key == "result_sheets/chessmen-lounge_grassroots_#{today}.jpg"
+      assert result_sheet.uploaded_on == Date.utc_today()
+      assert result_sheet.uploaded_by_admin_id == admin.id
+
+      assert [listed] = Competitions.list_result_sheets(grassroots.id, venue.id)
+      assert listed.id == result_sheet.id
+      assert Competitions.result_sheet_url(listed) =~ result_sheet.object_key
+    end
+
+    test "re-uploading the same venue/stage/day replaces the previous sheet" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "tournament_director")
+      grassroots = stage("Grassroots")
+
+      assert {:ok, first} =
+               Competitions.upload_result_sheet(
+                 grassroots,
+                 venue,
+                 admin,
+                 "v1",
+                 "image/jpeg",
+                 "v1.jpg"
+               )
+
+      assert {:ok, second} =
+               Competitions.upload_result_sheet(
+                 grassroots,
+                 venue,
+                 admin,
+                 "v2",
+                 "application/pdf",
+                 "v2.pdf"
+               )
+
+      assert second.id == first.id
+      assert second.content_type == "application/pdf"
+      assert [only] = Competitions.list_result_sheets(grassroots.id, venue.id)
+      assert only.original_filename == "v2.pdf"
+    end
+
+    test "rejects anything other than jpg/jpeg/pdf" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "tournament_director")
+      grassroots = stage("Grassroots")
+
+      assert {:error, :unsupported_content_type} =
+               Competitions.upload_result_sheet(
+                 grassroots,
+                 venue,
+                 admin,
+                 "bytes",
+                 "image/png",
+                 "scan.png"
+               )
+    end
+
+    test "is restricted to :record_results" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "regional_coordinator")
+      grassroots = stage("Grassroots")
+
+      assert {:ok, _} =
+               Competitions.upload_result_sheet(
+                 grassroots,
+                 venue,
+                 admin,
+                 "bytes",
+                 "application/pdf",
+                 "scan.pdf"
+               )
+    end
+  end
+
   describe "advance_all_entrants/4" do
     defp venue_entrant(venue) do
       player =

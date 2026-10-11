@@ -109,6 +109,81 @@
       </button>
     </div>
 
+    <div
+      :if={
+        @venue && @can_close_stage? &&
+          !Competitions.deadline_passed?(@stage.completion_deadline)
+      }
+      class="mb-4.5 flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+    >
+      <span class="text-[13px] text-amber-900">
+        <%= if @venue_ready_early? do %>
+          <strong>{@venue.name}</strong>
+          was manually marked ready to close — groups here count as final even though the deadline hasn't passed.
+        <% else %>
+          Venue finished playing but results aren't fully recorded yet? Mark it ready early instead of waiting for the deadline.
+        <% end %>
+      </span>
+      <button
+        type="button"
+        phx-click="toggle_venue_ready_early"
+        class={[
+          "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
+          @venue_ready_early? &&
+            "border border-amber-400 bg-white text-amber-900 hover:bg-amber-100",
+          !@venue_ready_early? && "bg-amber-600 text-white hover:bg-amber-700"
+        ]}
+      >
+        {if @venue_ready_early?, do: "Undo — wait for deadline", else: "Mark ready early"}
+      </button>
+    </div>
+
+    <div :if={@venue} class="mb-4.5 rounded-xl border border-ink-200 bg-white px-4 py-3.5">
+      <h3 class="mb-2.5 text-[13px] font-bold text-ink-950">
+        Result sheets — {@venue.name}
+      </h3>
+      <ul :if={@result_sheets != []} class="mb-3 space-y-1">
+        <li
+          :for={sheet <- @result_sheets}
+          class="flex items-center justify-between gap-2.5 text-[13px] text-ink-700"
+        >
+          <a
+            href={Competitions.result_sheet_url(sheet)}
+            target="_blank"
+            class="font-semibold text-ink-950 underline"
+          >
+            {sheet.original_filename}
+          </a>
+          <span class="font-mono text-[11px] text-ink-400">{sheet.uploaded_on}</span>
+        </li>
+      </ul>
+      <p :if={@result_sheets == []} class="mb-3 text-[13px] text-ink-400">
+        No result sheets uploaded yet for this venue/stage.
+      </p>
+
+      <form
+        :if={@can_upload_result_sheets?}
+        phx-submit="upload_result_sheet"
+        phx-change="noop"
+        class="flex flex-wrap items-center gap-2.5"
+      >
+        <.live_file_input upload={@uploads.result_sheet} class="text-[13px]" />
+        <button
+          type="submit"
+          disabled={@uploads.result_sheet.entries == []}
+          class="rounded-full bg-ink-950 px-4 py-1.5 text-[12.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Upload
+        </button>
+        <span
+          :for={err <- upload_errors(@uploads.result_sheet)}
+          class="text-[12px] font-semibold text-red-600"
+        >
+          {upload_error_message(err)}
+        </span>
+      </form>
+    </div>
+
     <div :if={@gr_view == :standings} class="mb-5 flex gap-2">
       <button
         type="button"

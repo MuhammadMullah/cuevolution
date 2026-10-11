@@ -21,21 +21,27 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Competitions.KnockoutBracket
   alias Cuevolution.Competitions.MatchFrame
   alias Cuevolution.Competitions.MatchResult
+  alias Cuevolution.Competitions.ResultSheet
   alias Cuevolution.Competitions.Round
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
   alias Cuevolution.Competitions.StageGroupConfig
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Competitions.StandingsCalculator
+  alias Cuevolution.Competitions.VenueEarlyClosure
   alias Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams
   alias Cuevolution.Teams.Team
+  alias Cuevolution.Venues.Venue
   alias Ecto.Multi
 
   # EAT = East Africa Time, UTC+3, fixed offset (no DST) — spec 007 FR-008.
   @eat_offset_seconds 3 * 60 * 60
+
+  # Results recording closes for everyone after 2026-10-11 EAT (approvals are unaffected).
+  @results_recording_cutoff ~D[2026-10-12]
 
   @doc "All 5 seeded stages, in pipeline order (Grassroots → Grassroots Round 2 → Regional → Circuit → Finals)."
   def list_stages do
@@ -2259,10 +2265,15 @@ defmodule Cuevolution.Competitions do
   `attrs`: `%{"winner_participation_id" => id, "score" => map | nil}`.
   """
   def record_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
-    if Admin.can?(admin, :record_results) and fixture_accessible_to_admin?(fixture.id, admin) do
-      do_record_result(fixture, admin, attrs)
-    else
-      {:error, :unauthorized}
+    cond do
+      blocked_by_results_cutoff?(admin) ->
+        {:error, :results_recording_closed}
+
+      Admin.can?(admin, :record_results) and fixture_accessible_to_admin?(fixture.id, admin) ->
+        do_record_result(fixture, admin, attrs)
+
+      true ->
+        {:error, :unauthorized}
     end
   end
 
@@ -2315,6 +2326,9 @@ defmodule Cuevolution.Competitions do
   """
   def correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
     cond do
+      blocked_by_results_cutoff?(admin) ->
+        {:error, :results_recording_closed}
+
       Admin.can?(admin, :approve_results) ->
         do_correct_result(result, admin, attrs)
 
@@ -2344,19 +2358,19 @@ defmodule Cuevolution.Competitions do
   @doc "Records the five structured singles frames and moves a scheduled fixture to completed."
   def record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners)
       when is_list(frame_winners) do
-    if Admin.can?(admin, :record_results) do
-      do_record_frames(fixture, admin, frame_winners)
-    else
-      {:error, :unauthorized}
+    cond do
+      blocked_by_results_cutoff?(admin) -> {:error, :results_recording_closed}
+      Admin.can?(admin, :record_results) -> do_record_frames(fixture, admin, frame_winners)
+      true -> {:error, :unauthorized}
     end
   end
 
   @doc "Records a singles result from the final best-of-five score."
   def record_final_score(%Fixture{} = fixture, %Admin{} = admin, attrs) do
-    if Admin.can?(admin, :record_results) do
-      do_record_final_score(fixture, admin, attrs)
-    else
-      {:error, :unauthorized}
+    cond do
+      blocked_by_results_cutoff?(admin) -> {:error, :results_recording_closed}
+      Admin.can?(admin, :record_results) -> do_record_final_score(fixture, admin, attrs)
+      true -> {:error, :unauthorized}
     end
   end
 
@@ -2532,10 +2546,15 @@ defmodule Cuevolution.Competitions do
         %Admin{} = admin,
         present_participant
       ) do
-    if Admin.can?(admin, :record_results) do
-      do_record_walkover(fixture, admin, present_participant)
-    else
-      {:error, :unauthorized}
+    cond do
+      blocked_by_results_cutoff?(admin) ->
+        {:error, :results_recording_closed}
+
+      Admin.can?(admin, :record_results) ->
+        do_record_walkover(fixture, admin, present_participant)
+
+      true ->
+        {:error, :unauthorized}
     end
   end
 
@@ -3079,13 +3098,14 @@ defmodule Cuevolution.Competitions do
   fixture.
   """
   def final_groups(stage_id, category, scope) do
-    deadline_passed? = stage_deadline_passed?(stage_id)
+    ready? =
+      stage_deadline_passed?(stage_id) or venue_marked_ready_early?(stage_id, category, scope)
 
     Group
     |> where([g], g.stage_id == ^stage_id and g.category == ^category)
     |> filter_by_group_scope(scope)
     |> Repo.all()
-    |> Enum.filter(&group_final?(&1, deadline_passed?))
+    |> Enum.filter(&group_final?(&1, ready?))
   end
 
   defp stage_deadline_passed?(stage_id) do
@@ -3103,6 +3123,15 @@ defmodule Cuevolution.Competitions do
     DateTime.utc_now() |> DateTime.add(@eat_offset_seconds, :second) |> DateTime.to_date()
   end
 
+  @doc "Whether new match results can no longer be recorded, corrected, or walked over, EAT. Approving an already-recorded result (`verify_result/2`, `verify_final_score/3`, `approve_pending_results/2`) is unaffected."
+  def results_recording_closed?, do: Date.compare(eat_today(), @results_recording_cutoff) != :lt
+
+  # Tournament directors and super admins (the same roles that can approve
+  # results) can still record/correct results past the cutoff.
+  defp blocked_by_results_cutoff?(%Admin{} = admin) do
+    results_recording_closed?() and not Admin.can?(admin, :approve_results)
+  end
+
   defp group_final?(group, deadline_passed?) do
     case list_fixtures_for_group(group.id) do
       [] ->
@@ -3110,6 +3139,75 @@ defmodule Cuevolution.Competitions do
 
       fixtures ->
         deadline_passed? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
+    end
+  end
+
+  @doc "Whether a Tournament Director has marked `scope`'s venue ready to close early for `stage_id`/`category` (see `mark_venue_ready_early/4`). Always `false` for a region scope — this override only exists for venue-scoped (Grassroots) stages."
+  def venue_marked_ready_early?(stage_id, category, {:venue_id, venue_id}) do
+    Repo.exists?(
+      from vec in VenueEarlyClosure,
+        where:
+          vec.stage_id == ^stage_id and vec.venue_id == ^venue_id and vec.category == ^category
+    )
+  end
+
+  def venue_marked_ready_early?(_stage_id, _category, _scope), do: false
+
+  @doc """
+  Lets a Tournament Director force one venue's groups into "final" early
+  (spec 012) — bypassing `final_groups/3`'s completion-deadline wait — for
+  a venue that finished playing every match but whose results weren't
+  entered in time. Does not relax `close_group_stage/5`'s other rule
+  (played at least once there); it only changes whether the venue's
+  groups count as settled at all. Idempotent: marking an already-marked
+  venue is a no-op, not an error.
+
+  Restricted to `:advance_participants` (Tournament Director/Super Admin
+  only), same as `close_group_stage/5`.
+  """
+  def mark_venue_ready_early(stage_id, venue_id, category, %Admin{} = admin) do
+    with true <- Admin.can?(admin, :advance_participants),
+         false <- venue_marked_ready_early?(stage_id, category, {:venue_id, venue_id}) do
+      %VenueEarlyClosure{}
+      |> VenueEarlyClosure.changeset(%{
+        stage_id: stage_id,
+        venue_id: venue_id,
+        category: category,
+        admin_id: admin.id
+      })
+      |> Repo.insert()
+      |> case do
+        {:ok, early_closure} ->
+          Accounts.log_admin_action("mark_venue_ready_early", admin, early_closure)
+          {:ok, early_closure}
+
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    else
+      false -> {:error, :unauthorized}
+      true -> {:ok, :already_marked}
+    end
+  end
+
+  @doc "Reverses `mark_venue_ready_early/4` (e.g. marked by mistake). A no-op, not an error, if the venue wasn't marked."
+  def unmark_venue_ready_early(stage_id, venue_id, category, %Admin{} = admin) do
+    if Admin.can?(admin, :advance_participants) do
+      case Repo.get_by(VenueEarlyClosure,
+             stage_id: stage_id,
+             venue_id: venue_id,
+             category: category
+           ) do
+        nil ->
+          {:ok, :not_marked}
+
+        early_closure ->
+          Repo.delete!(early_closure)
+          Accounts.log_admin_action("unmark_venue_ready_early", admin, early_closure)
+          {:ok, early_closure}
+      end
+    else
+      {:error, :unauthorized}
     end
   end
 
@@ -4078,4 +4176,100 @@ defmodule Cuevolution.Competitions do
     Repo.exists?(from f in Fixture, where: f.venue_id == ^venue_id) or
       Repo.exists?(from g in Group, where: g.venue_id == ^venue_id)
   end
+
+  @result_sheet_extensions %{"image/jpeg" => "jpg", "application/pdf" => "pdf"}
+
+  @doc "Result sheets already uploaded for `stage_id`/`venue_id`, newest first — admin reference only, never consulted for standings."
+  def list_result_sheets(stage_id, venue_id) do
+    ResultSheet
+    |> where([rs], rs.stage_id == ^stage_id and rs.venue_id == ^venue_id)
+    |> order_by(desc: :uploaded_on)
+    |> Repo.all()
+  end
+
+  @doc "A short-lived signed URL (or local path in dev/test) for viewing/downloading `result_sheet`'s stored file."
+  def result_sheet_url(%ResultSheet{object_key: key}), do: result_sheet_storage().url(key)
+
+  @doc """
+  Stores an admin-uploaded scan/photo of a venue's results sheet for
+  future reference (spec 012) — never consulted for standings, which
+  still come only from recorded `MatchResult`s. The object key is
+  deterministic — `<venue>_<stage>_<date>.<ext>` — so re-uploading the
+  same venue/stage on the same day replaces the previous sheet instead of
+  accumulating duplicates.
+
+  `content_type` must be one of #{inspect(Map.keys(@result_sheet_extensions))}
+  (jpg/jpeg/pdf); anything else is rejected before touching storage.
+
+  Restricted to `:record_results` — every admin role that can also record
+  match results for a venue.
+  """
+  def upload_result_sheet(
+        %Stage{} = stage,
+        %Venue{} = venue,
+        %Admin{} = admin,
+        body,
+        content_type,
+        original_filename
+      )
+      when is_binary(body) do
+    today = Date.utc_today()
+
+    with true <- Admin.can?(admin, :record_results),
+         {:ok, ext} <- Map.fetch(@result_sheet_extensions, content_type),
+         key = "result_sheets/#{slug(venue.name)}_#{slug(stage.name)}_#{today}.#{ext}",
+         :ok <- result_sheet_storage().put(key, body, content_type) do
+      persist_result_sheet(stage, venue, admin, key, content_type, original_filename, today)
+    else
+      false -> {:error, :unauthorized}
+      :error -> {:error, :unsupported_content_type}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp persist_result_sheet(stage, venue, admin, key, content_type, original_filename, today) do
+    %ResultSheet{}
+    |> ResultSheet.changeset(%{
+      stage_id: stage.id,
+      venue_id: venue.id,
+      uploaded_by_admin_id: admin.id,
+      object_key: key,
+      content_type: content_type,
+      original_filename: original_filename,
+      uploaded_on: today
+    })
+    |> Repo.insert(
+      on_conflict:
+        {:replace,
+         [:object_key, :content_type, :original_filename, :uploaded_by_admin_id, :updated_at]},
+      conflict_target: [:venue_id, :stage_id, :uploaded_on],
+      returning: true
+    )
+    |> case do
+      {:ok, result_sheet} ->
+        Accounts.log_admin_action("upload_result_sheet", admin, result_sheet,
+          new_value: %{"object_key" => key}
+        )
+
+        {:ok, result_sheet}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp slug(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
+  end
+
+  defp result_sheet_storage,
+    do:
+      Application.get_env(
+        :cuevolution,
+        :result_sheet_storage,
+        Cuevolution.Competitions.ResultSheet.Storage.Local
+      )
 end

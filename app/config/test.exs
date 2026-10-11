@@ -49,12 +49,12 @@ config :cuevolution, :africastalking_req_options,
 # Mox seams for upload and IAM signing; the default profile-picture tests use
 # Storage.Local and do not contact the network.
 config :cuevolution, :gcs,
-  bucket: "test-bucket",
   signing_service_account: "cuevolution-web@test-project.iam.gserviceaccount.com"
 
-config :cuevolution,
-       :gcs_requester,
-       Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester.Mock
+config :cuevolution, :gcs_profile_pictures_bucket, "test-bucket"
+config :cuevolution, :gcs_result_sheets_bucket, "test-result-sheets-bucket"
+
+config :cuevolution, :gcs_requester, Cuevolution.GCS.Requester.Mock
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

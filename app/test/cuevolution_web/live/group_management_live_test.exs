@@ -924,5 +924,76 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       html = view |> element("button", "Per group") |> render_click()
       refute html =~ "all groups combined"
     end
+
+    test "marking a venue ready early surfaces the close button before the deadline, and can be undone",
+         %{conn: conn} do
+      {group, [a1, a2, a3], venue} = group_with_players(3, "Ready Early")
+
+      verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      # a3 never played — keeps the group non-final until the override.
+      round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: a2.id,
+        participant_b_id: a3.id,
+        venue_id: venue.id
+      )
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{group.region_id}']") |> render_click()
+      view |> element("button[phx-value-id='#{venue.id}']") |> render_click()
+      view |> element("button", "Group standings") |> render_click()
+
+      refute has_element?(view, "button", "Close stage & advance qualifiers")
+      assert has_element?(view, "button", "Mark ready early")
+
+      html = view |> element("button", "Mark ready early") |> render_click()
+      assert html =~ "manually marked ready to close"
+      assert has_element?(view, "button", "Close stage & advance qualifiers")
+
+      html = view |> element("button", "Undo — wait for deadline") |> render_click()
+      refute html =~ "manually marked ready to close"
+      refute has_element?(view, "button", "Close stage & advance qualifiers")
+    end
+
+    test "an admin can upload a result sheet and see it listed for that venue", %{conn: conn} do
+      {_group, _participants, venue} = group_with_players(2, "Result Sheet Venue")
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{venue.region_id}']") |> render_click()
+      view |> element("button[phx-value-id='#{venue.id}']") |> render_click()
+
+      assert has_element?(view, "*", "No result sheets uploaded yet")
+
+      sheet =
+        file_input(view, "form[phx-submit='upload_result_sheet']", :result_sheet, [
+          %{
+            name: "scan.pdf",
+            content: "pdf-bytes",
+            type: "application/pdf"
+          }
+        ])
+
+      render_upload(sheet, "scan.pdf")
+      html = view |> form("form[phx-submit='upload_result_sheet']") |> render_submit()
+
+      assert html =~ "Result sheet uploaded."
+      assert html =~ "scan.pdf"
+      refute html =~ "No result sheets uploaded yet"
+    end
   end
 end

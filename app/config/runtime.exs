@@ -113,9 +113,8 @@ if config_env() == :prod do
              :profile_picture_storage,
              Cuevolution.Accounts.ProfilePicture.Storage.GCS
 
-      config :cuevolution, :gcs,
-        bucket: gcs_bucket,
-        signing_service_account: signing_service_account
+      config :cuevolution, :gcs_profile_pictures_bucket, gcs_bucket
+      config :cuevolution, :gcs, signing_service_account: signing_service_account
 
     "local" ->
       config :cuevolution,
@@ -124,6 +123,39 @@ if config_env() == :prod do
 
     storage ->
       raise "unsupported PROFILE_PICTURE_STORAGE=#{storage}; expected gcs or local"
+  end
+
+  # ## Configuring result-sheet storage
+  #
+  # Same rationale as profile pictures above: local disk doesn't survive a
+  # redeploy, so production stores uploaded result sheets (admin-side scans
+  # of venue results sheets) in a private GCS bucket, reusing the same
+  # signing service account as profile pictures — both buckets live on the
+  # same VM service account (see infra/modules/cuevolution-runtime).
+  case System.get_env("RESULT_SHEET_STORAGE", "gcs") do
+    "gcs" ->
+      result_sheets_bucket =
+        System.get_env("GCS_RESULT_SHEETS_BUCKET") ||
+          raise "GCS_RESULT_SHEETS_BUCKET is required when RESULT_SHEET_STORAGE=gcs"
+
+      signing_service_account =
+        System.get_env("GCS_SIGNING_SERVICE_ACCOUNT") ||
+          raise "GCS_SIGNING_SERVICE_ACCOUNT is required when RESULT_SHEET_STORAGE=gcs"
+
+      config :cuevolution,
+             :result_sheet_storage,
+             Cuevolution.Competitions.ResultSheet.Storage.GCS
+
+      config :cuevolution, :gcs_result_sheets_bucket, result_sheets_bucket
+      config :cuevolution, :gcs, signing_service_account: signing_service_account
+
+    "local" ->
+      config :cuevolution,
+             :result_sheet_storage,
+             Cuevolution.Competitions.ResultSheet.Storage.Local
+
+    storage ->
+      raise "unsupported RESULT_SHEET_STORAGE=#{storage}; expected gcs or local"
   end
 
   # The secret key base is used to sign/encrypt cookies and other secrets.

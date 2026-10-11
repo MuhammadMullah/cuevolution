@@ -1,6 +1,6 @@
-defmodule Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester.Live do
+defmodule Cuevolution.GCS.Requester.Live do
   @moduledoc false
-  @behaviour Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester
+  @behaviour Cuevolution.GCS.Requester
 
   @metadata_url "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
   @iam_url "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/"

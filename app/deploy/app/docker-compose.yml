@@ -7,8 +7,7 @@
 # cloud-sql-proxy needs no mounted credentials: it picks up the VM's attached
 # service account automatically from the instance metadata server (see
 # infra/modules/cuevolution-runtime/compute.tf), the same way
-# lib/cuevolution/accounts/profile_picture/storage/gcs/requester/live.ex
-# authenticates to GCS.
+# lib/cuevolution/gcs/requester/live.ex authenticates to GCS.
 #
 # DATABASE_URL and CUEVOLUTION_SECRETS_JSON (SECRET_KEY_BASE,
 # POSTMARK_SERVER_TOKEN, AFRICASTALKING_API_KEY/USERNAME) are NOT set here —
@@ -24,6 +23,8 @@ x-app-env: &app_env
   PROFILE_PICTURE_STORAGE: ${PROFILE_PICTURE_STORAGE:-gcs}
   GCS_BUCKET: ${GCS_BUCKET}
   GCS_SIGNING_SERVICE_ACCOUNT: ${GCS_SIGNING_SERVICE_ACCOUNT}
+  RESULT_SHEET_STORAGE: ${RESULT_SHEET_STORAGE:-gcs}
+  GCS_RESULT_SHEETS_BUCKET: ${GCS_RESULT_SHEETS_BUCKET}
   MAIL_PROVIDER: ${MAIL_PROVIDER:-postmark}
   MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
   AFRICASTALKING_SENDER_ID: ${AFRICASTALKING_SENDER_ID}

@@ -4,7 +4,7 @@ defmodule Cuevolution.Accounts.ProfilePicture.Storage.GCSTest do
   import Mox
 
   alias Cuevolution.Accounts.ProfilePicture.Storage.GCS
-  alias Cuevolution.Accounts.ProfilePicture.Storage.GCS.Requester.Mock
+  alias Cuevolution.GCS.Requester.Mock
 
   setup :verify_on_exit!
 

@@ -18,9 +18,10 @@ fi
 
 export CUEVOLUTION_SECRETS_JSON="$(gcloud secrets versions access latest --secret=cuevolution-production-application-secrets)"
 export DATABASE_URL="$(gcloud secrets versions access latest --secret=cuevolution-production-vm-database-url)"
-# MAIL_PROVIDER used to be smtp_auth. Keep the persistent VM .env from
-# selecting that removed provider after the production switch to Postmark.
-export MAIL_PROVIDER=postmark
+# MAIL_PROVIDER is read from .env (docker-compose.yml's ${MAIL_PROVIDER:-postmark}
+# default applies if it's unset there) — deliberately not hardcoded here, so
+# switching providers (e.g. the 2026-10 Postmark outage, falling back to
+# smtp_auth) only needs a one-line .env edit, not a script change.
 
 docker compose --env-file .env pull
 
