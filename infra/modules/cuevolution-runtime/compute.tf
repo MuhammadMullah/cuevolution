@@ -17,6 +17,12 @@ resource "google_storage_bucket_iam_member" "vm_uploads_object_user" {
   member = "serviceAccount:${google_service_account.vm.email}"
 }
 
+resource "google_storage_bucket_iam_member" "vm_result_sheets_object_user" {
+  bucket = google_storage_bucket.result_sheets.name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.vm.email}"
+}
+
 resource "google_project_iam_member" "vm_cloud_sql" {
   project = var.project_id
   role    = "roles/cloudsql.client"

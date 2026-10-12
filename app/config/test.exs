@@ -56,6 +56,10 @@ config :cuevolution, :gcs_result_sheets_bucket, "test-result-sheets-bucket"
 
 config :cuevolution, :gcs_requester, Cuevolution.GCS.Requester.Mock
 
+# Open by default — tests that exercise the switch itself override this
+# with Application.put_env.
+config :cuevolution, :results_recording_closed, false
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

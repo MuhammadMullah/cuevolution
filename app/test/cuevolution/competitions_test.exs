@@ -176,6 +176,59 @@ defmodule Cuevolution.CompetitionsTest do
 
       assert Enum.map(results, & &1.id) == [matching.id]
     end
+
+    test "filters by venue, matching a player's preferred venue or a team's match venue" do
+      grassroots = stage("Grassroots")
+      venue = insert(:venue)
+
+      player = insert(:player, preferred_venue_id: venue.id)
+
+      matching_player =
+        insert(:stage_participation, stage_id: grassroots.id, player_id: player.id)
+
+      team = insert(:team, match_venue_id: venue.id)
+
+      matching_team =
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          player_id: nil,
+          team_id: team.id,
+          category: "team"
+        )
+
+      insert(:stage_participation, stage_id: grassroots.id)
+
+      results =
+        Competitions.list_participations(%{stage_id: grassroots.id, venue_id: venue.id})
+
+      assert Enum.map(results, & &1.id) |> Enum.sort() ==
+               Enum.sort([matching_player.id, matching_team.id])
+    end
+
+    test "filters by search, matching player name, username, or team name" do
+      grassroots = stage("Grassroots")
+
+      player = insert(:player, first_name: "Martin", last_name: "Kihato", username: "mkihato")
+      by_name = insert(:stage_participation, stage_id: grassroots.id, player_id: player.id)
+
+      team = insert(:team, name: "Nairobi Strikers")
+
+      by_team_name =
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          player_id: nil,
+          team_id: team.id,
+          category: "team"
+        )
+
+      insert(:stage_participation, stage_id: grassroots.id)
+
+      assert Competitions.list_participations(%{stage_id: grassroots.id, search: "kihato"})
+             |> Enum.map(& &1.id) == [by_name.id]
+
+      assert Competitions.list_participations(%{stage_id: grassroots.id, search: "strikers"})
+             |> Enum.map(& &1.id) == [by_team_name.id]
+    end
   end
 
   describe "stages_by_participant/2" do

@@ -3,6 +3,11 @@ output "profile_pictures_bucket" {
   value       = google_storage_bucket.player_uploads.name
 }
 
+output "result_sheets_bucket" {
+  description = "Private bucket for admin-uploaded venue result sheets."
+  value       = google_storage_bucket.result_sheets.name
+}
+
 output "db_connection_name" {
   description = "Cloud SQL connection name (PROJECT:REGION:INSTANCE)."
   value       = google_sql_database_instance.db.connection_name

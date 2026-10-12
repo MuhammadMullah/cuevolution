@@ -6,6 +6,7 @@ module "cuevolution" {
   environment                   = "production"
   application_secrets_secret_id = "cuevolution-production-application-secrets"
   profile_pictures_bucket       = "cuevolution-production-profile-pictures-ew4"
+  result_sheets_bucket          = "cuevolution-production-result-sheets-ew4"
   phx_host                      = "sportpesapool.ke"
   mail_provider                 = "postmark"
   sms_provider                  = "africastalking"

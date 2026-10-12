@@ -14,6 +14,7 @@ side only.
 | Compute | GCE VM `cuevolution-production-vm` (web + worker containers) | Terraform (`compute.tf`); deploys via `.github/workflows/deploy-vm.yml` |
 | Database | Cloud SQL PostgreSQL `cuevolution-production-db`, `db-f1-micro`, public IP with no authorized networks, connector-only (project exception to the org's `sql.restrictPublicIp` policy, see `org_policy.tf`) | Terraform |
 | Uploads | Private bucket `cuevolution-production-profile-pictures-ew4` | Terraform |
+| Result sheets | Private bucket `cuevolution-production-result-sheets-ew4` (admin-uploaded venue result sheets, spec 012) | Terraform |
 | Secrets | `cuevolution-production-application-secrets` (JSON, values added by hand) and `cuevolution-production-vm-database-url` (written by Terraform, never stored in state) | Terraform |
 
 Code layout: `envs/production` is the only root; `modules/cuevolution-runtime`

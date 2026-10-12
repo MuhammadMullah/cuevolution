@@ -14,6 +14,7 @@ defmodule CuevolutionWeb.StageManagementLive do
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
+  alias Cuevolution.Venues
   alias CuevolutionWeb.AdminComponents
   alias CuevolutionWeb.PlayerComponents
 
@@ -33,17 +34,20 @@ defmodule CuevolutionWeb.StageManagementLive do
        stages: stages,
        regions: regions,
        categories: @categories,
+       venue_options: venue_options(),
        can_advance?: Admin.can?(socket.assigns.current_admin, :advance_participants),
        stage: List.first(stages),
        next_stage: Competitions.next_stage(List.first(stages)),
        region: List.first(regions),
        category: "male",
+       venue_filter: nil,
+       search_filter: nil,
        panel: :participants,
        editing_config: nil,
-       editing_field: nil,
-       filter_form:
-         to_form(%{"region_id" => List.first(regions).id, "category" => "male"}, as: :filter)
+       editing_field: nil
      )
+     |> assign_filter_form()
+     |> assign_search_form()
      |> assign_config_form()
      |> assign_deadline_form()
      |> load_participations()
@@ -72,7 +76,32 @@ defmodule CuevolutionWeb.StageManagementLive do
      socket
      |> assign(:region, region)
      |> assign(:category, params["category"])
-     |> assign(:filter_form, to_form(params, as: :filter))
+     |> assign(:venue_filter, blank_to_nil(params["venue_id"]))
+     |> assign_filter_form()
+     |> load_participations()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:venue_filter, nil)
+     |> assign_filter_form()
+     |> load_participations()}
+  end
+
+  def handle_event("search", %{"search" => %{"term" => term}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:search_filter, blank_to_nil(term))
+     |> assign_search_form()
+     |> load_participations()}
+  end
+
+  def handle_event("clear_search", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:search_filter, nil)
+     |> assign_search_form()
      |> load_participations()}
   end
 
@@ -175,7 +204,9 @@ defmodule CuevolutionWeb.StageManagementLive do
       Competitions.list_participations(%{
         stage_id: socket.assigns.stage.id,
         region_id: socket.assigns.region.id,
-        category: socket.assigns.category
+        category: socket.assigns.category,
+        venue_id: socket.assigns.venue_filter,
+        search: socket.assigns.search_filter
       })
     )
   end
@@ -204,6 +235,26 @@ defmodule CuevolutionWeb.StageManagementLive do
 
     assign(socket, :group_configs, group_configs)
   end
+
+  defp assign_filter_form(socket) do
+    params = %{
+      "region_id" => socket.assigns.region.id,
+      "category" => socket.assigns.category,
+      "venue_id" => socket.assigns.venue_filter
+    }
+
+    assign(socket, :filter_form, to_form(params, as: :filter))
+  end
+
+  defp assign_search_form(socket) do
+    assign(socket, :search_form, to_form(%{"term" => socket.assigns.search_filter}, as: :search))
+  end
+
+  defp venue_options, do: Venues.list_venues(%{active: true}) |> Enum.map(&{&1.name, &1.id})
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   defp assign_config_form(socket, config \\ nil) do
     changeset = StageCapacityConfig.changeset(config || %StageCapacityConfig{}, %{})

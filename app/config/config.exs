@@ -72,6 +72,15 @@ config :cuevolution, :sms_adapter, Cuevolution.Notifications.SmsAdapter.StubAdap
 # disabling the endpoint, until POSTMARK_WEBHOOK_USERNAME/PASSWORD exist).
 config :cuevolution, :postmark_webhook, username: "postmark", password: "postmark-webhook-dev"
 
+# Manual on/off switch: when true, Competitions.record_result/3,
+# record_frames/3, record_final_score/3, record_walkover/3, and
+# correct_result/3 refuse new work (Admin.can?(:approve_results) holders —
+# TD/super admin — are exempt; approving an already-recorded result is
+# never affected). Defaults to false so an unset override never locks
+# everyone out by accident. Flip in production via RESULTS_RECORDING_CLOSED
+# (config/runtime.exs) — takes effect on the next deploy/restart, not live.
+config :cuevolution, :results_recording_closed, false
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

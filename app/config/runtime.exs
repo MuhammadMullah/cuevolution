@@ -307,4 +307,8 @@ if config_env() == :prod do
     provider ->
       raise "unsupported SMS_PROVIDER=#{provider}; expected africastalking or stub"
   end
+
+  if closed = System.get_env("RESULTS_RECORDING_CLOSED") do
+    config :cuevolution, :results_recording_closed, closed in ~w(true 1)
+  end
 end

@@ -28,6 +28,11 @@ variable "profile_pictures_bucket" {
   type        = string
 }
 
+variable "result_sheets_bucket" {
+  description = "Globally unique name of the private bucket for admin-uploaded venue result sheets (spec 012)."
+  type        = string
+}
+
 variable "phx_host" {
   description = "Public host name of the web app; also the domain that gets mapped."
   type        = string

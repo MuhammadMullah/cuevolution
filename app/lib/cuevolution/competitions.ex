@@ -40,9 +40,6 @@ defmodule Cuevolution.Competitions do
   # EAT = East Africa Time, UTC+3, fixed offset (no DST) — spec 007 FR-008.
   @eat_offset_seconds 3 * 60 * 60
 
-  # Results recording closes for everyone after 2026-10-11 EAT (approvals are unaffected).
-  @results_recording_cutoff ~D[2026-10-12]
-
   @doc "All 5 seeded stages, in pipeline order (Grassroots → Grassroots Round 2 → Regional → Circuit → Finals)."
   def list_stages do
     Repo.all(from s in Stage, order_by: s.order)
@@ -410,16 +407,53 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  Participations filtered by `:stage_id`, `:region_id`, `:category` (all
-  optional) — the admin Stage/Group management screens' listing query.
+  Participations filtered by `:stage_id`, `:region_id`, `:category`,
+  `:venue_id`, and `:search` (all optional) — the admin Stage/Group
+  management screens' listing query. `:venue_id` matches a player's
+  `preferred_venue_id` or a team's `match_venue_id` (a participation has no
+  venue of its own until it's drawn into a venue-scoped group). `:search`
+  matches player first+last name, player username, or team name.
   """
   def list_participations(filters \\ %{}) do
     StageParticipation
     |> filter_by(:stage_id, filters[:stage_id])
     |> filter_by(:region_id, filters[:region_id])
     |> filter_by(:category, filters[:category])
+    |> filter_participations_by_venue_and_search(filters[:venue_id], filters[:search])
     |> preload([:player, :team, :region, :stage])
     |> Repo.all()
+  end
+
+  defp filter_participations_by_venue_and_search(query, nil, nil), do: query
+
+  defp filter_participations_by_venue_and_search(query, venue_id, search) do
+    query
+    |> join(:left, [p], player in assoc(p, :player), as: :player)
+    |> join(:left, [p], team in assoc(p, :team), as: :team)
+    |> where(^participant_venue_match(venue_id))
+    |> where(^participant_name_match(search))
+  end
+
+  defp participant_venue_match(nil), do: dynamic(true)
+
+  defp participant_venue_match(venue_id) do
+    dynamic(
+      [player: player, team: team],
+      player.preferred_venue_id == ^venue_id or team.match_venue_id == ^venue_id
+    )
+  end
+
+  defp participant_name_match(nil), do: dynamic(true)
+
+  defp participant_name_match(search) do
+    pattern = "%" <> escape_like_pattern(search) <> "%"
+
+    dynamic(
+      [player: player, team: team],
+      ilike(fragment("? || ' ' || ?", player.first_name, player.last_name), ^pattern) or
+        ilike(player.username, ^pattern) or
+        ilike(team.name, ^pattern)
+    )
   end
 
   @doc """
@@ -2266,7 +2300,7 @@ defmodule Cuevolution.Competitions do
   """
   def record_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
     cond do
-      blocked_by_results_cutoff?(admin) ->
+      blocked_by_results_closed?(admin) ->
         {:error, :results_recording_closed}
 
       Admin.can?(admin, :record_results) and fixture_accessible_to_admin?(fixture.id, admin) ->
@@ -2326,7 +2360,7 @@ defmodule Cuevolution.Competitions do
   """
   def correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
     cond do
-      blocked_by_results_cutoff?(admin) ->
+      blocked_by_results_closed?(admin) ->
         {:error, :results_recording_closed}
 
       Admin.can?(admin, :approve_results) ->
@@ -2359,7 +2393,7 @@ defmodule Cuevolution.Competitions do
   def record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners)
       when is_list(frame_winners) do
     cond do
-      blocked_by_results_cutoff?(admin) -> {:error, :results_recording_closed}
+      blocked_by_results_closed?(admin) -> {:error, :results_recording_closed}
       Admin.can?(admin, :record_results) -> do_record_frames(fixture, admin, frame_winners)
       true -> {:error, :unauthorized}
     end
@@ -2368,7 +2402,7 @@ defmodule Cuevolution.Competitions do
   @doc "Records a singles result from the final best-of-five score."
   def record_final_score(%Fixture{} = fixture, %Admin{} = admin, attrs) do
     cond do
-      blocked_by_results_cutoff?(admin) -> {:error, :results_recording_closed}
+      blocked_by_results_closed?(admin) -> {:error, :results_recording_closed}
       Admin.can?(admin, :record_results) -> do_record_final_score(fixture, admin, attrs)
       true -> {:error, :unauthorized}
     end
@@ -2547,7 +2581,7 @@ defmodule Cuevolution.Competitions do
         present_participant
       ) do
     cond do
-      blocked_by_results_cutoff?(admin) ->
+      blocked_by_results_closed?(admin) ->
         {:error, :results_recording_closed}
 
       Admin.can?(admin, :record_results) ->
@@ -3123,12 +3157,13 @@ defmodule Cuevolution.Competitions do
     DateTime.utc_now() |> DateTime.add(@eat_offset_seconds, :second) |> DateTime.to_date()
   end
 
-  @doc "Whether new match results can no longer be recorded, corrected, or walked over, EAT. Approving an already-recorded result (`verify_result/2`, `verify_final_score/3`, `approve_pending_results/2`) is unaffected."
-  def results_recording_closed?, do: Date.compare(eat_today(), @results_recording_cutoff) != :lt
+  @doc "Whether new match results can no longer be recorded, corrected, or walked over — a manual on/off switch (the `:results_recording_closed` config, flippable in production via RESULTS_RECORDING_CLOSED — see config/runtime.exs). Approving an already-recorded result (`verify_result/2`, `verify_final_score/3`, `approve_pending_results/2`) is unaffected."
+  def results_recording_closed?,
+    do: Application.get_env(:cuevolution, :results_recording_closed, false)
 
   # Tournament directors and super admins (the same roles that can approve
-  # results) can still record/correct results past the cutoff.
-  defp blocked_by_results_cutoff?(%Admin{} = admin) do
+  # results) can still record/correct results while recording is closed.
+  defp blocked_by_results_closed?(%Admin{} = admin) do
     results_recording_closed?() and not Admin.can?(admin, :approve_results)
   end
 
