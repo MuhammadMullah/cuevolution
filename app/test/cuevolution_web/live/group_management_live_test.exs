@@ -530,6 +530,59 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       assert html =~ "All fixtures"
     end
 
+    test "a deadline double walkover doesn't inflate the group's or a member's played count",
+         %{conn: conn} do
+      create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      draw = Repo.one!(Draw)
+      group = Repo.get_by!(Group, draw_id: draw.id)
+      [fixture | _] = Competitions.list_fixtures_for_group(group.id)
+      total_fixtures = group.id |> Competitions.list_fixtures_for_group() |> length()
+
+      # Simulate GrassrootsDeadlineWorker closing this fixture out — nobody
+      # played it, the deadline just passed.
+      {:ok, result} =
+        %MatchResult{}
+        |> MatchResult.system_double_walkover_changeset(%{
+          fixture_id: fixture.id,
+          score: %{
+            "participant_a_frames" => 0,
+            "participant_b_frames" => 0,
+            "points_a" => 0,
+            "points_b" => 0,
+            "walkover" => true,
+            "walkover_kind" => "double"
+          }
+        })
+        |> Repo.insert()
+
+      Repo.update!(
+        Ecto.Changeset.change(fixture,
+          result_id: result.id,
+          status: "walkover",
+          walkover_kind: "double"
+        )
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      html =
+        view
+        |> element("button[phx-value-id='#{fixture.participant_a_id}']")
+        |> render_click()
+
+      assert html =~ "0/#{total_fixtures} played"
+      refute html =~ "1/#{total_fixtures} played"
+    end
+
     test "a freshly published, unplayed draw shows no premature qualifiers", %{conn: conn} do
       create_draw_with_players(4)
 

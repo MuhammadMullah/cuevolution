@@ -171,5 +171,55 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
       assert Repo.get!(Fixture, remaining.id).status == "scheduled"
       assert Repo.get!(Fixture, third.id).status == "scheduled"
     end
+
+    test "a deadline double walkover doesn't count toward the fifty percent played threshold" do
+      fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M20")
+      withdrawn = Repo.preload(fixture, :participant_a).participant_a
+
+      opponent =
+        insert(:stage_participation, stage_id: withdrawn.stage_id, category: withdrawn.category)
+
+      remaining =
+        insert(:fixture,
+          round_id: fixture.round_id,
+          participant_a_id: withdrawn.id,
+          participant_b_id: opponent.id,
+          match_id: "SP26-NBO-MS-A-R1-M21"
+        )
+
+      {:ok, result} =
+        %MatchResult{}
+        |> MatchResult.system_double_walkover_changeset(%{
+          fixture_id: fixture.id,
+          score: %{
+            "participant_a_frames" => 0,
+            "participant_b_frames" => 0,
+            "points_a" => 0,
+            "points_b" => 0,
+            "walkover" => true,
+            "walkover_kind" => "double"
+          }
+        })
+        |> Repo.insert()
+
+      Repo.update!(
+        Ecto.Changeset.change(fixture,
+          result_id: result.id,
+          status: "walkover",
+          walkover_kind: "double"
+        )
+      )
+
+      admin = insert(:admin, role: "tournament_director")
+
+      # Neither fixture was actually played — `fixture` only looks
+      # "played" because the deadline worker closed it out, not because
+      # anyone recorded a result — so withdrawal resets both instead of
+      # treating the double walkover as a kept result.
+      assert {:ok, _fixtures} = Competitions.process_withdrawal(withdrawn, admin)
+      assert Repo.get!(Fixture, fixture.id).status == "scheduled"
+      assert Repo.get!(Fixture, fixture.id).result_id == nil
+      assert Repo.get!(Fixture, remaining.id).status == "scheduled"
+    end
   end
 end

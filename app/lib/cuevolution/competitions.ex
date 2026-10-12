@@ -2665,7 +2665,13 @@ defmodule Cuevolution.Competitions do
 
   defp do_process_withdrawal(participation, admin) do
     fixtures = withdrawal_fixtures(participation.id)
-    played = Enum.count(fixtures, &(&1.status in ["completed", "verified", "walkover"]))
+
+    played =
+      Enum.count(fixtures, fn f ->
+        f.status == "completed" or f.status == "verified" or
+          (f.status == "walkover" and f.walkover_kind != "double")
+      end)
+
     keep_played = played * 2 >= length(fixtures)
 
     Multi.new()

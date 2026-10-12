@@ -331,7 +331,7 @@ defmodule CuevolutionWeb.AdminComponents do
         Admin.can?(admin, :view_directory)
 
       {_, _, "/admin/audit-log"} ->
-        Admin.can?(admin, :view_directory) and admin.role != "tournament_director"
+        admin.role == "super_admin"
 
       {_, _, "/admin/venues"} ->
         Admin.can?(admin, :manage_venues)

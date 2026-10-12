@@ -153,6 +153,13 @@ defmodule CuevolutionWeb.Router do
         {CuevolutionWeb.AdminAuth, {:ensure_permission, :view_directory}}
       ] do
       live "/notifications", NotificationLogLive, :index
+    end
+
+    live_session :admin_audit_log,
+      on_mount: [
+        {CuevolutionWeb.AdminAuth, :ensure_admin},
+        {CuevolutionWeb.AdminAuth, :ensure_super_admin}
+      ] do
       live "/audit-log", Admin.AuditLogLive, :index
     end
 

@@ -999,12 +999,12 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp ngettext_group(_count), do: "groups"
 
   defp fixture_progress(fixtures),
-    do: {Enum.count(fixtures, &(&1.status in ["verified", "walkover"])), length(fixtures)}
+    do: {Enum.count(fixtures, &actually_played?/1), length(fixtures)}
 
   defp member_progress(fixtures, participation_id) do
     played =
       Enum.count(fixtures, fn f ->
-        f.status in ["verified", "walkover"] and
+        actually_played?(f) and
           (f.participant_a_id == participation_id or f.participant_b_id == participation_id)
       end)
 
@@ -1015,6 +1015,14 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
     "#{played}/#{total}"
   end
+
+  # A verified result, or a real (single) walkover. Excludes a "double"
+  # walkover — GrassrootsDeadlineWorker's auto-closure of a fixture nobody
+  # played before the stage deadline — which must not count as played.
+  defp actually_played?(%{status: "verified"}), do: true
+  defp actually_played?(%{status: "walkover", walkover_kind: "double"}), do: false
+  defp actually_played?(%{status: "walkover"}), do: true
+  defp actually_played?(_fixture), do: false
 
   defp fixture_pair(%{participant_a: a, participant_b: b}),
     do: "#{participant_name(a)} vs #{participant_name(b)}"
