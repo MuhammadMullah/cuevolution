@@ -2349,6 +2349,122 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
+  describe "revert_deadline_double_walkovers/0" do
+    defp double_walkover_fixture do
+      grassroots = stage("Grassroots")
+      a = insert(:stage_participation, stage_id: grassroots.id, category: "male")
+      b = insert(:stage_participation, stage_id: grassroots.id, category: "male")
+      group = insert(:group, stage_id: grassroots.id, category: "male")
+      round = insert(:round, stage_id: grassroots.id, group_id: group.id)
+
+      fixture =
+        insert(:fixture, round_id: round.id, participant_a_id: a.id, participant_b_id: b.id)
+
+      {:ok, result} =
+        %MatchResult{}
+        |> MatchResult.system_double_walkover_changeset(%{
+          fixture_id: fixture.id,
+          score: %{
+            "participant_a_frames" => 0,
+            "participant_b_frames" => 0,
+            "points_a" => 0,
+            "points_b" => 0,
+            "walkover" => true,
+            "walkover_kind" => "double"
+          }
+        })
+        |> Repo.insert()
+
+      fixture =
+        Repo.update!(
+          Ecto.Changeset.change(fixture,
+            result_id: result.id,
+            status: "walkover",
+            walkover_kind: "double"
+          )
+        )
+
+      {fixture, result, a, b}
+    end
+
+    test "reverts a double walkover to scheduled, deleting the synthetic result" do
+      {fixture, result, _a, _b} = double_walkover_fixture()
+
+      assert %{reverted: 1, skipped_advanced: []} =
+               Competitions.revert_deadline_double_walkovers()
+
+      reverted = Repo.get!(Fixture, fixture.id)
+      assert reverted.status == "scheduled"
+      assert reverted.walkover_kind == nil
+      assert reverted.result_id == nil
+      assert Repo.get(MatchResult, result.id) == nil
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "revert_deadline_double_walkover",
+          entity_id: fixture.id
+        )
+
+      assert log.actor_type == "system"
+    end
+
+    test "skips a fixture where a participant already advanced to the next stage" do
+      {fixture, result, a, _b} = double_walkover_fixture()
+      round_2 = stage("Grassroots Round 2")
+      Repo.update!(Ecto.Changeset.change(a, stage_id: round_2.id))
+
+      assert %{reverted: 0, skipped_advanced: [skipped_id]} =
+               Competitions.revert_deadline_double_walkovers()
+
+      assert skipped_id == fixture.id
+
+      untouched = Repo.get!(Fixture, fixture.id)
+      assert untouched.status == "walkover"
+      assert untouched.walkover_kind == "double"
+      assert Repo.get(MatchResult, result.id)
+    end
+
+    test "is idempotent — a second run finds nothing left to revert" do
+      double_walkover_fixture()
+
+      assert %{reverted: 1} = Competitions.revert_deadline_double_walkovers()
+
+      assert %{reverted: 0, skipped_advanced: []} =
+               Competitions.revert_deadline_double_walkovers()
+    end
+
+    test "leaves a real (single) walkover and a verified result alone" do
+      single = insert(:fixture, status: "walkover", walkover_kind: "single")
+      verified = insert(:fixture, status: "verified")
+
+      assert %{reverted: 0, skipped_advanced: []} =
+               Competitions.revert_deadline_double_walkovers()
+
+      assert Repo.get!(Fixture, single.id).status == "walkover"
+      assert Repo.get!(Fixture, verified.id).status == "verified"
+    end
+
+    test "leaves a double walkover alone once its result was manually corrected" do
+      {fixture, result, _a, b} = double_walkover_fixture()
+
+      admin = insert(:admin, role: "super_admin")
+
+      {:ok, _corrected} =
+        Competitions.correct_result(result, admin, %{
+          "winner_participation_id" => b.id,
+          "score" => %{"participant_a_frames" => 0, "participant_b_frames" => 5}
+        })
+
+      assert %{reverted: 0, skipped_advanced: []} =
+               Competitions.revert_deadline_double_walkovers()
+
+      untouched = Repo.get!(Fixture, fixture.id)
+      assert untouched.status == "walkover"
+      assert untouched.walkover_kind == "double"
+      assert Repo.get!(MatchResult, result.id).winner_participation_id == b.id
+    end
+  end
+
   describe "list_pending_result_fixtures/4 and count_pending_result_fixtures/3 (search)" do
     test "matches by participant_a's player username" do
       player = insert(:player, username: "findable-rep", first_name: "Alpha", last_name: "One")

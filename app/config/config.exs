@@ -22,8 +22,14 @@ config :cuevolution, Oban,
      crontab: [
        # 08:00 UTC = 11:00 EAT (Nairobi).
        {"0 8 * * *", Cuevolution.Accounts.Workers.BirthdayGreetingWorker},
-       {"@daily", Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker},
-       {"@hourly", Cuevolution.Competitions.Workers.GrassrootsDeadlineWorker}
+       {"@daily", Cuevolution.Competitions.Workers.GrassrootsMatchReminderWorker}
+       # GrassrootsDeadlineWorker's auto-walkover-on-deadline cron is
+       # disabled (2026-10-12): a match past its stage's completion_deadline
+       # is no longer force-converted to a double walkover — a real result
+       # can still be recorded late. The deadline itself still exists and
+       # still lets a stage/group be closed for qualification regardless
+       # of unplayed fixtures (see Competitions.final_groups/3); only the
+       # automatic walkover conversion is off.
      ]},
     # Rescues jobs left "executing" when an instance restarts mid-job.
     {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30)}

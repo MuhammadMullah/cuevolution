@@ -4,7 +4,7 @@ defmodule CuevolutionWeb.Admin.AuditLogLive do
   alias Cuevolution.Accounts
   alias CuevolutionWeb.AdminComponents
 
-  @action_types ~w(publish_draw redraw override_group_count record_walkover process_withdrawal deadline_double_walkover verify_result postpone_fixture correct_result correct_points)
+  @action_types ~w(publish_draw redraw override_group_count record_walkover process_withdrawal deadline_double_walkover revert_deadline_double_walkover verify_result postpone_fixture correct_result correct_points)
 
   def mount(_params, _session, socket) do
     {:ok,

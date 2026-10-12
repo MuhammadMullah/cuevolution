@@ -143,6 +143,35 @@ defmodule Cuevolution.Release do
   end
 
   @doc """
+  One-off, paired with disabling `GrassrootsDeadlineWorker`'s cron
+  (2026-10-12): reverts every fixture that worker auto-walkovered back to
+  "scheduled" so a real result can still be recorded for it. See
+  `Cuevolution.Competitions.revert_deadline_double_walkovers/0` for exactly
+  what's reverted and what's skipped (anything already advanced to the
+  next stage). Idempotent — already-reverted fixtures are left alone. E.g.:
+
+      bin/cuevolution eval 'Cuevolution.Release.revert_deadline_double_walkovers()'
+  """
+  def revert_deadline_double_walkovers do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    %{reverted: reverted, skipped_advanced: skipped} =
+      Cuevolution.Competitions.revert_deadline_double_walkovers()
+
+    IO.puts("Reverted #{reverted} deadline-closed fixture(s) back to scheduled.")
+
+    if skipped != [] do
+      IO.puts(
+        :stderr,
+        "Skipped #{length(skipped)} fixture(s) already advanced to the next stage: #{inspect(skipped)}"
+      )
+    end
+
+    :ok
+  end
+
+  @doc """
   Re-queues up to `limit` failed/stuck "draw_published" email
   notifications for another delivery attempt after a provider rejection or
   outage (see `Cuevolution.Notifications.redrive_failed/3`). Defaults to 400;

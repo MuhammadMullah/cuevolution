@@ -401,6 +401,83 @@ defmodule Cuevolution.Competitions do
   defp walkover_points(winner_id, _a_id, b_id) when winner_id == b_id, do: {:ok, 0, 3}
   defp walkover_points(_winner_id, _a_id, _b_id), do: :error
 
+  @doc """
+  One-off data correction, paired with disabling `GrassrootsDeadlineWorker`'s
+  cron (2026-10-12): reverts every fixture that worker had auto-walkovered
+  back to an ordinary "scheduled" fixture a real result can still be
+  recorded for — deleting the synthetic 0-0 `MatchResult` it created and
+  clearing `walkover_kind`/`result_id`.
+
+  A fixture only qualifies if its `MatchResult` is still exactly the
+  pristine row the worker created: `walkover_kind == "double"` alone isn't
+  enough, since `correct_result/3` can rewrite a result's `winner_id`/
+  `score` without ever touching the fixture's `walkover_kind` — so this
+  also requires `winner_participation_id` and `prior_value` to both still
+  be `nil` (the system changeset never sets a winner, and a `nil`
+  `prior_value` means `correct_result/3` has never touched this row).
+  Either one being non-nil means a human already turned this into a real,
+  reviewed result, however it's labeled — left untouched, not reverted.
+
+  Skips (and reports) any fixture where either side has already been
+  advanced to the next stage — redoing that advancement, or re-deriving
+  who should have qualified, is a separate manual decision this
+  correction must not guess at. Logs each reversion via
+  `Accounts.log_system_action/3`, visible in the audit log alongside the
+  original `deadline_double_walkover` entry it undoes. Idempotent: a
+  fixture already reverted (now "scheduled") no longer matches and is
+  left alone on a re-run. Returns
+  `%{reverted: count, skipped_advanced: [fixture_id]}`.
+  """
+  def revert_deadline_double_walkovers do
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: g in Group,
+      on: g.id == r.group_id,
+      join: mr in MatchResult,
+      on: mr.id == f.result_id,
+      where:
+        f.status == "walkover" and f.walkover_kind == "double" and
+          is_nil(mr.winner_participation_id) and is_nil(mr.prior_value),
+      select: {f, g.stage_id}
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{reverted: 0, skipped_advanced: []}, fn {fixture, stage_id}, acc ->
+      if either_participant_advanced?(fixture, stage_id) do
+        %{acc | skipped_advanced: [fixture.id | acc.skipped_advanced]}
+      else
+        revert_double_walkover(fixture)
+        %{acc | reverted: acc.reverted + 1}
+      end
+    end)
+  end
+
+  defp either_participant_advanced?(fixture, stage_id) do
+    ids = [fixture.participant_a_id, fixture.participant_b_id]
+
+    Repo.exists?(from sp in StageParticipation, where: sp.id in ^ids and sp.stage_id != ^stage_id)
+  end
+
+  defp revert_double_walkover(fixture) do
+    Repo.transaction(fn ->
+      if fixture.result_id do
+        Repo.delete_all(from mf in MatchFrame, where: mf.match_result_id == ^fixture.result_id)
+        Repo.delete_all(from mr in MatchResult, where: mr.id == ^fixture.result_id)
+      end
+
+      updated =
+        fixture
+        |> Ecto.Changeset.change(result_id: nil, status: "scheduled", walkover_kind: nil)
+        |> Repo.update!()
+
+      Accounts.log_system_action("revert_deadline_double_walkover", updated,
+        new_value: %{"reason" => "deadline_enforcement_disabled"}
+      )
+
+      updated
+    end)
+  end
+
   @doc "The stage a participation currently sits in (spec 006)."
   def current_stage(%StageParticipation{} = participation) do
     participation |> Repo.preload(:stage) |> Map.fetch!(:stage)
