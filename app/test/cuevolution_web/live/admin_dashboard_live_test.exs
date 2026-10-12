@@ -123,8 +123,19 @@ defmodule CuevolutionWeb.AdminDashboardLiveTest do
     refute html =~ "Audit Log"
   end
 
-  test "other roles with directory access still see Audit Log in the sidebar", %{conn: conn} do
+  test "regional coordinators, despite holding view_directory, don't see Audit Log in the sidebar",
+       %{conn: conn} do
     admin = insert(:admin, role: "regional_coordinator")
+    token = Accounts.generate_admin_session_token(admin)
+
+    conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
+    {:ok, _view, html} = live(conn, ~p"/admin/dashboard")
+
+    refute html =~ "Audit Log"
+  end
+
+  test "super admins see Audit Log in the sidebar", %{conn: conn} do
+    admin = insert(:admin, role: "super_admin")
     token = Accounts.generate_admin_session_token(admin)
 
     conn = conn |> init_test_session(%{}) |> put_session(:admin_token, token)
