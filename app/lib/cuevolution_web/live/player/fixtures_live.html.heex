@@ -9,18 +9,18 @@
   <h1 class="mb-5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">My fixtures</h1>
 
   <div
-    :if={@upcoming != [] || @venue_representative}
+    :if={@all_upcoming != [] || @venue_representative}
     class="mb-6 flex items-start gap-3 rounded-2xl bg-ink-950 px-5 py-4 text-ink-25"
   >
     <div class="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
       ◆
     </div>
     <div>
-      <div :if={@upcoming != []} class="mb-0.5 text-[15px] font-semibold">
+      <div :if={@all_upcoming != []} class="mb-0.5 text-[15px] font-semibold">
         A new draw has been published
       </div>
-      <div :if={@upcoming != []} class="text-[13.5px] text-ink-300">
-        You have {length(@upcoming)} upcoming {ngettext_fixture(length(@upcoming))}.
+      <div :if={@all_upcoming != []} class="text-[13.5px] text-ink-300">
+        You have {length(@all_upcoming)} upcoming {ngettext_fixture(length(@all_upcoming))}.
         Notifications were sent to your email and SMS.
       </div>
       <div
@@ -45,12 +45,53 @@
     </div>
   </div>
 
+  <div
+    :if={@stage_options != []}
+    class="mb-4 flex flex-wrap gap-2"
+    role="group"
+    aria-label="Filter fixtures by stage"
+  >
+    <button
+      type="button"
+      phx-click="filter_stage"
+      phx-value-stage=""
+      class={[
+        "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+        if(is_nil(@stage_filter),
+          do: "bg-ink-950 text-ink-25",
+          else: "bg-ink-100 text-ink-600 hover:bg-ink-200"
+        )
+      ]}
+    >
+      All stages
+    </button>
+    <button
+      :for={stage <- @stage_options}
+      type="button"
+      phx-click="filter_stage"
+      phx-value-stage={stage}
+      class={[
+        "rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+        if(@stage_filter == stage,
+          do: "bg-ink-950 text-ink-25",
+          else: "bg-ink-100 text-ink-600 hover:bg-ink-200"
+        )
+      ]}
+    >
+      {stage}
+    </button>
+  </div>
+
   <h2 class="mb-3 text-[15px] font-bold tracking-tight text-ink-950">Upcoming</h2>
 
   <div :if={@upcoming == []} class="mb-8">
     <PlayerComponents.empty_state icon="hero-calendar" title="No upcoming fixtures">
-      When the admin publishes a draw, your matches — with opponent, venue and time — will
-      show up here and we'll notify you.
+      <%= if @stage_filter do %>
+        You don't have any upcoming fixtures in this stage right now.
+      <% else %>
+        When the admin publishes a draw, your matches — with opponent, venue and time — will
+        show up here and we'll notify you.
+      <% end %>
     </PlayerComponents.empty_state>
   </div>
 
@@ -106,9 +147,13 @@
   <PlayerComponents.empty_state
     :if={@results == []}
     icon="hero-clock"
-    title="No matches played yet"
+    title={if @stage_filter, do: "No results in this stage", else: "No matches played yet"}
   >
-    Results appear here once the admin records your first match.
+    <%= if @stage_filter do %>
+      You don't have any recorded results in this stage yet.
+    <% else %>
+      Results appear here once the admin records your first match.
+    <% end %>
   </PlayerComponents.empty_state>
 
   <div

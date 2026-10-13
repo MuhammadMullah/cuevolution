@@ -16,20 +16,54 @@ defmodule CuevolutionWeb.FixturesLive do
 
   def mount(_params, _session, socket) do
     player = Repo.preload(socket.assigns.current_player, :preferred_venue)
+    all_upcoming = upcoming_fixtures(player)
+    all_results = recent_results(player)
 
     {:ok,
      assign(socket,
        page_title: "Fixtures",
-       upcoming: upcoming_fixtures(player),
+       all_upcoming: all_upcoming,
+       all_results: all_results,
+       upcoming: all_upcoming,
+       results: all_results,
+       stage_filter: nil,
+       stage_options: stage_options(all_upcoming, all_results),
        venue_fixtures: venue_fixtures(player),
        venue_name: player.preferred_venue && player.preferred_venue.name,
-       venue_representative: Accounts.venue_representative_for_venue(player.preferred_venue_id),
-       results: recent_results(player)
+       venue_representative: Accounts.venue_representative_for_venue(player.preferred_venue_id)
+     )}
+  end
+
+  def handle_event("filter_stage", %{"stage" => stage}, socket) do
+    stage_filter = if stage == "", do: nil, else: stage
+
+    {:noreply,
+     assign(socket,
+       stage_filter: stage_filter,
+       upcoming: filter_by_stage(socket.assigns.all_upcoming, stage_filter),
+       results: filter_by_stage(socket.assigns.all_results, stage_filter)
      )}
   end
 
   defp ngettext_fixture(1), do: "fixture"
   defp ngettext_fixture(_count), do: "fixtures"
+
+  # Pipeline order (Grassroots → ... → Finals), limited to stages the player
+  # actually has upcoming fixtures or results in. `result.stage` keeps its
+  # original casing for display (see `present_result/2`), so compare
+  # case-insensitively here.
+  defp stage_options(upcoming, results) do
+    present = MapSet.new(upcoming ++ results, &String.downcase(&1.stage))
+
+    Competitions.list_stages()
+    |> Enum.map(&String.downcase(&1.name))
+    |> Enum.filter(&MapSet.member?(present, &1))
+  end
+
+  defp filter_by_stage(fixtures, nil), do: fixtures
+
+  defp filter_by_stage(fixtures, stage),
+    do: Enum.filter(fixtures, &(String.downcase(&1.stage) == stage))
 
   defp upcoming_fixtures(player) do
     player.id
@@ -56,7 +90,7 @@ defmodule CuevolutionWeb.FixturesLive do
     %{
       scheduled?: false,
       type: if(mine.category == "team", do: "Team", else: "Individual"),
-      stage: String.downcase(mine.stage.name),
+      stage: String.downcase(fixture.round.stage.name),
       opponent: Competitions.participant_name(opponent),
       opponent_phone: participant_phone(opponent),
       match_id: fixture.match_id,
@@ -71,7 +105,7 @@ defmodule CuevolutionWeb.FixturesLive do
     %{
       scheduled?: true,
       type: if(mine.category == "team", do: "Team", else: "Individual"),
-      stage: String.downcase(mine.stage.name),
+      stage: String.downcase(fixture.round.stage.name),
       opponent: Competitions.participant_name(opponent),
       opponent_phone: participant_phone(opponent),
       date: Calendar.strftime(eat, "%b %-d, %Y"),

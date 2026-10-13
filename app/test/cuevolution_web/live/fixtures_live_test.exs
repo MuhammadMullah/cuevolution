@@ -223,6 +223,114 @@ defmodule CuevolutionWeb.FixturesLiveTest do
     assert html =~ "Brian"
   end
 
+  test "filters upcoming fixtures and results by stage", %{conn: conn} do
+    grassroots = Repo.get_by!(Competitions.Stage, name: "Grassroots")
+    round_2 = Repo.get_by!(Competitions.Stage, name: "Grassroots Round 2")
+    region = build(:region)
+    player = insert(:player, region_id: region.id, gender: "male")
+    r1_opponent = insert(:player, region_id: region.id, gender: "male", first_name: "Kevin")
+    r2_opponent = insert(:player, region_id: region.id, gender: "male", first_name: "Amina")
+    venue = insert(:venue, region_id: region.id)
+
+    r1_mine =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player.id
+      )
+
+    r1_theirs =
+      insert(:stage_participation,
+        stage_id: grassroots.id,
+        region_id: region.id,
+        category: "male",
+        player_id: r1_opponent.id
+      )
+
+    {:ok, r1_group} =
+      Competitions.create_group(%{
+        stage_id: grassroots.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Pool A"
+      })
+
+    Competitions.assign_to_group(r1_mine, r1_group)
+    Competitions.assign_to_group(r1_theirs, r1_group)
+
+    {:ok, r1_round} =
+      Competitions.create_round(%{
+        stage_id: grassroots.id,
+        group_id: r1_group.id,
+        name: "Round 1"
+      })
+
+    assert [{:ok, _}] =
+             Competitions.enter_fixtures(r1_round, [
+               fixture_row(player.id, r1_opponent.id, venue.id)
+             ])
+
+    # Advance the player's participation to Grassroots Round 2 in place —
+    # this is exactly what `advance_to_stage`/`advance_qualifiers` do, and
+    # what previously caused the Round 1 fixture above to be mislabeled
+    # under the player's *new* stage instead of its own.
+    r2_mine =
+      Repo.update!(Ecto.Changeset.change(r1_mine, stage_id: round_2.id))
+
+    r2_theirs =
+      insert(:stage_participation,
+        stage_id: round_2.id,
+        region_id: region.id,
+        category: "male",
+        player_id: r2_opponent.id
+      )
+
+    {:ok, r2_group} =
+      Competitions.create_group(%{
+        stage_id: round_2.id,
+        region_id: region.id,
+        venue_id: venue.id,
+        category: "male",
+        name: "Pool A"
+      })
+
+    Competitions.assign_to_group(r2_mine, r2_group)
+    Competitions.assign_to_group(r2_theirs, r2_group)
+
+    {:ok, r2_round} =
+      Competitions.create_round(%{
+        stage_id: round_2.id,
+        group_id: r2_group.id,
+        name: "Round 1"
+      })
+
+    assert [{:ok, _}] =
+             Competitions.enter_fixtures(r2_round, [
+               fixture_row(player.id, r2_opponent.id, venue.id)
+             ])
+
+    conn = log_in_player(conn, player)
+    {:ok, view, html} = live(conn, ~p"/fixtures")
+
+    # Both fixtures show up, each still tagged with the stage it was
+    # actually drawn in rather than the player's current stage.
+    assert html =~ "Kevin"
+    assert html =~ "Amina"
+    assert has_element?(view, "button", "grassroots round 2")
+
+    html = view |> element("button", "grassroots round 2") |> render_click()
+
+    assert html =~ "Amina"
+    refute html =~ "Kevin"
+
+    html = view |> element("button", "All stages") |> render_click()
+
+    assert html =~ "Kevin"
+    assert html =~ "Amina"
+  end
+
   defp fixture_row(player_a_id, player_b_id, venue_id) do
     %{
       "category" => "male",

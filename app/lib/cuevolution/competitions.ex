@@ -2244,7 +2244,7 @@ defmodule Cuevolution.Competitions do
     |> order_by(asc: :scheduled_at)
     |> preload([
       :venue,
-      round: [group: :stage],
+      round: [:stage, group: :stage],
       participant_a: [:player, :stage, team: :captain],
       participant_b: [:player, :stage, team: :captain]
     ])
