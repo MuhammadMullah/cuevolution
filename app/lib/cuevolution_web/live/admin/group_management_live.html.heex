@@ -637,7 +637,16 @@
           </p>
           <ul class="my-3 space-y-1 text-sm text-ink-800">
             <li :for={row <- @qualifiers} class="flex items-center justify-between gap-2.5">
-              {row.name}
+              <span class="flex items-center gap-1.5">
+                {row.name}
+                <span
+                  :if={Map.get(row, :played?, true) == false}
+                  class="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+                  title="No match result recorded for this person yet in this stage."
+                >
+                  No result recorded
+                </span>
+              </span>
               <button
                 type="button"
                 phx-click="remove_qualifier"
@@ -670,10 +679,17 @@
                 :for={candidate <- @qualifier_candidates}
                 type="button"
                 phx-click="add_qualifier"
-                phx-value-id={candidate.id}
-                class="block w-full px-3.5 py-2 text-left text-sm text-ink-900 hover:bg-ink-50"
+                phx-value-id={candidate.participation.id}
+                class="flex w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-sm text-ink-900 hover:bg-ink-50"
               >
-                {participant_name(candidate)}
+                {participant_name(candidate.participation)}
+                <span
+                  :if={!candidate.played?}
+                  class="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+                  title="No match result recorded for this person yet in this stage."
+                >
+                  No result recorded
+                </span>
               </button>
             </div>
           </div>

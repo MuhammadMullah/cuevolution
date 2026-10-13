@@ -870,6 +870,72 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       refute Repo.get!(StageParticipation, a2.id).stage_id == round_2.id
     end
 
+    test "an admin can confirm a qualifier with no recorded result, flagged with a visible warning",
+         %{conn: conn} do
+      {group_a, [a1, _a2], venue_a} = group_with_players(2, "Unrecorded Results A")
+      a1 = Repo.preload(a1, :player)
+
+      # The venue finished playing, but nothing has been typed in yet —
+      # only the admin's own knowledge says who qualified. A scheduled,
+      # never-recorded fixture is what the deadline worker/results clerk
+      # would still be waiting on.
+      round = insert(:round, stage_id: group_a.stage_id, group_id: group_a.id)
+
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: a1.id,
+        participant_b_id: insert(:stage_participation, stage_id: group_a.stage_id).id,
+        venue_id: venue_a.id
+      )
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{group_a.region_id}']") |> render_click()
+      view |> element("button[phx-value-id='#{venue_a.id}']") |> render_click()
+      view |> element("button", "Group standings") |> render_click()
+
+      # Without the override, the group isn't final yet, so there's nothing
+      # to close and no one is searchable.
+      refute has_element?(view, "button", "Close stage & advance qualifiers")
+
+      view |> element("button", "Mark ready early") |> render_click()
+
+      view |> element("button", "Close stage & advance qualifiers") |> render_click()
+
+      view
+      |> form("form[phx-change='search_qualifier_candidate']", %{"query" => a1.player.username})
+      |> render_change()
+
+      candidate_button =
+        view |> element("button[phx-click='add_qualifier'][phx-value-id='#{a1.id}']")
+
+      assert render(candidate_button) =~ "No result recorded"
+
+      candidate_button |> render_click()
+
+      assert has_element?(view, "li", "No result recorded")
+
+      assert has_element?(
+               view,
+               "button[phx-click='remove_qualifier'][phx-value-id='#{a1.id}']"
+             )
+
+      html = view |> element("button", "Confirm & advance") |> render_click()
+      assert html =~ "Qualifiers advanced to Grassroots Round 2."
+
+      round_2 = Repo.get_by!(Stage, name: "Grassroots Round 2")
+      assert Repo.get!(StageParticipation, a1.id).stage_id == round_2.id
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "advance_to_stage",
+          entity_id: a1.id
+        )
+
+      assert log.new_value["result_recorded"] == false
+    end
+
     test "Venue overall toggle combines every group's standings into one ranked table",
          %{conn: conn} do
       grassroots = Repo.get_by!(Stage, name: "Grassroots")

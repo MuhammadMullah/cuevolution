@@ -456,8 +456,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
         stage.id
         |> Competitions.search_eligible_qualifiers(category, draw_scope(socket.assigns), query)
-        |> Enum.reject(fn p ->
-          Enum.any?(socket.assigns.qualifiers, &(&1.participant_id == p.id))
+        |> Enum.reject(fn c ->
+          Enum.any?(socket.assigns.qualifiers, &(&1.participant_id == c.participation.id))
         end)
       end
 
@@ -465,14 +465,20 @@ defmodule CuevolutionWeb.GroupManagementLive do
   end
 
   # Lets the admin add someone the automatic suggestion left out — most
-  # notably, filling a slot a dead group (nobody played) left empty.
+  # notably, filling a slot a dead group (nobody played) left empty, or a
+  # qualifier the admin knows played but whose result isn't recorded yet
+  # (`candidate.played?` is `false` then — see `Competitions.close_group_stage/5`).
   def handle_event("add_qualifier", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.qualifier_candidates, &(&1.id == id)) do
+    case Enum.find(socket.assigns.qualifier_candidates, &(&1.participation.id == id)) do
       nil ->
         {:noreply, socket}
 
-      participation ->
-        row = %{participant_id: participation.id, name: participant_name(participation)}
+      candidate ->
+        row = %{
+          participant_id: candidate.participation.id,
+          name: participant_name(candidate.participation),
+          played?: candidate.played?
+        }
 
         {:noreply,
          assign(socket,

@@ -161,4 +161,70 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
     updated = Cuevolution.Competitions.group_config(grassroots.id, "male")
     assert updated.group_size == 10
   end
+
+  test "moving a participant back returns them to the previous stage", %{conn: conn} do
+    regional = Repo.get_by!(Stage, name: "Regional")
+    region = List.first(Accounts.list_regions())
+    player = insert(:player, region_id: region.id)
+
+    participation =
+      insert(:stage_participation,
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player.id
+      )
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/stages")
+    view |> element("button[phx-click='select_stage']", "Regional") |> render_click()
+
+    html =
+      view
+      |> element("button[phx-click='move_back'][phx-value-id='#{participation.id}']")
+      |> render_click()
+
+    assert html =~ "Moved back to Grassroots Round 2"
+    refute html =~ player.first_name
+
+    assert Repo.get!(Cuevolution.Competitions.StageParticipation, participation.id).stage_id ==
+             Repo.get_by!(Stage, name: "Grassroots Round 2").id
+  end
+
+  test "shows a clear error instead of moving back when matches were played", %{conn: conn} do
+    regional = Repo.get_by!(Stage, name: "Regional")
+    region = List.first(Accounts.list_regions())
+    player = insert(:player, region_id: region.id)
+
+    participation =
+      insert(:stage_participation,
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player.id
+      )
+
+    group = insert(:group, stage_id: regional.id, category: "male")
+    round = insert(:round, stage_id: regional.id, group_id: group.id)
+    opponent = insert(:stage_participation, stage_id: regional.id, category: "male")
+
+    insert(:fixture,
+      round_id: round.id,
+      participant_a_id: participation.id,
+      participant_b_id: opponent.id,
+      status: "verified"
+    )
+
+    conn = log_in_admin(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/stages")
+    view |> element("button[phx-click='select_stage']", "Regional") |> render_click()
+
+    html =
+      view
+      |> element("button[phx-click='move_back'][phx-value-id='#{participation.id}']")
+      |> render_click()
+
+    assert html =~ "played or recorded matches"
+    assert html =~ player.first_name
+  end
 end

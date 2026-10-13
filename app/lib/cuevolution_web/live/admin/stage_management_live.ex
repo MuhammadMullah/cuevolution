@@ -38,6 +38,7 @@ defmodule CuevolutionWeb.StageManagementLive do
        can_advance?: Admin.can?(socket.assigns.current_admin, :advance_participants),
        stage: List.first(stages),
        next_stage: Competitions.next_stage(List.first(stages)),
+       previous_stage: Competitions.previous_stage(List.first(stages), "male"),
        region: List.first(regions),
        category: "male",
        venue_filter: nil,
@@ -62,6 +63,7 @@ defmodule CuevolutionWeb.StageManagementLive do
      socket
      |> assign(:stage, stage)
      |> assign(:next_stage, Competitions.next_stage(stage))
+     |> assign_previous_stage(stage, socket.assigns.category)
      |> assign(:editing_field, nil)
      |> assign_deadline_form(stage)
      |> load_participations()
@@ -76,6 +78,7 @@ defmodule CuevolutionWeb.StageManagementLive do
      socket
      |> assign(:region, region)
      |> assign(:category, params["category"])
+     |> assign_previous_stage(socket.assigns.stage, params["category"])
      |> assign(:venue_filter, blank_to_nil(params["venue_id"]))
      |> assign_filter_form()
      |> load_participations()}
@@ -139,6 +142,20 @@ defmodule CuevolutionWeb.StageManagementLive do
     end
   end
 
+  def handle_event("move_back", %{"id" => participation_id}, socket) do
+    if socket.assigns.can_advance? do
+      participation = Enum.find(socket.assigns.participations, &(&1.id == participation_id))
+
+      result =
+        participation &&
+          Competitions.move_back_to_previous_stage(participation, socket.assigns.current_admin)
+
+      {:noreply, socket |> move_back_flash(result) |> load_participations()}
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to move participants.")}
+    end
+  end
+
   def handle_event("edit_config", %{"id" => id}, socket) do
     config = Enum.find(socket.assigns.configs, &(&1.id == id))
     {:noreply, socket |> assign(:editing_config, config) |> assign_config_form(config)}
@@ -195,6 +212,35 @@ defmodule CuevolutionWeb.StageManagementLive do
       {:ok, deadline} -> save_deadline(socket, deadline)
       _ -> {:noreply, put_flash(socket, :error, "Enter a valid date.")}
     end
+  end
+
+  defp move_back_flash(socket, nil),
+    do: put_flash(socket, :error, "That participant is no longer in this stage.")
+
+  defp move_back_flash(socket, {:ok, _participation}) do
+    target = socket.assigns.previous_stage
+    put_flash(socket, :info, "Moved back to #{target && target.name}.")
+  end
+
+  defp move_back_flash(socket, {:error, :has_recorded_results}) do
+    put_flash(
+      socket,
+      :error,
+      "Can't move back — they have played or recorded matches in #{socket.assigns.stage.name}. Correct or clear those results first."
+    )
+  end
+
+  defp move_back_flash(socket, {:error, :no_previous_stage}),
+    do: put_flash(socket, :error, "There is no earlier stage for this participant.")
+
+  defp move_back_flash(socket, {:error, :unauthorized}),
+    do: put_flash(socket, :error, "You don't have permission to move participants.")
+
+  defp move_back_flash(socket, {:error, _reason}),
+    do: put_flash(socket, :error, "Couldn't move back — please try again.")
+
+  defp assign_previous_stage(socket, stage, category) do
+    assign(socket, :previous_stage, Competitions.previous_stage(stage, category))
   end
 
   defp load_participations(socket) do

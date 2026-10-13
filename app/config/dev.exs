@@ -5,7 +5,8 @@ config :cuevolution, Cuevolution.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  database: "cuevolution_dev",
+  # DEV_DB_NAME lets test/smoke/ run against a throwaway database.
+  database: System.get_env("DEV_DB_NAME", "cuevolution_dev"),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10

@@ -66,6 +66,22 @@ defmodule Cuevolution.Competitions do
     Repo.one(from s in Stage, where: s.order == ^(order + 1))
   end
 
+  @doc """
+  The stage a `category` participant would be moved back to from `stage`, or
+  `nil` if there is none. Grassroots and Grassroots Round 2 are male-only, so
+  a female/team participant's pipeline starts at Regional — there is nothing
+  before it for them.
+  """
+  def previous_stage(%Stage{order: order}, category) do
+    previous = Repo.one(from s in Stage, where: s.order == ^(order - 1))
+
+    cond do
+      is_nil(previous) -> nil
+      Stage.grassroots?(previous) and category != "male" -> nil
+      true -> previous
+    end
+  end
+
   @doc "The first stage in pipeline order — individual male players enter here (spec 006)."
   def grassroots_stage do
     Repo.one!(from s in Stage, where: s.name == "Grassroots")
@@ -636,6 +652,141 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc """
+  Manually undoes an advance: moves `participation` back one stage, for when
+  someone was advanced by mistake. The mirror of `advance_to_stage/3`
+  (which is how someone is manually added to the next stage), restricted to
+  the same `:advance_participants` roles and recorded in `AdminActionLog`.
+
+  Everything the participant has in the stage they're *leaving* is cleaned
+  up in the same transaction: their group memberships there and any
+  not-yet-played fixtures (`scheduled`/`postponed`, no result). Their
+  opponents' round-robin schedules shrink accordingly. If they have any
+  played or recorded fixture there (live, completed, verified, walkover,
+  abandoned, or with a result attached) the move is refused with
+  `:has_recorded_results` and nothing changes — those need a deliberate
+  correction first, not a silent delete.
+
+  A capped stage (Circuit/Finals) has its `current_count` decremented so the
+  slot is released. Records in the stage they return to are untouched, so a
+  participant moved back from Round 2 is again a member of their Grassroots
+  group with their Grassroots results intact.
+
+  Returns `{:ok, participation}`, or `{:error, :unauthorized |
+  :no_previous_stage | :has_recorded_results | changeset}`.
+  """
+  def move_back_to_previous_stage(%StageParticipation{} = participation, %Admin{} = admin) do
+    if Admin.can?(admin, :advance_participants) do
+      do_move_back(participation, admin)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_move_back(participation, admin) do
+    Multi.new()
+    |> Multi.run(:current, &lock_participation(&1, &2, participation))
+    |> Multi.run(:target, &move_back_target/2)
+    |> Multi.run(:guard, &ensure_nothing_played/2)
+    |> Multi.run(:fixtures, &delete_unplayed_fixtures/2)
+    |> Multi.run(:memberships, &delete_stage_memberships/2)
+    |> Multi.run(:capacity, &release_capacity_slot/2)
+    |> Multi.update(:participation, &move_back_changeset/1)
+    |> Multi.run(:log, &log_move_back(&1, &2, admin))
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{participation: updated}} -> {:ok, updated}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  # Locked re-read: the caller's struct may be stale (another admin could
+  # have moved this participant since the page loaded).
+  defp lock_participation(repo, _changes, participation) do
+    case repo.one(
+           from sp in StageParticipation, where: sp.id == ^participation.id, lock: "FOR UPDATE"
+         ) do
+      nil -> {:error, :not_found}
+      current -> {:ok, current}
+    end
+  end
+
+  defp move_back_target(repo, %{current: current}) do
+    stage = repo.get!(Stage, current.stage_id)
+
+    case previous_stage(stage, current.category) do
+      nil -> {:error, :no_previous_stage}
+      previous -> {:ok, previous}
+    end
+  end
+
+  defp ensure_nothing_played(repo, %{current: current}) do
+    if repo.exists?(played_fixtures_query(current)),
+      do: {:error, :has_recorded_results},
+      else: {:ok, nil}
+  end
+
+  defp delete_unplayed_fixtures(repo, %{current: current}) do
+    {count, _} = repo.delete_all(participant_fixtures_query(current))
+    {:ok, count}
+  end
+
+  defp delete_stage_memberships(repo, %{current: current}) do
+    {count, _} =
+      repo.delete_all(
+        from gm in GroupMembership,
+          join: g in Group,
+          on: g.id == gm.group_id,
+          where: gm.stage_participation_id == ^current.id and g.stage_id == ^current.stage_id
+      )
+
+    {:ok, count}
+  end
+
+  defp release_capacity_slot(repo, %{current: current}) do
+    repo.update_all(
+      from(c in StageCapacityConfig,
+        where:
+          c.stage_id == ^current.stage_id and c.category == ^current.category and
+            c.current_count > 0
+      ),
+      inc: [current_count: -1]
+    )
+
+    {:ok, nil}
+  end
+
+  defp move_back_changeset(%{current: current, target: target}),
+    do: StageParticipation.changeset(current, %{stage_id: target.id})
+
+  defp log_move_back(_repo, changes, admin) do
+    %{current: current, target: target, participation: updated} = changes
+
+    Accounts.log_admin_action("move_back_to_stage", admin, updated,
+      prior_value: %{"stage_id" => current.stage_id},
+      new_value: %{
+        "stage_id" => target.id,
+        "removed_fixtures" => changes.fixtures,
+        "removed_group_memberships" => changes.memberships
+      }
+    )
+  end
+
+  # Fixtures in `participation`'s current stage that involve it, via the
+  # round's stage — a participation's *other* stages' fixtures (it keeps one
+  # row across stages) are never touched.
+  defp participant_fixtures_query(%StageParticipation{id: id, stage_id: stage_id}) do
+    from f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      where: r.stage_id == ^stage_id and (f.participant_a_id == ^id or f.participant_b_id == ^id)
+  end
+
+  defp played_fixtures_query(participation) do
+    from f in participant_fixtures_query(participation),
+      where: f.status not in ["scheduled", "postponed"] or not is_nil(f.result_id)
+  end
+
   defp check_and_claim_capacity(repo, stage_id, category) do
     config =
       repo.one(
@@ -813,14 +964,19 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  Members of any *final* (fully played) group at `stage_id`/`category`/
-  `scope`, who've actually played at least once, matching `query` by
-  name/username/team — the candidate pool for manually adding someone to
-  the "Close stage & advance qualifiers" list (see `close_group_stage/5`,
-  which enforces the exact same two rules). An admin curating the list can
-  only pull from people who actually competed in this venue/region's
-  finished groups — never from another venue, never from a group still
-  mid-play, and never one of a dead group's own zero-play participants.
+  Members of any *final* group at `stage_id`/`category`/`scope`, matching
+  `query` by name/username/team — the candidate pool for manually adding
+  someone to the "Close stage & advance qualifiers" list (see
+  `close_group_stage/5`, which enforces the exact same membership rule). An
+  admin curating the list can only pull from people who are actually in
+  this venue/region's finished groups — never from another venue, never
+  from a group still mid-play.
+
+  Each result is `%{participation: %StageParticipation{}, played?: bool}` —
+  `played?` is `false` for a candidate with no recorded result there yet
+  (e.g. a venue marked ready early whose results aren't typed in), so
+  `GroupManagementLive` can flag that clearly before the admin adds them;
+  see `close_group_stage/5`'s moduledoc for why that's allowed at all.
   """
   def search_eligible_qualifiers(stage_id, category, scope, query) do
     groups = final_groups(stage_id, category, scope)
@@ -846,9 +1002,9 @@ defmodule Cuevolution.Competitions do
       select: p
     )
     |> Repo.all()
-    |> Enum.filter(&MapSet.member?(played_ids, &1.id))
     |> Enum.take(8)
     |> Repo.preload([:player, team: [:region, :roster]])
+    |> Enum.map(&%{participation: &1, played?: MapSet.member?(played_ids, &1.id)})
   end
 
   defp escape_like_pattern(value), do: String.replace(value, ~w(% _), fn c -> "\\" <> c end)
@@ -3341,14 +3497,19 @@ defmodule Cuevolution.Competitions do
   automatic top-N/best-of-rest suggestion (`GroupManagementLive` computes
   that default), but the admin may freely add or remove names before
   confirming (e.g. to promote a 3rd-place finisher instead of 2nd, or drop
-  someone for a reason the system can't see). Two hard rules bound that
-  freedom, both enforced here rather than trusted to the caller: every id
-  must belong to a group that's actually final within this
-  `stage_id`/`category`/`scope` (never another venue's qualifier, never
-  someone from a group still mid-play), and must have actually played at
-  least one match there (see `played_participant_ids/1`) — a dead group's
-  empty slot can be filled by someone who legitimately played elsewhere,
-  never by one of that dead group's own zero-play participants.
+  someone for a reason the system can't see). One hard rule bounds that
+  freedom, enforced here rather than trusted to the caller: every id must
+  belong to a group that's actually final within this
+  `stage_id`/`category`/`scope` — never another venue's qualifier, never
+  someone from a group still mid-play.
+
+  Unlike that membership rule, having an actually-recorded result there is
+  *not* required — an admin who knows a venue finished playing, but whose
+  results aren't entered yet (see `mark_venue_ready_early/4`), can still
+  confirm the real qualifiers by name. Every such qualifier is tagged
+  `"result_recorded" => false` in their `AdminActionLog` entry, so this
+  override is always visible after the fact, distinct from an ordinary
+  played-and-verified advance.
 
   Restricted to `:advance_participants` (Tournament Director/Super Admin
   only), same as `advance_to_stage/3` which this calls per qualifier.
@@ -3360,12 +3521,15 @@ defmodule Cuevolution.Competitions do
          :ok <- if(Stage.round_robin?(stage), do: :ok, else: :not_round_robin),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
          groups <- final_groups(stage_id, category, scope),
-         played_by_group <- played_participant_ids_by_group(Enum.map(groups, & &1.id)),
-         eligible_ids <- Enum.flat_map(groups, &played_group_member_ids(&1, played_by_group)),
-         :ok <- if(all_eligible?(confirmed_ids, eligible_ids), do: :ok, else: :ineligible) do
+         member_ids <- Enum.flat_map(groups, &group_member_participant_ids(&1.id)),
+         :ok <- if(all_eligible?(confirmed_ids, member_ids), do: :ok, else: :ineligible) do
       participations = Repo.all(from sp in StageParticipation, where: sp.id in ^confirmed_ids)
 
-      advance_qualifiers(participations, admin, next_stage)
+      played_by_group = played_participant_ids_by_group(Enum.map(groups, & &1.id))
+      played_ids = played_by_group |> Map.values() |> Enum.reduce(MapSet.new(), &MapSet.union/2)
+      unplayed_ids = MapSet.new(confirmed_ids, &to_string/1) |> MapSet.difference(played_ids)
+
+      advance_qualifiers(participations, admin, next_stage, unplayed_ids)
     else
       false -> {:error, :unauthorized}
       nil -> {:error, :stage_not_found}
@@ -3382,17 +3546,19 @@ defmodule Cuevolution.Competitions do
   end
 
   # A group's members who actually played at least once — never its
-  # zero-play participants, even though they're technically "members" of
-  # a now-final (deadline-closed) group. Shared by `close_group_stage/5`'s
-  # eligibility gate and `search_eligible_qualifiers/4`'s candidate pool,
-  # so a name the admin can search up is always one `close_group_stage/5`
-  # will actually accept.
+  # zero-play participants, even though they're technically "members" of a
+  # now-final (deadline-closed) group. Used by `search_eligible_qualifiers/4`
+  # only to flag the `played?` field on each candidate (not to filter them
+  # out — see `close_group_stage/5`'s moduledoc for why a no-result-recorded
+  # candidate is still searchable/confirmable).
   defp played_group_member_ids(%Group{id: group_id}, played_by_group) do
     played_ids = Map.get(played_by_group, group_id, MapSet.new())
     group_id |> group_member_participant_ids() |> Enum.filter(&MapSet.member?(played_ids, &1))
   end
 
-  defp advance_qualifiers([], _admin, _next_stage), do: {:ok, []}
+  defp advance_qualifiers(participations, admin, next_stage, unplayed_ids \\ MapSet.new())
+
+  defp advance_qualifiers([], _admin, _next_stage, _unplayed_ids), do: {:ok, []}
 
   # Batches every step of advancing a whole qualifier list into one
   # transaction, instead of calling `advance_to_stage/3` (its own
@@ -3405,7 +3571,7 @@ defmodule Cuevolution.Competitions do
   # failure partway through left the first N already advanced and the
   # rest not — this is genuinely all-or-nothing, matching the single
   # confirmed list the admin actually reviewed.
-  defp advance_qualifiers(participations, admin, next_stage) do
+  defp advance_qualifiers(participations, admin, next_stage, unplayed_ids) do
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
     category = hd(participations).category
 
@@ -3430,19 +3596,10 @@ defmodule Cuevolution.Competitions do
       entity_type = StageParticipation |> to_string() |> String.trim_leading("Elixir.")
 
       rows =
-        Enum.map(eligible, fn participation ->
-          %{
-            id: Ecto.UUID.generate(),
-            admin_id: admin.id,
-            actor_type: "admin",
-            action_type: "advance_to_stage",
-            entity_type: entity_type,
-            entity_id: participation.id,
-            prior_value: %{"stage_id" => participation.stage_id},
-            new_value: %{"stage_id" => next_stage.id},
-            inserted_at: now
-          }
-        end)
+        Enum.map(
+          eligible,
+          &advance_log_row(&1, admin, next_stage, unplayed_ids, entity_type, now)
+        )
 
       {count, _} = repo.insert_all(Cuevolution.Accounts.AdminActionLog, rows)
       {:ok, count}
@@ -3454,6 +3611,29 @@ defmodule Cuevolution.Competitions do
       {:error, :capacity, :capacity_exceeded, _changes} -> {:error, :capacity_exceeded}
       {:error, _step, reason, _changes} -> {:error, reason}
     end
+  end
+
+  # One `advance_to_stage` audit row. Participants who advanced without a
+  # recorded result carry `"result_recorded" => false` so it's visible later.
+  defp advance_log_row(participation, admin, next_stage, unplayed_ids, entity_type, now) do
+    new_value =
+      if MapSet.member?(unplayed_ids, to_string(participation.id)) do
+        %{"stage_id" => next_stage.id, "result_recorded" => false}
+      else
+        %{"stage_id" => next_stage.id}
+      end
+
+    %{
+      id: Ecto.UUID.generate(),
+      admin_id: admin.id,
+      actor_type: "admin",
+      action_type: "advance_to_stage",
+      entity_type: entity_type,
+      entity_id: participation.id,
+      prior_value: %{"stage_id" => participation.stage_id},
+      new_value: new_value,
+      inserted_at: now
+    }
   end
 
   # Bulk equivalent of `eligible_for_tournament?/2` — two queries total

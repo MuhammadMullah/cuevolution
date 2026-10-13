@@ -188,6 +188,16 @@
         </div>
         <PlayerComponents.stage_badge stage={@stage.name} />
         <button
+          :if={@previous_stage && @can_advance?}
+          type="button"
+          phx-click="move_back"
+          phx-value-id={p.id}
+          data-confirm={"Move #{participant_name(p)} back to #{@previous_stage.name}? Their group placement and unplayed fixtures in #{@stage.name} will be removed."}
+          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          ← Move back to {@previous_stage.name}
+        </button>
+        <button
           :if={@next_stage && @can_advance?}
           type="button"
           phx-click="advance"

@@ -4,6 +4,7 @@ defmodule Cuevolution.CompetitionsTest do
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Competitions.Group
+  alias Cuevolution.Competitions.GroupMembership
   alias Cuevolution.Competitions.MatchResult
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
@@ -585,10 +586,13 @@ defmodule Cuevolution.CompetitionsTest do
                stage("Grassroots Round 2").id
     end
 
-    test "rejects a confirmed list that still includes a non-playing participant" do
+    test "lets the admin manually confirm someone with no recorded result in a final group, and tags it in the audit log" do
       venue = insert(:venue, region_id: build(:region).id)
       admin = insert(:admin, role: "super_admin")
 
+      # The group is final (a double walkover closes it without a deadline),
+      # but nobody in it ever actually played — this is the "venue finished
+      # playing, results just aren't typed in yet" case.
       {dead_group, [x, y]} = cgs_group_with_players(2, "Dead", venue)
       cgs_double_walkover(dead_group, venue, x, y)
 
@@ -596,7 +600,7 @@ defmodule Cuevolution.CompetitionsTest do
       config = Competitions.get_or_create_group_config(grassroots.id, "male")
       {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
 
-      assert {:error, :invalid_qualifiers} =
+      assert {:ok, [advanced]} =
                Competitions.close_group_stage(
                  grassroots.id,
                  "male",
@@ -604,6 +608,73 @@ defmodule Cuevolution.CompetitionsTest do
                  admin,
                  [x.id]
                )
+
+      assert advanced.id == x.id
+      assert advanced.stage_id == stage("Grassroots Round 2").id
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "advance_to_stage",
+          entity_id: x.id
+        )
+
+      assert log.new_value["result_recorded"] == false
+    end
+
+    test "still rejects a participant from a group that isn't final at all" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      {_live_group, [a1, _a2]} = cgs_group_with_players(2, "Live", venue)
+
+      grassroots = stage("Grassroots")
+
+      assert {:error, :invalid_qualifiers} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id]
+               )
+    end
+
+    test "an advance with a recorded result is never tagged result_recorded: false" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+
+      {group, [a1, a2]} = cgs_group_with_players(2, "Played", venue)
+
+      cgs_verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      grassroots = stage("Grassroots")
+      config = Competitions.get_or_create_group_config(grassroots.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      assert {:ok, [_advanced]} =
+               Competitions.close_group_stage(
+                 grassroots.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id]
+               )
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "advance_to_stage",
+          entity_id: a1.id
+        )
+
+      refute Map.has_key?(log.new_value, "result_recorded")
     end
 
     test "an admin can manually substitute a played participant who ranked below the cutoff" do
@@ -898,6 +969,67 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
+  describe "search_eligible_qualifiers/4" do
+    test "returns both played and unplayed members of a final group, flagged accordingly" do
+      venue = insert(:venue, region_id: build(:region).id)
+
+      {group, [a1, a2]} = cgs_group_with_players(2, "Dead", venue)
+      cgs_double_walkover(group, venue, a1, a2)
+      a1 = Repo.preload(a1, :player)
+
+      results =
+        Competitions.search_eligible_qualifiers(
+          group.stage_id,
+          "male",
+          {:venue_id, venue.id},
+          a1.player.first_name
+        )
+
+      assert [%{participation: found, played?: false}] = results
+      assert found.id == a1.id
+    end
+
+    test "flags a played member as played?: true" do
+      venue = insert(:venue, region_id: build(:region).id)
+      {group, [a1, a2]} = cgs_group_with_players(2, "Played", venue)
+
+      cgs_verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      a1 = Repo.preload(a1, :player)
+
+      assert [%{participation: found, played?: true}] =
+               Competitions.search_eligible_qualifiers(
+                 group.stage_id,
+                 "male",
+                 {:venue_id, venue.id},
+                 a1.player.first_name
+               )
+
+      assert found.id == a1.id
+    end
+
+    test "never returns a member of a group that isn't final yet" do
+      venue = insert(:venue, region_id: build(:region).id)
+      {group, [a1, _a2]} = cgs_group_with_players(2, "Live", venue)
+      a1 = Repo.preload(a1, :player)
+
+      assert Competitions.search_eligible_qualifiers(
+               group.stage_id,
+               "male",
+               {:venue_id, venue.id},
+               a1.player.first_name
+             ) == []
+    end
+  end
+
   describe "mark_venue_ready_early/4 and unmark_venue_ready_early/4" do
     test "unlocks final_groups/close_group_stage for just this venue, before the deadline" do
       venue = insert(:venue, region_id: build(:region).id)
@@ -960,9 +1092,10 @@ defmodule Cuevolution.CompetitionsTest do
       # override.
       assert Competitions.final_groups(grassroots.id, "male", {:venue_id, other_venue.id}) == []
 
-      # a3 never played, so even with the override they still can't be
-      # confirmed — the override only unlocks the group, not eligibility.
-      assert {:error, :invalid_qualifiers} =
+      # a3 never played, but the override unlocked their group as final, and
+      # an admin who knows they actually qualified can confirm them anyway
+      # — the group-membership rule is the only one still enforced here.
+      assert {:ok, advanced} =
                Competitions.close_group_stage(
                  grassroots.id,
                  "male",
@@ -971,16 +1104,22 @@ defmodule Cuevolution.CompetitionsTest do
                  [a1.id, a3.id]
                )
 
-      assert {:ok, [advanced]} =
-               Competitions.close_group_stage(
-                 grassroots.id,
-                 "male",
-                 {:venue_id, venue.id},
-                 admin,
-                 [a1.id]
-               )
+      assert Enum.map(advanced, & &1.id) |> Enum.sort() == Enum.sort([a1.id, a3.id])
 
-      assert advanced.id == a1.id
+      a3_log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "advance_to_stage",
+          entity_id: a3.id
+        )
+
+      a1_log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "advance_to_stage",
+          entity_id: a1.id
+        )
+
+      assert a3_log.new_value["result_recorded"] == false
+      refute Map.has_key?(a1_log.new_value, "result_recorded")
 
       assert {:ok, _} =
                Competitions.unmark_venue_ready_early(grassroots.id, venue.id, "male", admin)
@@ -2545,6 +2684,157 @@ defmodule Cuevolution.CompetitionsTest do
 
       assert Competitions.count_pending_result_fixtures(nil, nil, "") ==
                Competitions.count_pending_result_fixtures(nil, nil)
+    end
+  end
+
+  describe "move_back_to_previous_stage/2" do
+    defp placed_in(participation, stage_name, opts \\ []) do
+      stage = stage(stage_name)
+      group = insert(:group, stage_id: stage.id, category: participation.category)
+      round = insert(:round, stage_id: stage.id, group_id: group.id)
+
+      membership =
+        insert(:group_membership, group_id: group.id, stage_participation_id: participation.id)
+
+      opponent =
+        insert(:stage_participation, stage_id: stage.id, category: participation.category)
+
+      fixture =
+        insert(:fixture,
+          round_id: round.id,
+          participant_a_id: participation.id,
+          participant_b_id: opponent.id,
+          status: Keyword.get(opts, :status, "scheduled")
+        )
+
+      %{group: group, membership: membership, fixture: fixture}
+    end
+
+    test "moves back one stage, cleaning up only the stage it leaves" do
+      admin = insert(:admin, role: "tournament_director")
+      round_2 = stage("Grassroots Round 2")
+      participation = insert(:stage_participation, stage_id: round_2.id, category: "male")
+
+      # Their Grassroots history is intact and must survive the move.
+      participation = %{participation | stage_id: stage("Grassroots").id}
+      kept = placed_in(participation, "Grassroots", status: "verified")
+      participation = %{participation | stage_id: round_2.id}
+
+      Repo.update_all(from(sp in StageParticipation, where: sp.id == ^participation.id),
+        set: [stage_id: round_2.id]
+      )
+
+      removed = placed_in(participation, "Grassroots Round 2")
+
+      assert {:ok, updated} = Competitions.move_back_to_previous_stage(participation, admin)
+      assert updated.stage_id == stage("Grassroots").id
+
+      refute Repo.get(Fixture, removed.fixture.id)
+      refute Repo.get(GroupMembership, removed.membership.id)
+      assert Repo.get(Fixture, kept.fixture.id)
+      assert Repo.get(GroupMembership, kept.membership.id)
+    end
+
+    test "records the move in the audit log with what was removed" do
+      admin = insert(:admin, role: "super_admin")
+
+      participation =
+        insert(:stage_participation, stage_id: stage("Regional").id, category: "male")
+
+      placed_in(participation, "Regional")
+
+      assert {:ok, updated} = Competitions.move_back_to_previous_stage(participation, admin)
+
+      log =
+        Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+          action_type: "move_back_to_stage",
+          entity_id: updated.id
+        )
+
+      assert log.prior_value == %{"stage_id" => stage("Regional").id}
+
+      assert %{"stage_id" => _, "removed_fixtures" => 1, "removed_group_memberships" => 1} =
+               log.new_value
+    end
+
+    test "refuses, changing nothing, when they have a played fixture in the stage" do
+      admin = insert(:admin, role: "tournament_director")
+
+      participation =
+        insert(:stage_participation, stage_id: stage("Regional").id, category: "male")
+
+      played = placed_in(participation, "Regional", status: "verified")
+
+      assert {:error, :has_recorded_results} =
+               Competitions.move_back_to_previous_stage(participation, admin)
+
+      assert Repo.get!(StageParticipation, participation.id).stage_id == stage("Regional").id
+      assert Repo.get(Fixture, played.fixture.id)
+      assert Repo.get(GroupMembership, played.membership.id)
+    end
+
+    test "refuses when a scheduled fixture already has a result attached" do
+      admin = insert(:admin, role: "tournament_director")
+
+      participation =
+        insert(:stage_participation, stage_id: stage("Regional").id, category: "male")
+
+      %{fixture: fixture} = placed_in(participation, "Regional")
+      result = insert(:match_result)
+      Repo.update_all(from(f in Fixture, where: f.id == ^fixture.id), set: [result_id: result.id])
+
+      assert {:error, :has_recorded_results} =
+               Competitions.move_back_to_previous_stage(participation, admin)
+    end
+
+    test "releases the slot in a capped stage" do
+      admin = insert(:admin, role: "super_admin")
+      finals = stage("Finals")
+      config = Repo.get_by!(StageCapacityConfig, stage_id: finals.id, category: "female")
+
+      Repo.update_all(from(c in StageCapacityConfig, where: c.id == ^config.id),
+        set: [current_count: 3]
+      )
+
+      participation = insert(:stage_participation, stage_id: finals.id, category: "female")
+
+      assert {:ok, updated} = Competitions.move_back_to_previous_stage(participation, admin)
+
+      assert updated.stage_id == stage("Circuit").id
+      assert Repo.get!(StageCapacityConfig, config.id).current_count == 2
+    end
+
+    test "has no earlier stage for the first stage, or for female/team entering at Regional" do
+      admin = insert(:admin, role: "super_admin")
+      first = insert(:stage_participation, stage_id: stage("Grassroots").id, category: "male")
+      female = insert(:stage_participation, stage_id: stage("Regional").id, category: "female")
+
+      team =
+        insert(:stage_participation,
+          stage_id: stage("Regional").id,
+          category: "team",
+          player_id: nil,
+          team_id: insert(:team).id
+        )
+
+      assert {:error, :no_previous_stage} = Competitions.move_back_to_previous_stage(first, admin)
+
+      assert {:error, :no_previous_stage} =
+               Competitions.move_back_to_previous_stage(female, admin)
+
+      assert {:error, :no_previous_stage} = Competitions.move_back_to_previous_stage(team, admin)
+    end
+
+    test "is restricted to roles that can advance participants" do
+      admin = insert(:admin, role: "regional_coordinator", region_id: build(:region).id)
+
+      participation =
+        insert(:stage_participation, stage_id: stage("Regional").id, category: "male")
+
+      assert {:error, :unauthorized} =
+               Competitions.move_back_to_previous_stage(participation, admin)
+
+      assert Repo.get!(StageParticipation, participation.id).stage_id == stage("Regional").id
     end
   end
 end
