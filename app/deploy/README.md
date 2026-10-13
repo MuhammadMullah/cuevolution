@@ -112,10 +112,12 @@ All of this happens once, on the VM Terraform created.
    docker compose logs caddy   # confirm it obtained the certificate, no errors
    ```
 
-5. **Mail credentials.** Production uses `MAIL_PROVIDER=postmark`
-   (`config/runtime.exs`) and sends through Postmark's HTTP API. Add the
-   Postmark server token as `POSTMARK_SERVER_TOKEN` inside the `application`
-   Secret Manager secret. `deploy.sh` (step 7) fetches that secret for the
+5. **Mail credentials.** Production uses `MAIL_PROVIDER=smtp_auth`
+   (`config/runtime.exs`) and sends through Gmail SMTP. Add the credentials
+   as `SMTP_USERNAME` and `SMTP_PASSWORD` (a Google app password) inside the
+   `application` Secret Manager secret. To fall back to Postmark's HTTP API,
+   set `MAIL_PROVIDER=postmark` in `.env` and add `POSTMARK_SERVER_TOKEN` to
+   the same secret. `deploy.sh` (step 7) fetches that secret for the
    app and worker containers.
 
 6. **Create the app directory and copy the compose file + deploy script:**

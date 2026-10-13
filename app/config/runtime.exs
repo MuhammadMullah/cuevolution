@@ -217,7 +217,7 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  case System.get_env("MAIL_PROVIDER", "postmark") do
+  case System.get_env("MAIL_PROVIDER", "smtp_auth") do
     "postmark" ->
       mail_from_address =
         System.get_env("MAIL_FROM_ADDRESS") ||

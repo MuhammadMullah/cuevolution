@@ -13,7 +13,7 @@ defmodule CuevolutionWeb.AdminForgotPasswordLive do
   # Per email, per window. Counts attempts for unknown emails too, so being
   # limited never reveals whether an account exists.
   @max_requests 5
-  @window_ms :timer.minutes(15)
+  @window_ms :timer.minutes(30)
 
   def mount(_params, _session, socket) do
     {:ok,
