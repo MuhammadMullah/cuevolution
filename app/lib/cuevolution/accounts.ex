@@ -18,6 +18,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications
   alias Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker
+  alias Cuevolution.Notifications.Workers.SendAdminPasswordResetEmailWorker
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
@@ -590,6 +591,71 @@ defmodule Cuevolution.Accounts do
   def complete_admin_setup(%Admin{} = admin, attrs) do
     Multi.new()
     |> Multi.update(:admin, Admin.setup_changeset(admin, attrs))
+    |> Multi.delete_all(:tokens, AdminToken.by_admin_and_contexts_query(admin, :all))
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{admin: admin}} -> {:ok, admin}
+      {:error, :admin, changeset, _changes} -> {:error, changeset}
+    end
+  end
+
+  @doc """
+  Looks up an admin by email (case-insensitive), or `nil` if no match —
+  used by the forgot-password request flow, which must not otherwise reveal
+  whether a given email is registered.
+  """
+  def get_admin_by_email(email) when is_binary(email) do
+    email = String.downcase(email)
+    Repo.one(from a in Admin, where: fragment("lower(?)", a.email) == ^email)
+  end
+
+  @doc """
+  Issues a fresh password-reset token for `admin` and enqueues the reset
+  email. Any previously issued, unused reset token for this admin is
+  invalidated first — only the most recently requested link is valid.
+
+  Only active admins who have completed setup are eligible. Pending
+  (invited), suspended and removed admins are silently skipped, so the
+  forgot-password form can't be used to bypass an invite revocation or a
+  suspension, and never reveals which case applied. Returns `:ok` either
+  way.
+  """
+  def deliver_admin_reset_password_instructions(%Admin{} = admin, reset_password_url_fun)
+      when is_function(reset_password_url_fun, 1) do
+    if Admin.active?(admin) and not Admin.pending?(admin) do
+      Repo.delete_all(AdminToken.by_admin_and_contexts_query(admin, ["reset_password"]))
+
+      {encoded_token, token_struct} = AdminToken.build_reset_password_token(admin)
+      Repo.insert!(token_struct)
+
+      %{"admin_id" => admin.id, "reset_url" => reset_password_url_fun.(encoded_token)}
+      |> SendAdminPasswordResetEmailWorker.new()
+      |> Oban.insert()
+    end
+
+    :ok
+  end
+
+  @doc """
+  Looks up the admin a password-reset token belongs to — `nil` if the token
+  is malformed, unknown, expired, already consumed, or its admin is no
+  longer eligible to sign in.
+  """
+  def get_admin_by_reset_password_token(token) do
+    case AdminToken.verify_reset_password_token_query(token) do
+      {:ok, query} -> Repo.one(query)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Sets an admin's new password and invalidates every one of their tokens —
+  the reset token just used and any active sessions — in a single
+  transaction.
+  """
+  def reset_admin_password(%Admin{} = admin, attrs) do
+    Multi.new()
+    |> Multi.update(:admin, Admin.reset_password_changeset(admin, attrs))
     |> Multi.delete_all(:tokens, AdminToken.by_admin_and_contexts_query(admin, :all))
     |> Repo.transaction()
     |> case do

@@ -5,6 +5,7 @@ defmodule Cuevolution.Accounts.AdminToken do
   @rand_size 32
   @session_validity_in_days 60
   @setup_validity_in_days 7
+  @reset_password_validity_in_minutes 20
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -74,6 +75,51 @@ defmodule Cuevolution.Accounts.AdminToken do
           from t in by_token_and_context_query(hashed, "admin_setup"),
             join: admin in assoc(t, :admin),
             where: t.inserted_at > ago(@setup_validity_in_days, "day"),
+            select: admin
+
+        {:ok, query}
+
+      :error ->
+        :error
+    end
+  end
+
+  @doc """
+  Builds a password-reset token for an admin who has already completed
+  setup: returns `{url_safe_raw_token, token_struct}`. Only its hash is
+  persisted, matching `build_admin_setup_token/1`.
+  """
+  def build_reset_password_token(admin) do
+    raw = :crypto.strong_rand_bytes(@rand_size)
+
+    token_struct = %__MODULE__{
+      token: :crypto.hash(:sha256, raw),
+      context: "reset_password",
+      sent_to: admin.email,
+      admin_id: admin.id
+    }
+
+    {Base.url_encode64(raw, padding: false), token_struct}
+  end
+
+  @doc """
+  Verifies an encoded reset-password token and returns a query resolving to
+  its admin, or `:error` if the string isn't even decodable. Only resolves
+  for admins who are active and have finished setup — a suspended, removed
+  or still-pending admin can't use a reset link to get in.
+  """
+  def verify_reset_password_token_query(encoded_token) do
+    case Base.url_decode64(encoded_token, padding: false) do
+      {:ok, raw} ->
+        hashed = :crypto.hash(:sha256, raw)
+
+        query =
+          from t in by_token_and_context_query(hashed, "reset_password"),
+            join: admin in assoc(t, :admin),
+            where:
+              t.inserted_at > ago(@reset_password_validity_in_minutes, "minute") and
+                not is_nil(admin.hashed_password) and is_nil(admin.suspended_at) and
+                is_nil(admin.removed_at),
             select: admin
 
         {:ok, query}

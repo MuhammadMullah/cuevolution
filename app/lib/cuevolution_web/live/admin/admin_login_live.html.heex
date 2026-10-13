@@ -82,6 +82,11 @@
   </.form>
 
   <p class="mt-4.5 text-center text-[12.5px] text-ink-500">
-    Forgot your password? Contact the platform operator directly.
+    <.link
+      navigate={~p"/admin/forgot-password"}
+      class="font-semibold text-red-300 hover:text-red-200"
+    >
+      Forgot your password?
+    </.link>
   </p>
 </AdminComponents.guest_shell>

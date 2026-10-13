@@ -412,6 +412,41 @@ defmodule Cuevolution.Notifications.Emails do
   end
 
   @doc """
+  Password-reset link email for an admin. Sent via
+  `SendAdminPasswordResetEmailWorker`, not `Notifications.dispatch/3`.
+  """
+  def admin_reset_password_instructions(%Admin{} = admin, url) do
+    new()
+    |> to(admin.email)
+    |> from(Application.get_env(:cuevolution, :mail_from))
+    |> subject("Reset your admin password")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi,</p>
+      <p style="margin:0 0 16px;">
+        We got a request to reset the password on your admin account. Click below to choose
+        a new one — this link expires in 20 minutes.
+      </p>
+      #{button("Reset My Password", url)}
+      <p style="margin:24px 0 0;">
+        If you didn't request this, you can safely ignore this email — your password won't
+        change.
+      </p>
+      """)
+    )
+    |> text_body("""
+    Hi,
+
+    We got a request to reset the password on your admin account. Use the link below to
+    choose a new one — it expires in 20 minutes.
+
+    #{url}
+
+    If you didn't request this, you can safely ignore this email — your password won't change.
+    """)
+  end
+
+  @doc """
   Sent to a newly invited admin, with a link to set their password and
   mobile number before they can sign in.
   """

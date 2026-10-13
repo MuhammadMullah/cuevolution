@@ -76,6 +76,8 @@ defmodule CuevolutionWeb.Router do
     live_session :admin_guest do
       live "/login", AdminLoginLive, :new
       live "/setup/:token", AdminSetupLive, :new
+      live "/forgot-password", AdminForgotPasswordLive, :new
+      live "/reset-password/:token", AdminResetPasswordLive, :new
     end
 
     post "/login", AdminSessionController, :create

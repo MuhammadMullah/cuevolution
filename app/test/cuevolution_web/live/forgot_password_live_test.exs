@@ -55,4 +55,68 @@ defmodule CuevolutionWeb.ForgotPasswordLiveTest do
     assert [_first, _second] =
              all_enqueued(worker: SendPasswordResetEmailWorker, args: %{"player_id" => player.id})
   end
+
+  test "limits repeated requests for the same login, enqueueing nothing further", %{conn: conn} do
+    player = insert(:player)
+
+    for _ <- 1..5 do
+      {:ok, view, _html} = live(conn, ~p"/forgot-password")
+      view |> form("form", forgot: %{"login" => player.email}) |> render_submit()
+    end
+
+    {:ok, view, _html} = live(conn, ~p"/forgot-password")
+    html = view |> form("form", forgot: %{"login" => player.email}) |> render_submit()
+
+    assert html =~ "Too many reset requests"
+    refute html =~ "Check your email"
+
+    assert length(
+             all_enqueued(worker: SendPasswordResetEmailWorker, args: %{"player_id" => player.id})
+           ) == 5
+  end
+
+  test "limits repeated logins that match no account too, so existence isn't revealed", %{
+    conn: conn
+  } do
+    login = "ghost-#{System.unique_integer([:positive])}"
+
+    for _ <- 1..5 do
+      {:ok, view, _html} = live(conn, ~p"/forgot-password")
+      view |> form("form", forgot: %{"login" => login}) |> render_submit()
+    end
+
+    {:ok, view, _html} = live(conn, ~p"/forgot-password")
+    html = view |> form("form", forgot: %{"login" => login}) |> render_submit()
+
+    assert html =~ "Too many reset requests"
+  end
+
+  test "limit is case-insensitive on the login", %{conn: conn} do
+    player = insert(:player)
+
+    for _ <- 1..5 do
+      {:ok, view, _html} = live(conn, ~p"/forgot-password")
+      view |> form("form", forgot: %{"login" => String.upcase(player.email)}) |> render_submit()
+    end
+
+    {:ok, view, _html} = live(conn, ~p"/forgot-password")
+    html = view |> form("form", forgot: %{"login" => player.email}) |> render_submit()
+
+    assert html =~ "Too many reset requests"
+  end
+
+  test "resend is limited too", %{conn: conn} do
+    player = insert(:player)
+    {:ok, view, _html} = live(conn, ~p"/forgot-password")
+    view |> form("form", forgot: %{"login" => player.email}) |> render_submit()
+
+    for _ <- 1..4, do: view |> element("a", "Resend email") |> render_click()
+    html = view |> element("a", "Resend email") |> render_click()
+
+    assert html =~ "Too many reset requests"
+
+    assert length(
+             all_enqueued(worker: SendPasswordResetEmailWorker, args: %{"player_id" => player.id})
+           ) == 5
+  end
 end

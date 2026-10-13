@@ -191,6 +191,9 @@ defmodule Cuevolution.Accounts.Admin do
     |> put_change(:must_change_password, false)
   end
 
+  @doc "Sets a new password via the emailed forgot-password link."
+  def reset_password_changeset(admin, attrs), do: force_password_changeset(admin, attrs)
+
   def venue_changeset(admin, attrs) do
     admin
     |> cast(attrs, [:venue_id])
