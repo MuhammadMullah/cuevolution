@@ -41,7 +41,11 @@
           <div class="font-mono text-2xl font-semibold text-ink-950">0–0</div>
         </div>
         <p class="mt-1 text-sm text-ink-500">
-          Enter the final score from the five-frame match. A match result requires a three-frame majority.
+          <%= if regional_fixture?(@fixture) do %>
+            Enter the final score from the four-frame match. Scores must sum to four — a 2–2 draw is allowed.
+          <% else %>
+            Enter the final score from the five-frame match. A match result requires a three-frame majority.
+          <% end %>
         </p>
         <.form
           for={@score_form}
@@ -54,7 +58,7 @@
               field={@score_form[:participant_a_score]}
               type="number"
               min="0"
-              max="5"
+              max={max_frame_score(@fixture)}
               label={participant_label(@fixture.participant_a)}
               class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
@@ -63,7 +67,7 @@
               field={@score_form[:participant_b_score]}
               type="number"
               min="0"
-              max="5"
+              max={max_frame_score(@fixture)}
               label={participant_label(@fixture.participant_b)}
               class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
@@ -108,7 +112,7 @@
               field={@correction_form[:participant_a_score]}
               type="number"
               min="0"
-              max="5"
+              max={max_frame_score(@fixture)}
               label={participant_label(@fixture.participant_a)}
               class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required
@@ -117,7 +121,7 @@
               field={@correction_form[:participant_b_score]}
               type="number"
               min="0"
-              max="5"
+              max={max_frame_score(@fixture)}
               label={participant_label(@fixture.participant_b)}
               class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               required

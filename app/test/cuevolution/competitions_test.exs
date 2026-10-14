@@ -33,11 +33,12 @@ defmodule Cuevolution.CompetitionsTest do
   end
 
   describe "list_stages/0" do
-    test "returns all 5 seeded stages in pipeline order" do
+    test "returns all 6 seeded stages in pipeline order" do
       assert Enum.map(Competitions.list_stages(), & &1.name) == [
                "Grassroots",
                "Grassroots Round 2",
                "Regional",
+               "Regional Round 2",
                "Circuit",
                "Finals"
              ]
@@ -48,6 +49,8 @@ defmodule Cuevolution.CompetitionsTest do
     test "returns the following stage" do
       assert Competitions.next_stage(stage("Grassroots")).name == "Grassroots Round 2"
       assert Competitions.next_stage(stage("Grassroots Round 2")).name == "Regional"
+      assert Competitions.next_stage(stage("Regional")).name == "Regional Round 2"
+      assert Competitions.next_stage(stage("Regional Round 2")).name == "Circuit"
       assert Competitions.next_stage(stage("Circuit")).name == "Finals"
     end
 
@@ -159,6 +162,119 @@ defmodule Cuevolution.CompetitionsTest do
 
       assert log.admin_id == admin.id
       assert log.new_value["stage_id"] == stage("Regional").id
+    end
+  end
+
+  describe "bulk_advance_to_regional/3" do
+    defp male_at(stage_name, region, username) do
+      player = insert(:player, username: username, region_id: region.id, gender: "male")
+
+      insert(:stage_participation,
+        player_id: player.id,
+        stage_id: stage(stage_name).id,
+        region_id: region.id,
+        category: "male"
+      )
+    end
+
+    test "advances a player currently at Grassroots" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      male_at("Grassroots", region, "bulkplayer1")
+
+      assert {:ok, %{advanced: [advanced], errors: []}} =
+               Competitions.bulk_advance_to_regional(["bulkplayer1"], region.id, admin)
+
+      assert advanced.stage_id == stage("Regional").id
+    end
+
+    test "advances a player currently at Grassroots Round 2" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      male_at("Grassroots Round 2", region, "bulkplayer2")
+
+      assert {:ok, %{advanced: [advanced], errors: []}} =
+               Competitions.bulk_advance_to_regional(["bulkplayer2"], region.id, admin)
+
+      assert advanced.stage_id == stage("Regional").id
+    end
+
+    test "matches usernames case-insensitively" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      male_at("Grassroots", region, "bulkplayer3")
+
+      assert {:ok, %{advanced: [_advanced], errors: []}} =
+               Competitions.bulk_advance_to_regional(["BulkPlayer3"], region.id, admin)
+    end
+
+    test "ignores blank lines and de-duplicates repeated usernames" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      male_at("Grassroots", region, "bulkplayer4")
+
+      assert {:ok, %{advanced: [_one], errors: []}} =
+               Competitions.bulk_advance_to_regional(
+                 ["", "bulkplayer4", "  ", "bulkplayer4"],
+                 region.id,
+                 admin
+               )
+    end
+
+    test "is best-effort — a bad username doesn't block the rest of the batch" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      male_at("Grassroots", region, "bulkplayer5")
+
+      assert {:ok, %{advanced: [advanced], errors: [{"doesnotexist", :player_not_found}]}} =
+               Competitions.bulk_advance_to_regional(
+                 ["bulkplayer5", "doesnotexist"],
+                 region.id,
+                 admin
+               )
+
+      assert advanced.stage_id == stage("Regional").id
+    end
+
+    test "rejects a player from a different region" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      other_region = build(:region)
+      male_at("Grassroots", other_region, "bulkplayer6")
+
+      assert {:ok, %{advanced: [], errors: [{"bulkplayer6", :wrong_region}]}} =
+               Competitions.bulk_advance_to_regional(["bulkplayer6"], region.id, admin)
+    end
+
+    test "rejects a player who has already moved past Grassroots" do
+      admin = insert(:admin, role: "tournament_director")
+      region = build(:region)
+      male_at("Regional", region, "bulkplayer7")
+
+      assert {:ok, %{advanced: [], errors: [{"bulkplayer7", :not_in_grassroots}]}} =
+               Competitions.bulk_advance_to_regional(["bulkplayer7"], region.id, admin)
+    end
+
+    test "rejects a regional coordinator with :unauthorized" do
+      admin = insert(:admin, role: "regional_coordinator")
+      region = build(:region)
+
+      assert {:error, :unauthorized} =
+               Competitions.bulk_advance_to_regional(["anyone"], region.id, admin)
+    end
+
+    test "logs each successful advance in the admin action log" do
+      admin = insert(:admin, role: "super_admin")
+      region = build(:region)
+      male_at("Grassroots", region, "bulkplayer8")
+
+      assert {:ok, %{advanced: [advanced], errors: []}} =
+               Competitions.bulk_advance_to_regional(["bulkplayer8"], region.id, admin)
+
+      assert Repo.get_by!(Cuevolution.Accounts.AdminActionLog,
+               entity_id: advanced.id,
+               action_type: "advance_to_stage"
+             )
     end
   end
 
@@ -767,6 +883,59 @@ defmodule Cuevolution.CompetitionsTest do
       refute Repo.get!(StageParticipation, b1.id).stage_id == stage("Grassroots Round 2").id
     end
 
+    test "advances from Grassroots Round 2 into Regional" do
+      venue = insert(:venue, region_id: build(:region).id)
+      admin = insert(:admin, role: "super_admin")
+      round_2 = stage("Grassroots Round 2")
+
+      group =
+        Repo.insert!(%Group{
+          stage_id: round_2.id,
+          region_id: venue.region_id,
+          venue_id: venue.id,
+          category: "male",
+          name: "GR2 Pool"
+        })
+
+      [a1, a2] =
+        for _ <- 1..2 do
+          participation =
+            insert(:stage_participation,
+              stage_id: round_2.id,
+              region_id: venue.region_id,
+              category: "male"
+            )
+
+          {:ok, _} = Competitions.assign_to_group(participation, group)
+          participation
+        end
+
+      cgs_verified_result(group, venue, a1, a2, %{
+        "winner_id" => a1.id,
+        "participant_a_frames" => 3,
+        "participant_b_frames" => 0,
+        "points_a" => 3,
+        "points_b" => 0,
+        "bonus_a" => 0,
+        "bonus_b" => 0
+      })
+
+      config = Competitions.get_or_create_group_config(round_2.id, "male")
+      {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 1})
+
+      assert {:ok, [advanced]} =
+               Competitions.close_group_stage(
+                 round_2.id,
+                 "male",
+                 {:venue_id, venue.id},
+                 admin,
+                 [a1.id]
+               )
+
+      assert advanced.id == a1.id
+      assert advanced.stage_id == stage("Regional").id
+    end
+
     defp regional_group_with_result(region) do
       regional = stage("Regional")
 
@@ -820,45 +989,20 @@ defmodule Cuevolution.CompetitionsTest do
       {group, p1, p2}
     end
 
-    test "advances a capacity-capped batch atomically — all fit, or none do" do
+    test "advances a batch together into Regional Round 2, an uncapped holding stage" do
       region = build(:region)
       admin = insert(:admin, role: "super_admin")
       regional = stage("Regional")
-      circuit = stage("Circuit")
+      regional_round_2 = stage("Regional Round 2")
       {_group, p1, p2} = regional_group_with_result(region)
 
       config = Competitions.get_or_create_group_config(regional.id, "male")
       {:ok, _} = Competitions.update_group_config(config, %{advancer_count: 2})
 
-      circuit_config = Competitions.capacity_config(circuit.id, "male")
-
-      {:ok, _} =
-        Competitions.update_capacity_config(circuit_config, %{
-          capacity_limit: circuit_config.current_count + 1
-        })
-
-      # Only 1 slot available, but both are trying to advance together —
-      # the whole batch is refused, not just whoever claims the last slot.
-      assert {:error, :capacity_exceeded} =
-               Competitions.close_group_stage(
-                 regional.id,
-                 "male",
-                 {:region_id, region.id},
-                 admin,
-                 [p1.id, p2.id]
-               )
-
-      refute Repo.get!(StageParticipation, p1.id).stage_id == circuit.id
-      refute Repo.get!(StageParticipation, p2.id).stage_id == circuit.id
-
-      assert Competitions.capacity_config(circuit.id, "male").current_count ==
-               circuit_config.current_count
-
-      {:ok, _} =
-        Competitions.update_capacity_config(Competitions.capacity_config(circuit.id, "male"), %{
-          capacity_limit: circuit_config.current_count + 2
-        })
-
+      # "Regional Round 2" is a pure holding stage (no groups/matches yet —
+      # Phase 2 of the regional restructure builds its bracket later) and
+      # intentionally has no `StageCapacityConfig` row, so this advance is
+      # always uncapped regardless of batch size.
       assert {:ok, advanced} =
                Competitions.close_group_stage(
                  regional.id,
@@ -869,11 +1013,8 @@ defmodule Cuevolution.CompetitionsTest do
                )
 
       assert length(advanced) == 2
-      assert Repo.get!(StageParticipation, p1.id).stage_id == circuit.id
-      assert Repo.get!(StageParticipation, p2.id).stage_id == circuit.id
-
-      assert Competitions.capacity_config(circuit.id, "male").current_count ==
-               circuit_config.current_count + 2
+      assert Repo.get!(StageParticipation, p1.id).stage_id == regional_round_2.id
+      assert Repo.get!(StageParticipation, p2.id).stage_id == regional_round_2.id
     end
 
     test "refuses the whole batch, advancing nobody, when one participant is tournament-ineligible" do
@@ -899,8 +1040,8 @@ defmodule Cuevolution.CompetitionsTest do
                  [p1.id, p2.id]
                )
 
-      refute Repo.get!(StageParticipation, p1.id).stage_id == stage("Circuit").id
-      refute Repo.get!(StageParticipation, p2.id).stage_id == stage("Circuit").id
+      refute Repo.get!(StageParticipation, p1.id).stage_id == stage("Regional Round 2").id
+      refute Repo.get!(StageParticipation, p2.id).stage_id == stage("Regional Round 2").id
     end
 
     test "a group with an unresolved fixture isn't closable before the deadline, but is after" do
@@ -1772,7 +1913,32 @@ defmodule Cuevolution.CompetitionsTest do
       other_region = Repo.get_by!(Cuevolution.Accounts.Region, name: "Eastern")
       coordinator = insert(:admin, role: "regional_coordinator", region_id: coordinator_region.id)
       other_venue = insert(:venue, region_id: other_region.id)
-      fixture = insert(:fixture, venue_id: other_venue.id)
+
+      # Pin the group's region explicitly, rather than leaving it to
+      # `fixture_factory`'s random region cycle — `scope_fixtures_for_admin/2`
+      # also matches on the group's region (not just the venue's), so an
+      # unpinned group could accidentally land on the coordinator's own
+      # region and make this test pass for the wrong reason.
+      group = insert(:group, region_id: other_region.id)
+      round = insert(:round, stage_id: group.stage_id, group_id: group.id)
+
+      participant_a =
+        insert(:stage_participation, stage_id: group.stage_id, region_id: other_region.id)
+
+      participant_b =
+        insert(:stage_participation,
+          stage_id: group.stage_id,
+          region_id: other_region.id,
+          category: participant_a.category
+        )
+
+      fixture =
+        insert(:fixture,
+          round_id: round.id,
+          participant_a_id: participant_a.id,
+          participant_b_id: participant_b.id,
+          venue_id: other_venue.id
+        )
 
       assert {:error, :unauthorized} =
                Competitions.record_result(fixture, coordinator, %{

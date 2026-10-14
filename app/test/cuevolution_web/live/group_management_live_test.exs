@@ -73,15 +73,79 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
     assert html =~ "SP26-"
   end
 
-  describe "manual flow (Regional Male — deliberately kept manual, not unified onto the auto-draw)" do
-    test "creating a group doesn't require a venue and never creates a bracket",
+  describe "Regional Individual Male — now unified onto the formula-driven draw" do
+    test "proposes, deals, and publishes scoped to the region, not a venue",
          %{conn: conn} do
+      region = List.first(Accounts.list_regions())
+      regional = Repo.get_by!(Stage, name: "Regional")
+
+      for _ <- 1..4 do
+        player = insert(:player, region_id: region.id, gender: "male")
+
+        insert(:stage_participation,
+          stage_id: regional.id,
+          region_id: region.id,
+          category: "male",
+          player_id: player.id
+        )
+      end
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
+      view |> element("button", "Individual Male") |> render_click()
+
+      html = view |> element("button", "Propose draw") |> render_click()
+      assert html =~ "4 entrants → 1 group"
+
+      html = view |> element("button", "Deal draw") |> render_click()
+      assert html =~ "Draw dealt."
+
+      draw = Repo.one!(Draw)
+      assert draw.category == "male"
+      assert draw.region_id == region.id
+      assert is_nil(draw.venue_id)
+    end
+
+    test "no longer offers manual group creation", %{conn: conn} do
       regional = Repo.get_by!(Stage, name: "Regional")
       region = List.first(Accounts.list_regions())
-      player = insert(:player, region_id: region.id, gender: "male")
+
+      # Enough entrants to land on the "Propose draw" branch rather than
+      # the at-or-below-advancer-count direct-advance branch (see the
+      # Grassroots equivalent of this distinction further down this file).
+      for _ <- 1..4 do
+        player = insert(:player, region_id: region.id, gender: "male")
+
+        insert(:stage_participation,
+          stage_id: regional.id,
+          region_id: region.id,
+          category: "male",
+          player_id: player.id
+        )
+      end
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
+      html = view |> element("button", "Individual Male") |> render_click()
+
+      refute html =~ "Create group"
+      assert html =~ "Propose draw"
+    end
+
+    test "bulk adds players pasted by username, catching up a venue that never advanced them",
+         %{conn: conn} do
+      region = List.first(Accounts.list_regions())
+      grassroots = Repo.get_by!(Stage, name: "Grassroots")
+      regional = Repo.get_by!(Stage, name: "Regional")
+
+      player = insert(:player, username: "latejoiner", region_id: region.id, gender: "male")
 
       insert(:stage_participation,
-        stage_id: regional.id,
+        stage_id: grassroots.id,
         region_id: region.id,
         category: "male",
         player_id: player.id
@@ -91,57 +155,60 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
       {:ok, view, _html} = live(conn, ~p"/admin/groups")
 
       view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
-      html = view |> element("button", "Individual Male") |> render_click()
-      assert html =~ "#{player.first_name} #{player.last_name}"
+      view |> element("button", "Individual Male") |> render_click()
+
+      html = view |> element("button", "Bulk add players") |> render_click()
+      assert html =~ "Bulk add players to #{region.name} Regional"
 
       html =
         view
-        |> form("form[phx-submit='create_group']", group: %{"name" => "Pool A"})
+        |> form("#bulk-add-form", %{"bulk_add" => %{"usernames" => "latejoiner"}})
         |> render_submit()
 
-      assert html =~ "created."
-      assert html =~ "Pool A"
+      assert html =~ "1 added to Regional."
 
-      group = Repo.get_by!(Group, name: "Pool A")
-      assert is_nil(group.venue_id)
-      refute Repo.get_by(Cuevolution.Competitions.KnockoutBracket, stage_id: regional.id)
+      assert Repo.get!(StageParticipation, player_participation_id(player)).stage_id ==
+               regional.id
     end
 
-    test "assigning an unassigned participant moves them out of the unassigned list",
-         %{conn: conn} do
+    test "reports a per-username error instead of failing the whole batch", %{conn: conn} do
       regional = Repo.get_by!(Stage, name: "Regional")
-      region = List.first(Accounts.list_regions())
-      player = insert(:player, region_id: region.id, gender: "male")
-
-      participation =
-        insert(:stage_participation,
-          stage_id: regional.id,
-          region_id: region.id,
-          category: "male",
-          player_id: player.id
-        )
 
       conn = log_in_admin(conn)
       {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
       view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
       view |> element("button", "Individual Male") |> render_click()
-
-      view
-      |> form("form[phx-submit='create_group']", group: %{"name" => "Pool A"})
-      |> render_submit()
-
-      group = Repo.get_by!(Group, name: "Pool A")
-
-      view |> element("button[phx-value-id='#{group.id}']") |> render_click()
+      view |> element("button", "Bulk add players") |> render_click()
 
       html =
         view
-        |> form("form[phx-value-group_id]", %{"participation_id" => participation.id})
-        |> render_change()
+        |> form("#bulk-add-form", %{"bulk_add" => %{"usernames" => "doesnotexist"}})
+        |> render_submit()
 
-      assert html =~ "Added to Pool A."
-      assert html =~ "Everyone in this stage/region is already grouped."
+      assert html =~ "0 added to Regional."
+      assert html =~ "doesnotexist"
+      assert html =~ "no player with that username"
     end
+
+    test "isn't offered on the Individual Female tab", %{conn: conn} do
+      regional = Repo.get_by!(Stage, name: "Regional")
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
+      html = view |> element("button", "Individual Female") |> render_click()
+
+      refute html =~ "Bulk add players"
+    end
+  end
+
+  defp player_participation_id(player) do
+    Repo.one!(
+      from sp in StageParticipation,
+        where: sp.player_id == ^player.id,
+        select: sp.id
+    )
   end
 
   describe "Regional Individual Female / Team — formula-driven draw, region-scoped (no venue)" do
@@ -369,6 +436,48 @@ defmodule CuevolutionWeb.GroupManagementLiveTest do
 
       html = view |> element("button", "Redraw and republish") |> render_click()
       assert html =~ "results already exist"
+    end
+
+    test "clicking a fixture opens match entry in a slide-over, not a page navigation",
+         %{conn: conn} do
+      {_grassroots, _venue} = create_draw_with_players(4)
+
+      conn = log_in_admin(conn)
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+      view |> element("button", "Propose draw") |> render_click()
+      view |> element("button", "Deal draw") |> render_click()
+      view |> element("button", "Approve draw") |> render_click()
+      view |> element("button", "Publish & generate fixtures") |> render_click()
+
+      draw = Repo.one!(Draw)
+      group = Repo.get_by!(Group, draw_id: draw.id)
+      view |> element("button[phx-value-id='#{group.id}']") |> render_click()
+
+      fixture = Repo.one!(from(f in Cuevolution.Competitions.Fixture, limit: 1))
+
+      html =
+        view
+        |> element("button[phx-click='open_match_entry'][phx-value-id='#{fixture.id}']")
+        |> render_click()
+
+      assert html =~ "Record final score"
+      refute html =~ "could not be found"
+
+      html =
+        view
+        |> form("#record-final-score-match-entry-#{fixture.id}", %{
+          "result" => %{"participant_a_score" => "3", "participant_b_score" => "2"}
+        })
+        |> render_submit()
+
+      assert html =~ "Five frames recorded"
+      assert html =~ "Awaiting verification"
+
+      # Still interacting with the same connected view — no navigation
+      # happened, the group's card behind the panel is also now current.
+      assert html =~ "played"
+      assert Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).status == "completed"
     end
 
     test "redrawing a published draw with no results yet succeeds once a reason is entered",

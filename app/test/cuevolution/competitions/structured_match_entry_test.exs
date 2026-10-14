@@ -77,7 +77,9 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
 
   describe "walkovers and postponement" do
     test "records a single walkover without frames or a clean-sweep bonus" do
-      fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M3")
+      # Pinned to Grassroots — Regional's walkover uses a different frame
+      # count (3-0, not 5-0); see `competitions_test.exs` for that case.
+      fixture = fixture_on_stage("Grassroots", %{match_id: "SP26-NBO-MS-A-R1-M3"})
       admin = insert(:admin, role: "venue_representative")
 
       assert {:ok, updated} =
@@ -103,6 +105,80 @@ defmodule Cuevolution.Competitions.StructuredMatchEntryTest do
       assert postponed.status == "postponed"
       assert {:ok, resumed} = Competitions.resume_fixture(postponed, admin)
       assert resumed.status == "scheduled"
+    end
+  end
+
+  describe "Regional Round 1 scoring (4-frame format)" do
+    test "a 3-1 result carries no clean-sweep bonus" do
+      fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M30"})
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:ok, result} =
+               Competitions.record_final_score(fixture, admin, %{
+                 "participant_a_score" => "3",
+                 "participant_b_score" => "1"
+               })
+
+      assert result.winner_participation_id == fixture.participant_a_id
+      assert result.score["participant_a_frames"] == 3
+      assert result.score["participant_b_frames"] == 1
+      assert result.score["points_a"] == 3
+      assert result.score["points_b"] == 1
+    end
+
+    test "a 4-0 result carries the clean-sweep bonus (5 points)" do
+      fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M31"})
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:ok, result} =
+               Competitions.record_final_score(fixture, admin, %{
+                 "participant_a_score" => "4",
+                 "participant_b_score" => "0"
+               })
+
+      assert result.winner_participation_id == fixture.participant_a_id
+      assert result.score["points_a"] == 5
+      assert result.score["points_b"] == 0
+    end
+
+    test "a 2-2 result is a valid draw — no winner, 2 points each" do
+      fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M32"})
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:ok, result} =
+               Competitions.record_final_score(fixture, admin, %{
+                 "participant_a_score" => "2",
+                 "participant_b_score" => "2"
+               })
+
+      assert is_nil(result.winner_participation_id)
+      assert result.score["points_a"] == 2
+      assert result.score["points_b"] == 2
+    end
+
+    test "rejects a score that doesn't sum to four frames" do
+      fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M33"})
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:error, :invalid_final_score} =
+               Competitions.record_final_score(fixture, admin, %{
+                 "participant_a_score" => "3",
+                 "participant_b_score" => "2"
+               })
+    end
+
+    test "a walkover gives the present participant a 3-0 frame score (not 5-0)" do
+      fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M34"})
+      admin = insert(:admin, role: "venue_representative")
+
+      assert {:ok, _updated} =
+               Competitions.record_walkover(fixture, admin, fixture.participant_a_id)
+
+      result = Repo.get_by!(MatchResult, fixture_id: fixture.id)
+      assert result.score["participant_a_frames"] == 3
+      assert result.score["participant_b_frames"] == 0
+      assert result.score["points_a"] == 3
+      assert result.score["points_b"] == 0
     end
   end
 

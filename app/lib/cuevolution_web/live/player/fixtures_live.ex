@@ -183,12 +183,30 @@ defmodule CuevolutionWeb.FixturesLive do
       opponent: Competitions.participant_name(opponent),
       date: if(double_walkover?, do: "Deadline closed", else: "Result verified"),
       stage: stage,
-      won:
-        fixture.result &&
-          fixture.result.winner_participation_id == participant_id(fixture, player),
+      outcome: result_outcome(fixture, player, double_walkover?),
       score: if(double_walkover?, do: "No result", else: result_score(fixture.result))
     }
   end
+
+  # Neither a win nor a loss for either side: a deadline double walkover, or
+  # (Regional's 4-frame format only) a genuine 2-2 draw.
+  defp result_outcome(_fixture, _player, true), do: :drawn
+
+  defp result_outcome(fixture, player, false) do
+    cond do
+      is_nil(fixture.result.winner_participation_id) -> :drawn
+      fixture.result.winner_participation_id == participant_id(fixture, player) -> :won
+      true -> :lost
+    end
+  end
+
+  def outcome_letter(:won), do: "W"
+  def outcome_letter(:lost), do: "L"
+  def outcome_letter(:drawn), do: "D"
+
+  def outcome_word(:won), do: "Won"
+  def outcome_word(:lost), do: "Lost"
+  def outcome_word(:drawn), do: "Drawn"
 
   defp participant_id(fixture, player) do
     if mine?(fixture.participant_a, player),

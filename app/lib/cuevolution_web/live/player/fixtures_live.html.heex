@@ -166,10 +166,11 @@
     >
       <div class={[
         "flex size-[34px] shrink-0 items-center justify-center rounded-full font-mono text-sm font-semibold",
-        result.won && "bg-green-100 text-green-600",
-        !result.won && "bg-red-50 text-red-700"
+        result.outcome == :won && "bg-green-100 text-green-600",
+        result.outcome == :lost && "bg-red-50 text-red-700",
+        result.outcome == :drawn && "bg-ink-100 text-ink-600"
       ]}>
-        {if result.won, do: "W", else: "L"}
+        {outcome_letter(result.outcome)}
       </div>
       <div class="min-w-0 flex-1">
         <div class="text-[15px] font-semibold text-ink-950">vs {result.opponent}</div>
@@ -177,8 +178,9 @@
       </div>
       <div class={[
         "font-mono text-sm font-semibold",
-        result.won && "text-green-600",
-        !result.won && "text-red-700"
+        result.outcome == :won && "text-green-600",
+        result.outcome == :lost && "text-red-700",
+        result.outcome == :drawn && "text-ink-600"
       ]}>
         <span
           :if={result.score == "No result"}
@@ -187,7 +189,7 @@
           NO RESULT — DEADLINE
         </span>
         <span :if={result.score != "No result"}>
-          {if result.won, do: "Won", else: "Lost"} {result.score}
+          {outcome_word(result.outcome)} {result.score}
         </span>
       </div>
     </div>

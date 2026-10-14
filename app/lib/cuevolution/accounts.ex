@@ -847,6 +847,16 @@ defmodule Cuevolution.Accounts do
     Repo.one(player_by_login_query(login))
   end
 
+  @doc """
+  Looks up a player by username only (case-insensitive), or `nil` if no
+  match — used by admin bulk-lookup flows (e.g. `Competitions.bulk_advance_to_regional/3`)
+  where username is the only identifier the admin is expected to have.
+  """
+  def get_player_by_username(username) when is_binary(username) do
+    username = String.downcase(username)
+    Repo.one(from p in Player, where: fragment("lower(?)", p.username) == ^username)
+  end
+
   defp player_by_login_query(login) do
     login = String.downcase(login)
 

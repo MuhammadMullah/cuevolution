@@ -21,7 +21,8 @@ defmodule Cuevolution.Competitions.MatchResult do
   def create_changeset(result, attrs) do
     result
     |> cast(attrs, [:fixture_id, :winner_participation_id, :score, :recorded_by_admin_id])
-    |> validate_required([:fixture_id, :winner_participation_id, :recorded_by_admin_id])
+    |> validate_required([:fixture_id, :recorded_by_admin_id])
+    |> validate_winner_unless_tied()
     |> foreign_key_constraint(:fixture_id)
     |> foreign_key_constraint(:winner_participation_id)
     |> foreign_key_constraint(:recorded_by_admin_id)
@@ -43,6 +44,20 @@ defmodule Cuevolution.Competitions.MatchResult do
   def correction_changeset(result, attrs) do
     result
     |> cast(attrs, [:winner_participation_id, :score, :prior_value])
-    |> validate_required([:winner_participation_id])
+    |> validate_winner_unless_tied()
   end
+
+  # A winner is required for every format except a genuine tie (equal frame
+  # counts on both sides) — only possible for the Regional 4-frame format,
+  # since the legacy 5-frame majority rule can never produce one.
+  defp validate_winner_unless_tied(changeset) do
+    if tied?(get_field(changeset, :score)) do
+      changeset
+    else
+      validate_required(changeset, [:winner_participation_id])
+    end
+  end
+
+  defp tied?(%{"participant_a_frames" => a, "participant_b_frames" => b}), do: a == b
+  defp tied?(_score), do: false
 end

@@ -12,6 +12,11 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
 
   def status_label(%Fixture{status: status}), do: status
 
+  def regional_fixture?(%Fixture{round: %{stage: %{name: "Regional"}}}), do: true
+  def regional_fixture?(%Fixture{}), do: false
+
+  def max_frame_score(fixture), do: if(regional_fixture?(fixture), do: "4", else: "5")
+
   def mount(%{"id" => id}, _session, socket) do
     {:ok,
      socket
@@ -31,7 +36,10 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
            params
          ) do
       {:ok, _result} ->
-        {:noreply, reload_fixture(socket, "Five frames recorded. Submit for verification.")}
+        frame_count = if regional_fixture?(socket.assigns.fixture), do: "Four", else: "Five"
+
+        {:noreply,
+         reload_fixture(socket, "#{frame_count} frames recorded. Submit for verification.")}
 
       {:error, :unauthorized} ->
         {:noreply, put_flash(socket, :error, "You don't have permission to record results.")}
@@ -40,7 +48,10 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
         {:noreply,
          socket
          |> assign(:score_form, to_form(params, as: :result))
-         |> put_flash(:error, "Could not record score: #{format_error(reason)}")}
+         |> put_flash(
+           :error,
+           "Could not record score: #{format_error(reason, socket.assigns.fixture)}"
+         )}
     end
   end
 
@@ -60,7 +71,10 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
         {:noreply,
          socket
          |> assign(:correction_form, to_form(params, as: :result))
-         |> put_flash(:error, "Could not verify result: #{format_error(reason)}")}
+         |> put_flash(
+           :error,
+           "Could not verify result: #{format_error(reason, socket.assigns.fixture)}"
+         )}
     end
   end
 
@@ -78,7 +92,11 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
 
       {:error, reason} ->
         {:noreply,
-         put_flash(socket, :error, "Could not postpone fixture: #{format_error(reason)}")}
+         put_flash(
+           socket,
+           :error,
+           "Could not postpone fixture: #{format_error(reason, socket.assigns.fixture)}"
+         )}
     end
   end
 
@@ -91,7 +109,12 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
         {:noreply, put_flash(socket, :error, "You don't have permission to resume fixtures.")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Could not resume fixture: #{format_error(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Could not resume fixture: #{format_error(reason, socket.assigns.fixture)}"
+         )}
     end
   end
 
@@ -109,7 +132,11 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
 
       {:error, reason} ->
         {:noreply,
-         put_flash(socket, :error, "Could not record walkover: #{format_error(reason)}")}
+         put_flash(
+           socket,
+           :error,
+           "Could not record walkover: #{format_error(reason, socket.assigns.fixture)}"
+         )}
     end
   end
 
@@ -126,7 +153,7 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
             result: :match_frames,
             participant_a: :player,
             participant_b: :player,
-            round: [group: :stage]
+            round: :stage
           )
       end
 
@@ -152,15 +179,29 @@ defmodule CuevolutionWeb.Admin.MatchEntryLive do
 
   defp recorded_score_params(_fixture), do: %{}
 
-  defp format_error(:five_frames_required), do: "exactly five frame winners are required"
-  defp format_error(:no_majority), do: "one participant must win at least three frames"
-  defp format_error(:final_score_required), do: "enter both final scores"
-  defp format_error(:invalid_final_score), do: "scores must be whole numbers from 0 to 5"
-  defp format_error(:reason_required), do: "a reason is required"
-  defp format_error(:invalid_fixture_state), do: "this fixture is not in an editable state"
-  defp format_error(:results_recording_closed), do: "results recording has closed"
-  defp format_error(:participant_required), do: "choose the participant who was present"
-  defp format_error(reason), do: inspect(reason)
+  defp format_error(:five_frames_required, _fixture),
+    do: "exactly five frame winners are required"
+
+  defp format_error(:no_majority, _fixture), do: "one participant must win at least three frames"
+  defp format_error(:final_score_required, _fixture), do: "enter both final scores"
+
+  defp format_error(:invalid_final_score, fixture) do
+    if regional_fixture?(fixture),
+      do: "scores must be whole numbers from 0 to 4, summing to 4",
+      else: "scores must be whole numbers from 0 to 5"
+  end
+
+  defp format_error(:reason_required, _fixture), do: "a reason is required"
+
+  defp format_error(:invalid_fixture_state, _fixture),
+    do: "this fixture is not in an editable state"
+
+  defp format_error(:results_recording_closed, _fixture), do: "results recording has closed"
+
+  defp format_error(:participant_required, _fixture),
+    do: "choose the participant who was present"
+
+  defp format_error(reason, _fixture), do: inspect(reason)
 
   defp participant_label(participation), do: Competitions.participant_name(participation)
 end

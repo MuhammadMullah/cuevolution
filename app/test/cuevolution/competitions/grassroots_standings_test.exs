@@ -259,6 +259,63 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
     assert [%{participant_id: ^a2_id, points_per_match: 2.0}] = qualifiers
   end
 
+  test "best of rest doesn't crash on a participant whose only match was a Regional draw" do
+    regional = stage("Regional")
+    region = build(:region)
+    venue = insert(:venue, region_id: region.id)
+
+    group =
+      Repo.insert!(%Group{
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "male",
+        name: "Regional Best Rest"
+      })
+
+    [p1, p2, p3] =
+      for _ <- 1..3 do
+        participation =
+          insert(:stage_participation,
+            stage_id: regional.id,
+            region_id: region.id,
+            category: "male"
+          )
+
+        {:ok, _membership} = Competitions.assign_to_group(participation, group)
+        participation
+      end
+
+    config = Competitions.get_or_create_group_config(regional.id, "male")
+
+    {:ok, _} =
+      Competitions.update_group_config(config, %{advancer_count: 1, extra_qualifier_count: 1})
+
+    # p1's only match is a 2-2 draw — wins == losses == 0 for them, the
+    # exact shape that divided by zero in `best_rest_row/3` before draws
+    # got their own counter.
+    verified_result(group, venue, p1, p2, %{
+      "winner_id" => nil,
+      "participant_a_frames" => 2,
+      "participant_b_frames" => 2,
+      "points_a" => 2,
+      "points_b" => 2
+    })
+
+    verified_result(group, venue, p2, p3, %{
+      "winner_id" => p2.id,
+      "participant_a_frames" => 3,
+      "participant_b_frames" => 1,
+      "points_a" => 3,
+      "points_b" => 1
+    })
+
+    qualifiers =
+      Competitions.best_of_rest_qualifiers(regional.id, "male", {:region_id, region.id})
+
+    p1_id = p1.id
+    assert [%{participant_id: ^p1_id, points_per_match: 2.0}] = qualifiers
+  end
+
   test "played_participant_ids/1 counts verified matches and single-walkover winners, not double-walkover sides" do
     {group, [a, b, c, d], venue} = group_with_players(4, "Played Ids")
 
@@ -307,6 +364,63 @@ defmodule Cuevolution.Competitions.GrassrootsStandingsTest do
     assert by_group[group_a.id] == Competitions.played_participant_ids(group_a.id)
     assert by_group[group_b.id] == Competitions.played_participant_ids(group_b.id)
   end
+
+  test "grassroots_group_standings_by_group/2 matches calling the single-group function once per group" do
+    {group_a, [a, b], venue_a} = group_with_players(2, "Perf A")
+    {group_b, [c, d], venue_b} = group_with_players(2, "Perf B")
+
+    verified_result(group_a, venue_a, a, b, %{
+      "winner_id" => a.id,
+      "participant_a_frames" => 3,
+      "participant_b_frames" => 1,
+      "points_a" => 3,
+      "points_b" => 1,
+      "bonus_a" => 0,
+      "bonus_b" => 0
+    })
+
+    verified_result(group_b, venue_b, c, d, %{
+      "winner_id" => d.id,
+      "participant_a_frames" => 1,
+      "participant_b_frames" => 3,
+      "points_a" => 1,
+      "points_b" => 3,
+      "bonus_a" => 0,
+      "bonus_b" => 0
+    })
+
+    stage = Repo.get!(Stage, group_a.stage_id)
+
+    by_group =
+      Competitions.grassroots_group_standings_by_group([group_a, group_b], stage)
+
+    assert by_group[group_a.id] == Competitions.grassroots_group_standings(group_a)
+    assert by_group[group_b.id] == Competitions.grassroots_group_standings(group_b)
+  end
+
+  test "list_fixtures_for_groups/1 matches calling the single-group function once per group" do
+    {group_a, [a, b], venue_a} = group_with_players(2, "Fixtures A")
+    {group_b, [c, d], venue_b} = group_with_players(2, "Fixtures B")
+
+    verified_result(group_a, venue_a, a, b, %{
+      "winner_id" => a.id,
+      "participant_a_frames" => 3,
+      "participant_b_frames" => 1,
+      "points_a" => 3,
+      "points_b" => 1,
+      "bonus_a" => 0,
+      "bonus_b" => 0
+    })
+
+    single_walkover_fixture(group_b, venue_b, c, d)
+
+    by_group = Competitions.list_fixtures_for_groups([group_a.id, group_b.id])
+
+    assert ids(by_group[group_a.id]) == ids(Competitions.list_fixtures_for_group(group_a.id))
+    assert ids(by_group[group_b.id]) == ids(Competitions.list_fixtures_for_group(group_b.id))
+  end
+
+  defp ids(fixtures), do: fixtures |> Enum.map(& &1.id) |> Enum.sort()
 
   test "a group where nobody played contributes zero best-of-rest qualifiers, even though a double walkover counts as a loss in standings" do
     {dead_group, [x, y], venue} = group_with_players(2, "Dead Group")

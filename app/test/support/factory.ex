@@ -86,7 +86,14 @@ defmodule Cuevolution.Factory do
     }
   end
 
-  @doc "Cycles through the 5 seeded stages (Grassroots/Grassroots Round 2/Regional/Circuit/Finals), same fixed-domain pattern as `region_factory/0`."
+  @doc """
+  Cycles through all 6 seeded stages (Grassroots/Grassroots Round 2/Regional/
+  Regional Round 2/Circuit/Finals), same fixed-domain pattern as
+  `region_factory/0`. Scoring is now stage-dependent (Regional's 4-frame
+  format vs. the legacy 5-frame format elsewhere), so any test asserting on
+  score/frame-count behavior must pin its fixture's stage explicitly with
+  `fixture_on_stage/2` rather than relying on this random cycle.
+  """
   def stage_factory do
     stages = Cuevolution.Repo.all(from s in Stage, order_by: s.order)
     index = sequence(:stage_cycle, & &1)
@@ -190,6 +197,28 @@ defmodule Cuevolution.Factory do
       venue_id: insert(:venue).id,
       scheduled_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
+  end
+
+  @doc """
+  Builds a fixture pinned to a specific stage by name, bypassing
+  `fixture_factory/0`'s random `build(:stage)` cycle. Needed wherever a test
+  asserts on scoring behavior that is now stage-dependent (Regional's
+  4-frame format vs. the legacy 5-frame format every other stage uses) —
+  letting the stage land on Regional by chance would make the test flaky.
+  """
+  def fixture_on_stage(stage_name, attrs \\ %{}) do
+    stage = Cuevolution.Repo.get_by!(Stage, name: stage_name)
+    category = Map.get(attrs, :category, Enum.random(["male", "female"]))
+    participant_a = insert(:stage_participation, stage_id: stage.id, category: category)
+    participant_b = insert(:stage_participation, stage_id: stage.id, category: category)
+    round = insert(:round, stage_id: stage.id)
+
+    attrs
+    |> Map.delete(:category)
+    |> Map.put_new(:round_id, round.id)
+    |> Map.put_new(:participant_a_id, participant_a.id)
+    |> Map.put_new(:participant_b_id, participant_b.id)
+    |> then(&insert(:fixture, &1))
   end
 
   @doc "A recorded result for a freshly-built fixture, winner defaults to participant A."

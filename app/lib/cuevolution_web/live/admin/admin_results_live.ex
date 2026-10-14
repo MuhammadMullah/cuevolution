@@ -274,7 +274,7 @@ defmodule CuevolutionWeb.AdminResultsLive do
   def handle_event("record_result", %{"result" => params}, socket) do
     fixture = socket.assigns.selected_unplayed
 
-    case resolve_winner(params, fixture.participant_a_id, fixture.participant_b_id) do
+    case resolve_winner(params, fixture) do
       {:error, message} ->
         {:noreply, put_flash(socket, :error, message)}
 
@@ -358,7 +358,7 @@ defmodule CuevolutionWeb.AdminResultsLive do
   def handle_event("correct_result", %{"result" => params}, socket) do
     fixture = socket.assigns.selected_played
 
-    case resolve_winner(params, fixture.participant_a_id, fixture.participant_b_id) do
+    case resolve_winner(params, fixture) do
       {:error, message} ->
         {:noreply, put_flash(socket, :error, message)}
 
@@ -456,13 +456,19 @@ defmodule CuevolutionWeb.AdminResultsLive do
   # without also re-picking the radio (the submitted
   # `winner_participation_id` is only used as a fallback when no score was
   # entered, e.g. a walkover).
-  defp resolve_winner(params, participant_a_id, participant_b_id) do
-    case derive_winner_from_score(params, participant_a_id, participant_b_id) do
+  defp resolve_winner(params, fixture) do
+    case derive_winner_from_score(params, fixture) do
       {:ok, winner_id} ->
         {:ok, winner_id}
 
+      :drawn ->
+        {:ok, nil}
+
       :tied ->
         {:error, "Frame scores can't be tied — enter a score with a clear winner."}
+
+      :invalid_score ->
+        {:error, "That score isn't valid for this stage's format."}
 
       :no_score ->
         case params["winner_participation_id"] do
@@ -474,15 +480,16 @@ defmodule CuevolutionWeb.AdminResultsLive do
 
   defp derive_winner_from_score(
          %{"participant_a_frames" => a, "participant_b_frames" => b},
-         participant_a_id,
-         participant_b_id
+         fixture
        )
        when a not in [nil, ""] and b not in [nil, ""] do
     with {a_frames, ""} <- Integer.parse(a),
          {b_frames, ""} <- Integer.parse(b) do
       cond do
-        a_frames > b_frames -> {:ok, participant_a_id}
-        b_frames > a_frames -> {:ok, participant_b_id}
+        a_frames > b_frames -> {:ok, fixture.participant_a_id}
+        b_frames > a_frames -> {:ok, fixture.participant_b_id}
+        regional_stage?(fixture) and regional_draw?(a_frames, b_frames) -> :drawn
+        regional_stage?(fixture) -> :invalid_score
         true -> :tied
       end
     else
@@ -490,7 +497,22 @@ defmodule CuevolutionWeb.AdminResultsLive do
     end
   end
 
-  defp derive_winner_from_score(_params, _a_id, _b_id), do: :no_score
+  defp derive_winner_from_score(_params, _fixture), do: :no_score
+
+  # Regional's only valid tie is a genuine 2-2 (scores sum to four, same as
+  # `Competitions.record_final_score/3`'s own validation) — this path has
+  # no server-side range check otherwise, so an equal-but-nonsensical pair
+  # (e.g. 9-9, or a tie entered for a non-4-frame match) must not silently
+  # resolve to a draw.
+  defp regional_draw?(a_frames, b_frames),
+    do: a_frames >= 0 and b_frames >= 0 and a_frames + b_frames == 4
+
+  # Reads the fixture's own stage via `round.stage`, not a participant's
+  # *current* stage — a participant who has since advanced past Regional
+  # would otherwise make a correction to their old Regional result wrongly
+  # fall back to legacy (non-draw) tie handling.
+  defp regional_stage?(%{round: %{stage: %{name: "Regional"}}}), do: true
+  defp regional_stage?(_fixture), do: false
 
   defp result_score(%{"participant_a_frames" => a, "participant_b_frames" => b})
        when a not in [nil, ""] and b not in [nil, ""] do
@@ -714,6 +736,8 @@ defmodule CuevolutionWeb.AdminResultsLive do
   defp played_fixture_summary(fixture) do
     winner_label(fixture)
   end
+
+  defp winner_label(%{result: %{winner_participation: nil}}), do: "Draw"
 
   defp winner_label(fixture) do
     "Winner: #{Competitions.participant_name(fixture.result.winner_participation)}"

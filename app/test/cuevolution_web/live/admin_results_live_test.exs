@@ -118,7 +118,11 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
   end
 
   test "recording a result with tied frame scores is rejected", %{conn: conn} do
-    fixture = insert(:fixture) |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+    # Pinned to Grassroots — tied frame scores are only ever rejected
+    # outside Regional, which allows a 2-2 draw.
+    fixture =
+      fixture_on_stage("Grassroots") |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+
     rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
 
     conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
@@ -134,6 +138,56 @@ defmodule CuevolutionWeb.AdminResultsLiveTest do
       |> render_submit()
 
     assert html =~ "can&#39;t be tied"
+    refute Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).result_id
+  end
+
+  test "recording a 2-2 draw on a Regional fixture succeeds with no winner", %{conn: conn} do
+    fixture =
+      fixture_on_stage("Regional") |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view |> element("[phx-click='select_fixture']") |> render_click(%{"id" => fixture.id})
+
+    html =
+      view
+      |> form("form[phx-submit='record_result']", %{
+        "result" => %{"participant_a_frames" => "2", "participant_b_frames" => "2"}
+      })
+      |> render_submit()
+
+    assert html =~ "Result recorded."
+
+    result =
+      Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id)
+
+    assert is_nil(result.winner_participation_id)
+  end
+
+  test "rejects a tied frame score on a Regional fixture that isn't a valid 2-2 draw", %{
+    conn: conn
+  } do
+    fixture =
+      fixture_on_stage("Regional") |> Cuevolution.Repo.preload([:participant_a, :participant_b])
+
+    rep = insert(:admin, role: "venue_representative", venue_id: fixture.venue_id)
+
+    conn = log_in_admin(conn, id: rep.id, role: rep.role, venue_id: rep.venue_id)
+    {:ok, view, _html} = live(conn, ~p"/admin/results")
+
+    view |> element("[phx-click='select_fixture']") |> render_click(%{"id" => fixture.id})
+
+    html =
+      view
+      |> form("form[phx-submit='record_result']", %{
+        "result" => %{"participant_a_frames" => "9", "participant_b_frames" => "9"}
+      })
+      |> render_submit()
+
+    assert html =~ "isn&#39;t valid for this stage"
     refute Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id).result_id
   end
 
