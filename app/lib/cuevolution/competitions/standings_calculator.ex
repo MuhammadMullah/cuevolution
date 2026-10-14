@@ -30,6 +30,7 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
           bonus: non_neg_integer(),
           wins: non_neg_integer(),
           losses: non_neg_integer(),
+          draws: non_neg_integer(),
           frame_diff: integer(),
           frames_won: non_neg_integer(),
           tied: boolean()
@@ -88,19 +89,19 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
     totals =
       Enum.reduce(
         matches,
-        %{wins: 0, losses: 0, frames_won: 0, frames_lost: 0, points: 0, bonus: 0},
+        %{wins: 0, losses: 0, draws: 0, frames_won: 0, frames_lost: 0, points: 0, bonus: 0},
         fn match, acc ->
           cond do
             match.participant_a_id == participant_id ->
               acc
               |> add_frames(match.frames_won_a, match.frames_won_b)
-              |> add_result(match.winner_id == participant_id)
+              |> add_result(match.winner_id, participant_id)
               |> add_points(points_for(match, :a), bonus_for(match, :a))
 
             match.participant_b_id == participant_id ->
               acc
               |> add_frames(match.frames_won_b, match.frames_won_a)
-              |> add_result(match.winner_id == participant_id)
+              |> add_result(match.winner_id, participant_id)
               |> add_points(points_for(match, :b), bonus_for(match, :b))
 
             true ->
@@ -115,8 +116,9 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   defp add_frames(acc, won, lost),
     do: %{acc | frames_won: acc.frames_won + won, frames_lost: acc.frames_lost + lost}
 
-  defp add_result(acc, true), do: %{acc | wins: acc.wins + 1}
-  defp add_result(acc, false), do: %{acc | losses: acc.losses + 1}
+  defp add_result(acc, nil, _participant_id), do: %{acc | draws: acc.draws + 1}
+  defp add_result(acc, winner_id, winner_id), do: %{acc | wins: acc.wins + 1}
+  defp add_result(acc, _winner_id, _participant_id), do: %{acc | losses: acc.losses + 1}
 
   defp add_points(acc, points, bonus),
     do: %{acc | points: acc.points + points, bonus: acc.bonus + bonus}
@@ -160,6 +162,10 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   end
 
   defp inferred_bonus(match, 5, 0) do
+    if Map.get(match, :status) in [:walkover, "walkover"], do: 0, else: 1
+  end
+
+  defp inferred_bonus(match, 4, 0) do
     if Map.get(match, :status) in [:walkover, "walkover"], do: 0, else: 1
   end
 

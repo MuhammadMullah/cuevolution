@@ -234,7 +234,7 @@ defmodule CuevolutionWeb.AdminComponents do
             <th class="px-3 py-3">POS</th>
             <th class="px-3 py-3">PLAYER</th>
             <th :if={@show_group} class="px-3 py-3">GROUP</th>
-            <th :for={label <- ~w(P W L FW FL FD BONUS PTS)} class="px-3 py-3">{label}</th>
+            <th :for={label <- ~w(P W L D FW FL FD BONUS PTS)} class="px-3 py-3">{label}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-ink-100">
@@ -258,9 +258,10 @@ defmodule CuevolutionWeb.AdminComponents do
             <td :if={@show_group} class="whitespace-nowrap px-3 py-3 text-ink-500">
               {Map.get(row, :group_name, "—")}
             </td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.wins + row.losses}</td>
+            <td class="px-3 py-3 font-mono text-ink-700">{row.wins + row.losses + row.draws}</td>
             <td class="px-3 py-3 font-mono text-ink-700">{row.wins}</td>
             <td class="px-3 py-3 font-mono text-ink-700">{row.losses}</td>
+            <td class="px-3 py-3 font-mono text-ink-700">{row.draws}</td>
             <td class="px-3 py-3 font-mono text-ink-700">{row.frames_won}</td>
             <td class="px-3 py-3 font-mono text-ink-700">{row.frames_won - row.frame_diff}</td>
             <td class="px-3 py-3 font-mono text-ink-700">{row.frame_diff}</td>

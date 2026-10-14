@@ -331,6 +331,54 @@ defmodule CuevolutionWeb.FixturesLiveTest do
     assert html =~ "Amina"
   end
 
+  test "shows a Regional 2-2 draw as neither a win nor a loss", %{conn: conn} do
+    regional = Repo.get_by!(Competitions.Stage, name: "Regional")
+    region = build(:region)
+    player = insert(:player, region_id: region.id, gender: "male")
+    opponent_player = insert(:player, region_id: region.id, gender: "male")
+    venue = insert(:venue, region_id: region.id)
+
+    mine =
+      insert(:stage_participation,
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "male",
+        player_id: player.id
+      )
+
+    theirs =
+      insert(:stage_participation,
+        stage_id: regional.id,
+        region_id: region.id,
+        category: "male",
+        player_id: opponent_player.id
+      )
+
+    round = insert(:round, stage_id: regional.id)
+
+    fixture =
+      insert(:fixture,
+        round_id: round.id,
+        participant_a_id: mine.id,
+        participant_b_id: theirs.id,
+        venue_id: venue.id
+      )
+
+    admin = insert(:admin, role: "tournament_director")
+    score = %{"participant_a_score" => "2", "participant_b_score" => "2"}
+
+    {:ok, _result} = Competitions.record_final_score(fixture, admin, score)
+    completed = Repo.get!(Competitions.Fixture, fixture.id)
+    {:ok, _verified} = Competitions.verify_final_score(completed, admin, score)
+
+    conn = log_in_player(conn, player)
+    {:ok, _view, html} = live(conn, ~p"/fixtures")
+
+    assert html =~ "Drawn"
+    refute html =~ "Lost"
+    refute html =~ ">Won<"
+  end
+
   defp fixture_row(player_a_id, player_b_id, venue_id) do
     %{
       "category" => "male",

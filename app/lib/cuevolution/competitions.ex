@@ -653,6 +653,194 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
+  Bulk-advances players straight into `region_id`'s Regional stage by
+  username — a catch-up path for a venue that never got around to manually
+  advancing some of its Grassroots entrants. Restricted to the same
+  `:advance_participants` roles as `advance_to_stage/3`.
+
+  Each username is validated and advanced independently (best-effort, not
+  all-or-nothing — one typo shouldn't block the rest of a pasted batch): the
+  player must exist, must currently sit at Grassroots or Grassroots Round 2
+  (the only stages male entrants pass through before Regional — female/team
+  enter at Regional directly, so this is effectively male-only by
+  construction), must belong to `region_id`, and must pass the tournament
+  registration-cutoff eligibility check.
+
+  All of the above is resolved with a fixed, small number of queries
+  regardless of how many usernames are pasted (two batched lookups, one
+  batched eligibility check, one transaction) rather than looping
+  `advance_to_stage/3` once per username — a real Regional draw means a
+  TD pasting 100-200 usernames at once, and a few queries per name would
+  turn that single paste into 500-1500+ sequential round trips, pinning a
+  DB connection for the whole page load. Capacity isn't claimed here the
+  way `advance_to_stage/3` does: Regional has no `StageCapacityConfig` row
+  (it's architecturally uncapped, same as Grassroots — see
+  `capacity_config/2`'s doc), so that check would always pass anyway.
+
+  Returns `{:ok, %{advanced: [%StageParticipation{}], errors: [{username,
+  reason}]}}`, or `{:error, :unauthorized}`.
+  """
+  def bulk_advance_to_regional(usernames, region_id, %Admin{} = admin)
+      when is_list(usernames) do
+    if Admin.can?(admin, :advance_participants) do
+      usernames =
+        usernames
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.uniq()
+
+      {:ok, do_bulk_advance_to_regional(usernames, region_id, admin)}
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp do_bulk_advance_to_regional(usernames, region_id, admin) do
+    regional = regional_stage()
+    players_by_username = players_by_username(usernames)
+    player_ids = players_by_username |> Map.values() |> Enum.map(& &1.id)
+    participations_by_player_id = grassroots_participations_by_player_id(player_ids)
+
+    {candidates, lookup_errors} =
+      usernames
+      |> Enum.map(
+        &resolve_bulk_advance_candidate(
+          &1,
+          players_by_username,
+          participations_by_player_id,
+          region_id
+        )
+      )
+      |> Enum.split_with(&match?({:ok, _username, _participation}, &1))
+
+    {eligible, ineligible} = split_eligible_candidates(candidates)
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+    advanced = write_bulk_advance(eligible, regional, admin, now)
+
+    errors =
+      Enum.map(lookup_errors, fn {:error, username, reason} -> {username, reason} end) ++
+        Enum.map(ineligible, fn {:ok, username, _participation} ->
+          {username, :registration_closed}
+        end)
+
+    %{advanced: advanced, errors: errors}
+  end
+
+  defp players_by_username(usernames) do
+    downcased = Enum.map(usernames, &String.downcase/1)
+
+    Player
+    |> where([p], fragment("lower(?)", p.username) in ^downcased)
+    |> Repo.all()
+    |> Map.new(&{String.downcase(&1.username), &1})
+  end
+
+  defp grassroots_participations_by_player_id([]), do: %{}
+
+  defp grassroots_participations_by_player_id(player_ids) do
+    StageParticipation
+    |> join(:inner, [sp], s in Stage, on: s.id == sp.stage_id)
+    |> where([sp], sp.player_id in ^player_ids)
+    |> select([sp, s], {sp.player_id, {sp, s.name}})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp resolve_bulk_advance_candidate(
+         username,
+         players_by_username,
+         participations_by_player_id,
+         region_id
+       ) do
+    with {:ok, player} <- find_player_in_map(players_by_username, username),
+         {:ok, {participation, stage_name}} <-
+           find_participation_in_map(participations_by_player_id, player.id),
+         :ok <- check_grassroots_stage_name(stage_name),
+         :ok <- check_bulk_advance_region(participation, region_id) do
+      {:ok, username, participation}
+    else
+      {:error, reason} -> {:error, username, reason}
+    end
+  end
+
+  defp find_player_in_map(players_by_username, username) do
+    case Map.get(players_by_username, String.downcase(username)) do
+      nil -> {:error, :player_not_found}
+      player -> {:ok, player}
+    end
+  end
+
+  defp find_participation_in_map(participations_by_player_id, player_id) do
+    case Map.get(participations_by_player_id, player_id) do
+      nil -> {:error, :not_in_grassroots}
+      entry -> {:ok, entry}
+    end
+  end
+
+  defp check_grassroots_stage_name(name) when name in ["Grassroots", "Grassroots Round 2"],
+    do: :ok
+
+  defp check_grassroots_stage_name(_name), do: {:error, :not_in_grassroots}
+
+  defp split_eligible_candidates([]), do: {[], []}
+
+  defp split_eligible_candidates(candidates) do
+    cutoff = Accounts.tournament_registration_cutoff()
+    player_ids = Enum.map(candidates, fn {:ok, _username, p} -> p.player_id end)
+
+    eligible_player_ids =
+      from(p in Player,
+        where:
+          p.id in ^player_ids and
+            (p.inserted_at < ^cutoff or p.tournament_eligibility_override),
+        select: p.id
+      )
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.split_with(candidates, fn {:ok, _username, p} ->
+      MapSet.member?(eligible_player_ids, p.player_id)
+    end)
+  end
+
+  defp write_bulk_advance([], _regional, _admin, _now), do: []
+
+  defp write_bulk_advance(eligible, regional, admin, now) do
+    participations = Enum.map(eligible, fn {:ok, _username, p} -> p end)
+    ids = Enum.map(participations, & &1.id)
+    entity_type = StageParticipation |> to_string() |> String.trim_leading("Elixir.")
+
+    log_rows =
+      Enum.map(participations, fn participation ->
+        %{
+          id: Ecto.UUID.generate(),
+          admin_id: admin.id,
+          actor_type: "admin",
+          action_type: "advance_to_stage",
+          entity_type: entity_type,
+          entity_id: participation.id,
+          prior_value: %{"stage_id" => participation.stage_id},
+          new_value: %{"stage_id" => regional.id},
+          inserted_at: now
+        }
+      end)
+
+    Repo.transaction(fn ->
+      Repo.update_all(
+        from(sp in StageParticipation, where: sp.id in ^ids),
+        set: [stage_id: regional.id, updated_at: now]
+      )
+
+      Repo.insert_all(Cuevolution.Accounts.AdminActionLog, log_rows)
+    end)
+
+    Enum.map(participations, &%{&1 | stage_id: regional.id})
+  end
+
+  defp check_bulk_advance_region(%{region_id: region_id}, region_id), do: :ok
+  defp check_bulk_advance_region(_participation, _region_id), do: {:error, :wrong_region}
+
+  @doc """
   Manually undoes an advance: moves `participation` back one stage, for when
   someone was advanced by mistake. The mirror of `advance_to_stage/3`
   (which is how someone is manually added to the next stage), restricted to
@@ -2006,6 +2194,27 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
+  Batched sibling of `list_fixtures_for_group/1` — every fixture across
+  every group in `group_ids`, in one query (plus Ecto's own batched
+  preload queries), grouped by `group_id`. A region-wide published Regional
+  draw means 15-30+ groups; calling `list_fixtures_for_group/1` once per
+  group to render them all turns a single page render into 15-30+
+  round trips, which is exactly the kind of load that starves the
+  connection pool and spikes memory during a live, concurrently-watched
+  draw. Groups with no fixtures are simply absent from the result map —
+  callers already default a missing key to `[]` (see `gr_fixtures_for/2`).
+  """
+  def list_fixtures_for_groups(group_ids) do
+    Fixture
+    |> join(:inner, [f], r in Round, on: r.id == f.round_id)
+    |> where([f, r], r.group_id in ^group_ids)
+    |> order_by([f, r], asc: r.inserted_at, asc: f.match_id)
+    |> preload([f, r], round: r, participant_a: [:player, :team], participant_b: [:player, :team])
+    |> Repo.all()
+    |> Enum.group_by(& &1.round.group_id)
+  end
+
+  @doc """
   Batch-enters `rows` of fixtures into `round` (spec 007 US1, FR-009).
 
   Each row gets its own transaction (not one big `Multi` across the whole
@@ -2646,10 +2855,11 @@ defmodule Cuevolution.Competitions do
        do: {:error, :invalid_fixture_state}
 
   defp do_record_final_score(%Fixture{} = fixture, %Admin{} = admin, attrs) do
-    fixture = Repo.preload(fixture, [:participant_a, :participant_b])
+    fixture = Repo.preload(fixture, [:participant_a, :participant_b, round: :stage])
+    format = match_format(fixture)
 
-    with {:ok, score} <- normalize_final_score(attrs),
-         {:ok, winner_id} <- final_score_winner(fixture, score) do
+    with {:ok, score} <- normalize_final_score(attrs, format),
+         {:ok, winner_id} <- final_score_winner(fixture, score, format) do
       result_attrs = %{
         fixture_id: fixture.id,
         winner_participation_id: winner_id,
@@ -2689,8 +2899,8 @@ defmodule Cuevolution.Competitions do
         score: %{
           "participant_a_frames" => frames_a,
           "participant_b_frames" => frames_b,
-          "points_a" => points_for_frames(frames_a, frames_b),
-          "points_b" => points_for_frames(frames_b, frames_a)
+          "points_a" => points_for_frames(frames_a, frames_b, :legacy),
+          "points_b" => points_for_frames(frames_b, frames_a, :legacy)
         },
         recorded_by_admin_id: admin.id
       }
@@ -2733,10 +2943,11 @@ defmodule Cuevolution.Competitions do
   end
 
   defp do_verify_final_score(%Fixture{status: "completed"} = fixture, %Admin{} = admin, attrs) do
-    fixture = Repo.preload(fixture, [:result, :participant_a, :participant_b])
+    fixture = Repo.preload(fixture, [:result, :participant_a, :participant_b, round: :stage])
+    format = match_format(fixture)
 
-    with {:ok, score} <- normalize_final_score(attrs),
-         {:ok, winner_id} <- final_score_winner(fixture, score),
+    with {:ok, score} <- normalize_final_score(attrs, format),
+         {:ok, winner_id} <- final_score_winner(fixture, score, format),
          correction_attrs <- %{winner_participation_id: winner_id, score: score} do
       Multi.new()
       |> Multi.update(:result, MatchResult.correction_changeset(fixture.result, correction_attrs))
@@ -2829,8 +3040,9 @@ defmodule Cuevolution.Competitions do
     do: {:error, :invalid_fixture_state}
 
   defp do_record_walkover(fixture, admin, present_participant) do
-    fixture = Repo.preload(fixture, [:participant_a, :participant_b])
+    fixture = Repo.preload(fixture, [:participant_a, :participant_b, round: :stage])
     present_id = present_participant_id(present_participant)
+    walkover_frames = if match_format(fixture) == :regional, do: 3, else: 5
 
     case present_id do
       id when id in [fixture.participant_a_id, fixture.participant_b_id] ->
@@ -2842,14 +3054,14 @@ defmodule Cuevolution.Competitions do
         score =
           if present_id == fixture.participant_a_id,
             do: %{
-              "participant_a_frames" => 5,
+              "participant_a_frames" => walkover_frames,
               "participant_b_frames" => 0,
               "points_a" => 3,
               "points_b" => 0
             },
             else: %{
               "participant_a_frames" => 0,
-              "participant_b_frames" => 5,
+              "participant_b_frames" => walkover_frames,
               "points_a" => 0,
               "points_b" => 3
             }
@@ -2932,6 +3144,17 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  # An explicit `nil` (clearing the winner, e.g. correcting to a Regional
+  # draw) must stick — `||` would treat it as "not provided" and silently
+  # keep the old winner, so presence of the key decides, not truthiness.
+  defp correction_winner_id(attrs, default) do
+    cond do
+      Map.has_key?(attrs, "winner_participation_id") -> attrs["winner_participation_id"]
+      Map.has_key?(attrs, :winner_participation_id) -> attrs[:winner_participation_id]
+      true -> default
+    end
+  end
+
   defp do_correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
     prior_value = %{
       "winner_participation_id" => result.winner_participation_id,
@@ -2939,9 +3162,7 @@ defmodule Cuevolution.Competitions do
     }
 
     correction_attrs = %{
-      winner_participation_id:
-        attrs["winner_participation_id"] || attrs[:winner_participation_id] ||
-          result.winner_participation_id,
+      winner_participation_id: correction_winner_id(attrs, result.winner_participation_id),
       score: attrs["score"] || attrs[:score] || result.score,
       prior_value: prior_value
     }
@@ -2981,40 +3202,62 @@ defmodule Cuevolution.Competitions do
   defp normalize_frame_winner(%{winner: value}), do: normalize_frame_winner(value)
   defp normalize_frame_winner(_value), do: nil
 
-  defp normalize_final_score(attrs) do
+  defp match_format(%Fixture{round: %{stage: %{name: "Regional"}}}), do: :regional
+  defp match_format(%Fixture{}), do: :legacy
+
+  defp normalize_final_score(attrs, format) do
     with {:ok, participant_a_score} <-
            parse_final_score_value(attrs["participant_a_score"] || attrs["participant_a_frames"]),
          {:ok, participant_b_score} <-
            parse_final_score_value(attrs["participant_b_score"] || attrs["participant_b_frames"]) do
-      validate_final_score(participant_a_score, participant_b_score)
+      validate_final_score(participant_a_score, participant_b_score, format)
     end
   end
 
-  defp validate_final_score(participant_a_score, participant_b_score)
-       when participant_a_score > 5 or participant_b_score > 5,
+  defp validate_final_score(participant_a_score, participant_b_score, :regional)
+       when participant_a_score > 4 or participant_b_score > 4,
        do: {:error, :invalid_final_score}
 
-  defp validate_final_score(participant_a_score, participant_b_score)
-       when participant_a_score >= 3 and participant_b_score >= 3,
-       do: {:error, :no_majority}
+  defp validate_final_score(participant_a_score, participant_b_score, :regional)
+       when participant_a_score + participant_b_score != 4,
+       do: {:error, :invalid_final_score}
 
-  defp validate_final_score(participant_a_score, participant_b_score)
-       when participant_a_score < 3 and participant_b_score < 3,
-       do: {:error, :no_majority}
-
-  defp validate_final_score(participant_a_score, participant_b_score) do
+  defp validate_final_score(participant_a_score, participant_b_score, :regional) do
     {:ok,
      %{
        "participant_a_frames" => participant_a_score,
        "participant_b_frames" => participant_b_score,
-       "points_a" => points_for_frames(participant_a_score, participant_b_score),
-       "points_b" => points_for_frames(participant_b_score, participant_a_score)
+       "points_a" => points_for_frames(participant_a_score, participant_b_score, :regional),
+       "points_b" => points_for_frames(participant_b_score, participant_a_score, :regional)
+     }}
+  end
+
+  defp validate_final_score(participant_a_score, participant_b_score, :legacy)
+       when participant_a_score > 5 or participant_b_score > 5,
+       do: {:error, :invalid_final_score}
+
+  defp validate_final_score(participant_a_score, participant_b_score, :legacy)
+       when participant_a_score >= 3 and participant_b_score >= 3,
+       do: {:error, :no_majority}
+
+  defp validate_final_score(participant_a_score, participant_b_score, :legacy)
+       when participant_a_score < 3 and participant_b_score < 3,
+       do: {:error, :no_majority}
+
+  defp validate_final_score(participant_a_score, participant_b_score, :legacy) do
+    {:ok,
+     %{
+       "participant_a_frames" => participant_a_score,
+       "participant_b_frames" => participant_b_score,
+       "points_a" => points_for_frames(participant_a_score, participant_b_score, :legacy),
+       "points_b" => points_for_frames(participant_b_score, participant_a_score, :legacy)
      }}
   end
 
   defp parse_final_score_value(nil), do: {:error, :final_score_required}
   defp parse_final_score_value(""), do: {:error, :final_score_required}
-  defp parse_final_score_value(value) when is_integer(value), do: {:ok, value}
+  defp parse_final_score_value(value) when is_integer(value) and value >= 0, do: {:ok, value}
+  defp parse_final_score_value(value) when is_integer(value), do: {:error, :invalid_final_score}
 
   defp parse_final_score_value(value) when is_binary(value) do
     case Integer.parse(String.trim(value)) do
@@ -3030,7 +3273,23 @@ defmodule Cuevolution.Competitions do
          %{
            "participant_a_frames" => participant_a_score,
            "participant_b_frames" => participant_b_score
-         }
+         },
+         :regional
+       ) do
+    cond do
+      participant_a_score > participant_b_score -> {:ok, participant_a_id}
+      participant_b_score > participant_a_score -> {:ok, participant_b_id}
+      true -> {:ok, nil}
+    end
+  end
+
+  defp final_score_winner(
+         %Fixture{participant_a_id: participant_a_id, participant_b_id: participant_b_id},
+         %{
+           "participant_a_frames" => participant_a_score,
+           "participant_b_frames" => participant_b_score
+         },
+         :legacy
        ) do
     cond do
       participant_a_score >= 3 -> {:ok, participant_a_id}
@@ -3052,8 +3311,9 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  defp points_for_frames(5, 0), do: 6
-  defp points_for_frames(frames_won, _frames_lost), do: frames_won
+  defp points_for_frames(5, 0, :legacy), do: 6
+  defp points_for_frames(4, 0, :regional), do: 5
+  defp points_for_frames(frames_won, _frames_lost, _format), do: frames_won
 
   defp insert_structured_frames(repo, result, fixture, winners) do
     Enum.with_index(winners, 1)
@@ -3094,8 +3354,8 @@ defmodule Cuevolution.Competitions do
          score: %{
            "participant_a_frames" => frames_a,
            "participant_b_frames" => frames_b,
-           "points_a" => points_for_frames(frames_a, frames_b),
-           "points_b" => points_for_frames(frames_b, frames_a)
+           "points_a" => points_for_frames(frames_a, frames_b, :legacy),
+           "points_b" => points_for_frames(frames_b, frames_a, :legacy)
          }
        }}
     end
@@ -3238,6 +3498,39 @@ defmodule Cuevolution.Competitions do
     do_grassroots_group_standings(group, group_member_participant_ids(group.id))
   end
 
+  @doc """
+  Batched sibling of `grassroots_group_standings/1` — standings for every
+  group in `groups` (all assumed to belong to `stage`), computed from one
+  batched match query and one batched membership query instead of two per
+  group. Returns `%{group_id => [standing_row]}`; `[]` for every group if
+  `stage` isn't round-robin, matching `grassroots_group_standings/1`'s own
+  behavior. A region-wide Regional standings render means 15-30+ groups —
+  calling the per-group function in a loop there turns one page render
+  into dozens of near-identical round trips.
+  """
+  def grassroots_group_standings_by_group(groups, %Stage{} = stage) do
+    if Stage.round_robin?(stage) do
+      group_ids = Enum.map(groups, & &1.id)
+      matches_by_group = group_matches_by_group_ids(group_ids)
+      participant_ids_by_group = group_member_participant_ids_by_group(group_ids)
+
+      Map.new(groups, fn group ->
+        matches = Map.get(matches_by_group, group.id, [])
+        participant_ids = Map.get(participant_ids_by_group, group.id, [])
+
+        rows =
+          StandingsCalculator.rank(participant_ids, matches,
+            cascade: :points_first,
+            tie_breakers: Enum.chunk_every(group.tie_breakers || [], 2)
+          )
+
+        {group.id, rows}
+      end)
+    else
+      Map.new(groups, &{&1.id, []})
+    end
+  end
+
   # Shared by `group_standings/1` and `grassroots_group_standings/1` so a
   # Grassroots group's standings — needed by both every time
   # `group_standings/1` is called on one — aren't fetched (membership ids,
@@ -3254,6 +3547,15 @@ defmodule Cuevolution.Competitions do
     else
       []
     end
+  end
+
+  defp group_member_participant_ids_by_group(group_ids) do
+    from(gm in GroupMembership,
+      where: gm.group_id in ^group_ids,
+      select: {gm.group_id, gm.stage_participation_id}
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn {group_id, _pid} -> group_id end, fn {_group_id, pid} -> pid end)
   end
 
   defp group_member_participant_ids(group_id) do
@@ -3309,13 +3611,19 @@ defmodule Cuevolution.Competitions do
     top_count = config.advancer_count
     played_by_group = played_participant_ids_by_group(Enum.map(groups, & &1.id))
 
+    # Batched — one match/membership query for every group instead of two
+    # per group (`grassroots_group_standings/1` called in a loop, as this
+    # used to), which at Regional's 15-30+-groups-per-region scale is the
+    # difference between ~2 queries and 40-60+ for a single qualifier check.
+    standings_by_group = grassroots_group_standings_by_group(groups, Repo.get!(Stage, stage_id))
+
     groups
     |> Enum.flat_map(fn group ->
       played_ids = Map.get(played_by_group, group.id, MapSet.new())
 
       standings =
-        group
-        |> grassroots_group_standings()
+        standings_by_group
+        |> Map.get(group.id, [])
         |> Enum.filter(&MapSet.member?(played_ids, &1.participant_id))
 
       top_ids = standings |> Enum.take(top_count) |> MapSet.new(& &1.participant_id)
@@ -3329,13 +3637,15 @@ defmodule Cuevolution.Competitions do
   end
 
   # `standings` is already filtered to participants who've actually played
-  # (see `played_participant_ids/1`), so `wins + losses` here is always
-  # >= 1 — safe as the points/frame-diff-per-match denominator.
+  # (see `played_participant_ids/1`), so `wins + losses + draws` here is
+  # always >= 1 — safe as the points/frame-diff-per-match denominator. Must
+  # include `draws` (Regional's 4-frame format allows a 2-2 draw) — a
+  # participant whose only match was drawn has `wins == losses == 0`.
   defp best_rest_row(row, top_ids, group_id) do
     if MapSet.member?(top_ids, row.participant_id) do
       []
     else
-      played = row.wins + row.losses
+      played = row.wins + row.losses + row.draws
 
       [
         Map.merge(row, %{
@@ -3374,11 +3684,27 @@ defmodule Cuevolution.Competitions do
     ready? =
       stage_deadline_passed?(stage_id) or venue_marked_ready_early?(stage_id, category, scope)
 
-    Group
-    |> where([g], g.stage_id == ^stage_id and g.category == ^category)
-    |> filter_by_group_scope(scope)
+    groups =
+      Group
+      |> where([g], g.stage_id == ^stage_id and g.category == ^category)
+      |> filter_by_group_scope(scope)
+      |> Repo.all()
+
+    statuses_by_group = fixture_statuses_by_group(Enum.map(groups, & &1.id))
+
+    Enum.filter(groups, &group_final?(Map.get(statuses_by_group, &1.id, []), ready?))
+  end
+
+  # Only the `status` column is needed to decide "is this group final" —
+  # fetching full `Fixture` structs (with player/team preloads) one group
+  # at a time, as this used to, is needless weight repeated per group.
+  defp fixture_statuses_by_group(group_ids) do
+    Fixture
+    |> join(:inner, [f], r in Round, on: r.id == f.round_id)
+    |> where([f, r], r.group_id in ^group_ids)
+    |> select([f, r], {r.group_id, f.status})
     |> Repo.all()
-    |> Enum.filter(&group_final?(&1, ready?))
+    |> Enum.group_by(fn {group_id, _status} -> group_id end, fn {_group_id, status} -> status end)
   end
 
   defp stage_deadline_passed?(stage_id) do
@@ -3406,15 +3732,10 @@ defmodule Cuevolution.Competitions do
     results_recording_closed?() and not Admin.can?(admin, :approve_results)
   end
 
-  defp group_final?(group, deadline_passed?) do
-    case list_fixtures_for_group(group.id) do
-      [] ->
-        false
+  defp group_final?([], _deadline_passed?), do: false
 
-      fixtures ->
-        deadline_passed? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"]))
-    end
-  end
+  defp group_final?(statuses, deadline_passed?),
+    do: deadline_passed? or Enum.all?(statuses, &(&1 in ["verified", "walkover"]))
 
   @doc "Whether a Tournament Director has marked `scope`'s venue ready to close early for `stage_id`/`category` (see `mark_venue_ready_early/4`). Always `false` for a region scope — this override only exists for venue-scoped (Grassroots) stages."
   def venue_marked_ready_early?(stage_id, category, {:venue_id, venue_id}) do
@@ -3769,6 +4090,27 @@ defmodule Cuevolution.Competitions do
     |> Enum.map(&to_calculator_match/1)
   end
 
+  # Batched sibling of `group_matches/1` — one query for every group in
+  # `group_ids` instead of one per group, grouped by `group_id` in Elixir
+  # afterward. Used wherever a render needs standings for a whole region's
+  # worth of groups at once (see `GroupManagementLive.load_gr_standings/1`).
+  defp group_matches_by_group_ids(group_ids) do
+    from(mr in MatchResult,
+      join: f in Fixture,
+      on: f.id == mr.fixture_id,
+      join: r in Round,
+      on: r.id == f.round_id,
+      where: r.group_id in ^group_ids,
+      where: is_nil(f.match_id) or f.status in ["verified", "walkover"],
+      select: {r.group_id, mr},
+      preload: [fixture: [:participant_a, :participant_b]]
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn {group_id, _mr} -> group_id end, fn {_group_id, mr} ->
+      to_calculator_match(mr)
+    end)
+  end
+
   @doc """
   Participant ids in `group_id` who've actually played at least one match —
   a verified result, or the present side of a *single* walkover. A
@@ -4015,7 +4357,12 @@ defmodule Cuevolution.Competitions do
     Fixture
     |> scope_fixtures_for_admin(admin)
     |> where([f, _r, _g, _v], f.id == ^id and is_nil(f.result_id))
-    |> preload([:venue, participant_a: [:player, :team], participant_b: [:player, :team]])
+    |> preload([
+      :venue,
+      round: :stage,
+      participant_a: [:player, :team, :stage],
+      participant_b: [:player, :team, :stage]
+    ])
     |> Repo.one()
   end
 
@@ -4076,6 +4423,7 @@ defmodule Cuevolution.Competitions do
     |> preload([
       :venue,
       [result: :winner_participation],
+      round: :stage,
       participant_a: [:player, :team, :stage],
       participant_b: [:player, :team, :stage]
     ])

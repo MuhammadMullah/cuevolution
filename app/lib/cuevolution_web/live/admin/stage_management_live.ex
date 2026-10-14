@@ -21,7 +21,7 @@ defmodule CuevolutionWeb.StageManagementLive do
   @categories [{"Individual Male", "male"}, {"Individual Female", "female"}, {"Teams", "team"}]
   @group_config_categories ~w(male female team)
   @editable_group_fields ~w(group_size advancer_count target_group_size minimum_group_size minimum_entrants extra_qualifier_count)
-  @capped_stages ~w(Circuit Finals)
+  @capped_stages ["Circuit", "Finals", "Regional Round 2"]
 
   def mount(_params, _session, socket) do
     stages = Competitions.list_stages()

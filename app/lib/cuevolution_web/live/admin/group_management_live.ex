@@ -9,16 +9,16 @@ defmodule CuevolutionWeb.GroupManagementLive do
   - The formula-driven draw lifecycle (propose → deal → approve → publish →
     redraw) plus a "Groups" / "Group standings" tab pair, both inline on
     this page, for: Grassroots Individual Male with a venue selected
-    (venue-scoped), or Regional Individual Female/Team (region-scoped —
+    (venue-scoped), or Regional Individual Male/Female/Team (region-scoped —
     both genders drawn together under the single "team" category; ladies
     and teams start their tournament here, not at Grassroots). See
     `auto_draw_eligible?/1`. This replaces the standalone
     `Admin.DrawWizardLive` and `Admin.GroupStandingsLive` routes, which are
     gone.
-  - Everything else (Regional Male — deliberately kept manual rather than
-    unified onto the engine above, since that pipeline already works today
-    — or no venue selected yet): the original manual create-group /
-    assign-member flow, unchanged.
+  - Everything else (no venue selected yet, for Grassroots): the original
+    manual create-group / assign-member flow, unchanged — stays reachable
+    for that case even though Regional now always routes onto the engine
+    above.
 
   Grassroots groups are venue-scoped (FR-003); Regional groups are
   region-scoped (FR-004). Neither stage ever creates a knockout bracket —
@@ -34,6 +34,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   alias Cuevolution.Competitions.{Draw, Stage, StageParticipation}
   alias Cuevolution.Repo
   alias Cuevolution.Venues
+  alias CuevolutionWeb.Admin.MatchEntryComponent
   alias CuevolutionWeb.AdminComponents
 
   @categories ~w(male female team)
@@ -92,7 +93,11 @@ defmodule CuevolutionWeb.GroupManagementLive do
        confirm_close: false,
        qualifier_search: "",
        qualifier_candidates: [],
-       tie_resolution: nil
+       tie_resolution: nil,
+       bulk_add_open?: false,
+       bulk_add_form: to_form(%{}, as: :bulk_add),
+       bulk_add_result: nil,
+       selected_fixture_id: nil
      )
      |> allow_upload(:result_sheet,
        accept: ~w(.jpg .jpeg .pdf),
@@ -592,6 +597,65 @@ defmodule CuevolutionWeb.GroupManagementLive do
     end
   end
 
+  def handle_event("open_bulk_add", _params, socket) do
+    {:noreply, assign(socket, bulk_add_open?: true, bulk_add_result: nil)}
+  end
+
+  def handle_event("cancel_bulk_add", _params, socket) do
+    {:noreply,
+     assign(socket,
+       bulk_add_open?: false,
+       bulk_add_result: nil,
+       bulk_add_form: to_form(%{}, as: :bulk_add)
+     )}
+  end
+
+  # Catch-up path for players a venue never got around to manually
+  # advancing out of Grassroots — pastes a list of usernames and advances
+  # each one straight into this region's Regional stage, best-effort (one
+  # bad username doesn't block the rest of the batch). See
+  # `Competitions.bulk_advance_to_regional/3` for the validation rules.
+  def handle_event("submit_bulk_add", %{"bulk_add" => %{"usernames" => text}}, socket) do
+    if socket.assigns.can_close_stage? do
+      usernames = String.split(text, ["\n", ",", "\r"], trim: true)
+
+      case Competitions.bulk_advance_to_regional(
+             usernames,
+             socket.assigns.region.id,
+             socket.assigns.current_admin
+           ) do
+        {:ok, result} ->
+          {:noreply,
+           socket
+           |> assign(bulk_add_result: result, bulk_add_form: to_form(%{}, as: :bulk_add))
+           |> load_gr()}
+
+        {:error, :unauthorized} ->
+          {:noreply, put_flash(socket, :error, "You don't have permission to add participants.")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "You don't have permission to add participants.")}
+    end
+  end
+
+  # Opens the match-entry slide-over in place of navigating to
+  # `/admin/matches/:id` — an admin scoring results out of a published
+  # group's fixture list stays on the Groups page throughout.
+  def handle_event("open_match_entry", %{"id" => fixture_id}, socket) do
+    {:noreply, assign(socket, :selected_fixture_id, fixture_id)}
+  end
+
+  def handle_event("close_match_entry", _params, socket) do
+    {:noreply, assign(socket, :selected_fixture_id, nil)}
+  end
+
+  # `MatchEntryComponent` sends this after any state-changing action
+  # (record/verify/postpone/resume/walkover) — refresh the group cards'
+  # fixture statuses and progress counts to match.
+  def handle_info({:match_entry_updated, _fixture_id}, socket) do
+    {:noreply, load_gr(socket)}
+  end
+
   defp store_result_sheet_entry(stage, venue, admin, path, entry) do
     body = File.read!(path)
 
@@ -655,13 +719,12 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp regional?(assigns), do: assigns.stage.name == "Regional"
 
   # The formula-driven draw engine applies to: Grassroots Individual Male
-  # with a venue selected (venue-scoped), or Regional Individual
-  # Female/Team (region-scoped). Regional Male deliberately stays on the
-  # manual flow — see the moduledoc.
+  # with a venue selected (venue-scoped), or any Regional Individual/Team
+  # category (region-scoped) — see the moduledoc.
   defp auto_draw_eligible?(assigns) do
     cond do
       grassroots?(assigns) -> assigns.category == "male" and !!assigns.venue
-      regional?(assigns) -> assigns.category in ~w(female team)
+      regional?(assigns) -> assigns.category in ~w(male female team)
       true -> false
     end
   end
@@ -723,7 +786,11 @@ defmodule CuevolutionWeb.GroupManagementLive do
         gr_open_group_id: nil,
         gr_selected_member_id: nil,
         confirm_close: false,
-        tie_resolution: nil
+        tie_resolution: nil,
+        bulk_add_open?: false,
+        bulk_add_form: to_form(%{}, as: :bulk_add),
+        bulk_add_result: nil,
+        selected_fixture_id: nil
       )
       |> load_result_sheets_and_readiness()
 
@@ -772,10 +839,16 @@ defmodule CuevolutionWeb.GroupManagementLive do
     # per-card "N/M played" line (design: `done+'/'+total+' played'`), not
     # just whichever card's fixtures panel happens to be expanded. Only
     # meaningful once published (FR-008 generates fixtures on that
-    # transition; before it there's nothing to fetch).
+    # transition; before it there's nothing to fetch). One batched query
+    # for every group at once (`list_fixtures_for_groups/1`), not one
+    # query per group — a published Regional draw means 15-30+ groups, and
+    # this reload fires on every single result/walkover/postpone (see
+    # `handle_info({:match_entry_updated, ...})`), so the per-group version
+    # here would mean dozens of round trips on every score entered during
+    # a live draw.
     group_fixtures =
       if draw && draw.state == "published" do
-        Map.new(groups, &{&1.id, Competitions.list_fixtures_for_group(&1.id)})
+        Competitions.list_fixtures_for_groups(Enum.map(groups, & &1.id))
       else
         %{}
       end
@@ -796,30 +869,28 @@ defmodule CuevolutionWeb.GroupManagementLive do
     config = Competitions.get_or_create_group_config(stage.id, category)
     scope = draw_scope(socket.assigns)
     final_groups_in_scope = Competitions.final_groups(stage.id, category, scope)
+    final_group_ids = MapSet.new(final_groups_in_scope, & &1.id)
+
+    all_groups = Enum.uniq_by(groups ++ final_groups_in_scope, & &1.id)
+    all_group_ids = Enum.map(all_groups, & &1.id)
 
     # One query for every group this render needs "who actually played"
     # for, instead of one query per group repeated across the per-card
     # tables and the qualifier suggestion below — a venue's worth of
     # groups otherwise means a dozen-plus near-identical round trips on
     # every single standings render.
-    played_by_group =
-      (groups ++ final_groups_in_scope)
-      |> Enum.map(& &1.id)
-      |> Enum.uniq()
-      |> Competitions.played_participant_ids_by_group()
+    played_by_group = Competitions.played_participant_ids_by_group(all_group_ids)
 
-    ready? =
-      Competitions.deadline_passed?(stage.completion_deadline) or
-        Competitions.venue_marked_ready_early?(stage.id, category, scope)
+    # Same idea, for the standings themselves — one batched match/membership
+    # query for every group instead of two per group. At Regional's
+    # 15-30+-groups-per-region scale, the per-group version this replaced
+    # turned switching to the Standings tab into 60-100+ round trips.
+    standings_by_group = Competitions.grassroots_group_standings_by_group(all_groups, stage)
 
     tables =
       Enum.map(groups, fn group ->
-        rows = group |> Competitions.grassroots_group_standings() |> name_rows()
-        fixtures = Competitions.list_fixtures_for_group(group.id)
-
-        final? =
-          fixtures != [] and
-            (ready? or Enum.all?(fixtures, &(&1.status in ["verified", "walkover"])))
+        rows = standings_by_group |> Map.get(group.id, []) |> name_rows()
+        final? = MapSet.member?(final_group_ids, group.id)
 
         top =
           if final? do
@@ -843,8 +914,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
       |> Enum.flat_map(fn g ->
         played_ids = Map.get(played_by_group, g.id, MapSet.new())
 
-        g
-        |> Competitions.grassroots_group_standings()
+        standings_by_group
+        |> Map.get(g.id, [])
         |> Enum.filter(&MapSet.member?(played_ids, &1.participant_id))
         |> Enum.take(config.advancer_count)
       end)
@@ -969,6 +1040,13 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp category_label("male"), do: "Individual Male"
   defp category_label("female"), do: "Individual Female"
   defp category_label("team"), do: "Teams"
+
+  defp bulk_add_error_label(:player_not_found), do: "no player with that username"
+  defp bulk_add_error_label(:not_in_grassroots), do: "not currently in Grassroots"
+  defp bulk_add_error_label(:wrong_region), do: "registered in a different region"
+  defp bulk_add_error_label(:registration_closed), do: "registration is closed for them"
+  defp bulk_add_error_label(:capacity_exceeded), do: "Regional is at capacity"
+  defp bulk_add_error_label(reason), do: inspect(reason)
 
   defp draw_step_index(nil), do: 0
 

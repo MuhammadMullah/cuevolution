@@ -124,10 +124,13 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
   end
 
   test "Regional Group settings has no formula columns or best-of-rest table", %{conn: conn} do
+    regional = Repo.get_by!(Stage, name: "Regional")
     conn = log_in_admin(conn)
     {:ok, view, _html} = live(conn, ~p"/admin/stages")
 
-    view |> element("button", "Regional") |> render_click()
+    # Exact-id select, not a text match — "Regional" is now also a
+    # substring of the "Regional Round 2" tab's button text.
+    view |> element("button[phx-value-id='#{regional.id}']") |> render_click()
     html = view |> element("button", "Group settings") |> render_click()
 
     refute html =~ "Target size"
@@ -177,7 +180,10 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
 
     conn = log_in_admin(conn)
     {:ok, view, _html} = live(conn, ~p"/admin/stages")
-    view |> element("button[phx-click='select_stage']", "Regional") |> render_click()
+
+    view
+    |> element("button[phx-click='select_stage'][phx-value-id='#{regional.id}']")
+    |> render_click()
 
     html =
       view
@@ -217,7 +223,10 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
 
     conn = log_in_admin(conn)
     {:ok, view, _html} = live(conn, ~p"/admin/stages")
-    view |> element("button[phx-click='select_stage']", "Regional") |> render_click()
+
+    view
+    |> element("button[phx-click='select_stage'][phx-value-id='#{regional.id}']")
+    |> render_click()
 
     html =
       view

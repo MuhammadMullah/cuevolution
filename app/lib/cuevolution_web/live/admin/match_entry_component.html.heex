@@ -1,0 +1,201 @@
+<div>
+  <div
+    :if={@banner}
+    class={[
+      "mb-4 rounded-xl p-3.5 text-sm font-medium",
+      elem(@banner, 0) == :error && "bg-red-50 text-red-800",
+      elem(@banner, 0) == :info && "bg-green-50 text-green-800"
+    ]}
+  >
+    {elem(@banner, 1)}
+  </div>
+
+  <div
+    :if={is_nil(@fixture)}
+    class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800"
+  >
+    This fixture could not be found.
+  </div>
+
+  <div :if={@fixture} class="space-y-5">
+    <section class="rounded-2xl border border-ink-200 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="font-mono text-xs font-semibold text-ink-500">
+            {@fixture.match_id || "Manual fixture"}
+          </p>
+          <h2 class="mt-2 text-xl font-bold text-ink-950">
+            {participant_label(@fixture.participant_a)}
+            <span class="text-ink-300">vs</span> {participant_label(@fixture.participant_b)}
+          </h2>
+        </div>
+        <span class={[
+          "rounded-full px-3 py-1 text-xs font-semibold",
+          @fixture.walkover_kind == "double" && "bg-ink-100 text-ink-600",
+          @fixture.walkover_kind != "double" && "bg-ink-100 text-ink-700"
+        ]}>
+          {status_label(@fixture)}
+        </span>
+      </div>
+    </section>
+
+    <section
+      :if={@fixture.status == "scheduled" && Admin.can?(@current_admin, :record_results)}
+      class="rounded-2xl border border-ink-200 bg-white p-5 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
+    >
+      <div class="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 class="text-base font-bold text-ink-950">Record final score</h2>
+        <div class="font-mono text-2xl font-semibold text-ink-950">0–0</div>
+      </div>
+      <p class="mt-1 text-sm text-ink-500">
+        <%= if regional_fixture?(@fixture) do %>
+          Enter the final score from the four-frame match. Scores must sum to four — a 2–2 draw is allowed.
+        <% else %>
+          Enter the final score from the five-frame match. A match result requires a three-frame majority.
+        <% end %>
+      </p>
+      <.form
+        for={@score_form}
+        id={"record-final-score-#{@id}"}
+        phx-submit="record_final_score"
+        phx-target={@myself}
+        class="mt-5"
+      >
+        <div class="grid gap-3 sm:grid-cols-2">
+          <.input
+            field={@score_form[:participant_a_score]}
+            type="number"
+            min="0"
+            max={max_frame_score(@fixture)}
+            label={participant_label(@fixture.participant_a)}
+            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+            required
+          />
+          <.input
+            field={@score_form[:participant_b_score]}
+            type="number"
+            min="0"
+            max={max_frame_score(@fixture)}
+            label={participant_label(@fixture.participant_b)}
+            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+            required
+          />
+        </div>
+        <button
+          id={"record-final-score-submit-#{@id}"}
+          type="submit"
+          class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+        >
+          Record result
+        </button>
+      </.form>
+    </section>
+
+    <section
+      :if={@fixture.status == "completed"}
+      class="rounded-2xl border border-amber-200 bg-amber-50 p-5"
+    >
+      <div class="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 class="text-base font-bold text-amber-950">Awaiting verification</h2>
+        <div class="font-mono text-2xl font-semibold text-amber-950">
+          {Map.get(@correction_form.params, "participant_a_score", "0")}–{Map.get(
+            @correction_form.params,
+            "participant_b_score",
+            "0"
+          )}
+        </div>
+      </div>
+      <p class="mt-1 text-sm text-amber-800">
+        Review the final score the representative recorded. Correct it if needed before verifying.
+      </p>
+      <.form
+        :if={Admin.can?(@current_admin, :approve_results)}
+        for={@correction_form}
+        id={"verify-result-#{@id}"}
+        phx-submit="verify"
+        phx-target={@myself}
+        class="mt-4"
+      >
+        <div class="grid gap-3 sm:grid-cols-2">
+          <.input
+            field={@correction_form[:participant_a_score]}
+            type="number"
+            min="0"
+            max={max_frame_score(@fixture)}
+            label={participant_label(@fixture.participant_a)}
+            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+            required
+          />
+          <.input
+            field={@correction_form[:participant_b_score]}
+            type="number"
+            min="0"
+            max={max_frame_score(@fixture)}
+            label={participant_label(@fixture.participant_b)}
+            class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+            required
+          />
+        </div>
+        <button
+          id={"verify-result-submit-#{@id}"}
+          type="submit"
+          class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+        >
+          Verify result
+        </button>
+      </.form>
+    </section>
+
+    <section :if={@fixture.status in ["scheduled", "postponed"]} class="grid gap-4">
+      <form
+        :if={@fixture.status == "scheduled" && Admin.can?(@current_admin, :approve_results)}
+        phx-submit="postpone"
+        phx-target={@myself}
+        class="rounded-2xl border border-ink-200 bg-white p-5"
+      >
+        <h2 class="font-bold text-ink-950">Postpone</h2>
+        <input
+          name="reason"
+          required
+          placeholder="Reason required"
+          class="mt-3 w-full rounded-xl border border-ink-300 px-3 py-2 text-sm"
+        />
+        <button class="mt-3 rounded-full border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50">
+          Postpone fixture
+        </button>
+      </form>
+      <div
+        :if={@fixture.status == "postponed" && Admin.can?(@current_admin, :approve_results)}
+        class="rounded-2xl border border-ink-200 bg-white p-5"
+      >
+        <h2 class="font-bold text-ink-950">Postponed fixture</h2>
+        <button
+          type="button"
+          phx-click="resume"
+          phx-target={@myself}
+          class="mt-3 rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Resume fixture
+        </button>
+      </div>
+      <div
+        :if={@fixture.status == "scheduled"}
+        class="rounded-2xl border border-ink-200 bg-white p-5"
+      >
+        <h2 class="font-bold text-ink-950">Walkover</h2>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            :for={participant <- [@fixture.participant_a, @fixture.participant_b]}
+            type="button"
+            phx-click="record_walkover"
+            phx-value-participant_id={participant.id}
+            phx-target={@myself}
+            class="rounded-full border border-ink-300 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            {participant_label(participant)} present
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

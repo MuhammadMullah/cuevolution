@@ -231,6 +231,70 @@
       </div>
 
       <%= if is_nil(@draw) or @draw.state == "draft" do %>
+        <div :if={@stage.name == "Regional" and @category == "male" and @can_close_stage?}>
+          <div
+            :if={@bulk_add_open?}
+            phx-click="cancel_bulk_add"
+            class="fixed inset-0 z-40 bg-ink-950/50"
+          >
+          </div>
+
+          <div class={[
+            "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl transition-transform duration-300 ease-out",
+            @bulk_add_open? && "translate-x-0",
+            !@bulk_add_open? && "translate-x-full"
+          ]}>
+            <div class="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+              <div class="text-[15.5px] font-bold text-ink-950">
+                Bulk add players to {@region.name} Regional
+              </div>
+              <button
+                type="button"
+                phx-click="cancel_bulk_add"
+                aria-label="Close"
+                class="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-400 hover:bg-ink-50 hover:text-ink-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto px-5 py-4">
+              <p class="mb-4 text-[13.5px] text-ink-500">
+                <strong>Paste one username per line.</strong>
+              </p>
+              <.form for={@bulk_add_form} id="bulk-add-form" phx-submit="submit_bulk_add">
+                <textarea
+                  name="bulk_add[usernames]"
+                  rows="10"
+                  placeholder="player123&#10;anotherplayer&#10;..."
+                  class="w-full rounded-xl border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-950 placeholder:text-ink-400 [color-scheme:light] focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+                ></textarea>
+                <button
+                  type="submit"
+                  class="mt-3 rounded-full bg-ink-950 px-4 py-2 text-sm font-semibold text-white hover:bg-ink-800"
+                >
+                  Add players
+                </button>
+              </.form>
+
+              <div :if={@bulk_add_result} class="mt-5 border-t border-ink-100 pt-4">
+                <p class="text-[13.5px] font-semibold text-green-700">
+                  {length(@bulk_add_result.advanced)} added to Regional.
+                </p>
+                <ul :if={@bulk_add_result.errors != []} class="mt-2 space-y-1">
+                  <li
+                    :for={{username, reason} <- @bulk_add_result.errors}
+                    class="text-[13px] text-red-700"
+                  >
+                    <span class="font-mono font-semibold">{username}</span>
+                    — {bulk_add_error_label(reason)}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
           :if={@everyone_qualifies? and @can_close_stage?}
           class="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5"
@@ -249,7 +313,7 @@
 
         <div
           :if={!@everyone_qualifies? and is_nil(@proposal) and @can_manage_groups?}
-          class="mb-6"
+          class="mb-6 flex flex-wrap items-center gap-2.5"
         >
           <button
             type="button"
@@ -257,6 +321,14 @@
             class="rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
           >
             Propose draw
+          </button>
+          <button
+            :if={@stage.name == "Regional" and @category == "male" and @can_close_stage?}
+            type="button"
+            phx-click="open_bulk_add"
+            class="rounded-full border border-ink-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            Bulk add players
           </button>
         </div>
 
@@ -297,13 +369,23 @@
             </p>
           </div>
 
-          <button
-            type="button"
-            phx-click="create_draw"
-            class="mt-5 rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
-          >
-            Deal draw
-          </button>
+          <div class="mt-5 flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              phx-click="create_draw"
+              class="rounded-full bg-ink-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-800"
+            >
+              Deal draw
+            </button>
+            <button
+              :if={@stage.name == "Regional" and @category == "male" and @can_close_stage?}
+              type="button"
+              phx-click="open_bulk_add"
+              class="rounded-full border border-ink-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              Bulk add players
+            </button>
+          </div>
         </div>
       <% else %>
         <div :if={@can_manage_groups?} class="mb-5 flex flex-wrap gap-2.5">
@@ -479,7 +561,7 @@
                 </button>
               </div>
               <div class="flex flex-col gap-1">
-                <.link
+                <button
                   :for={
                     fixture <-
                       filtered_gr_fixtures(
@@ -487,8 +569,10 @@
                         @gr_selected_member_id
                       )
                   }
-                  navigate={~p"/admin/matches/#{fixture.id}"}
-                  class="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-ink-50"
+                  type="button"
+                  phx-click="open_match_entry"
+                  phx-value-id={fixture.id}
+                  class="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-ink-50"
                 >
                   <div class="min-w-0 flex-1">
                     <div class="truncate text-[13px] font-semibold text-ink-950">
@@ -499,7 +583,7 @@
                   <span class="rounded-full bg-ink-100 px-2 py-0.5 text-[10.5px] font-semibold capitalize text-ink-700">
                     {fixture.status}
                   </span>
-                </.link>
+                </button>
               </div>
             </div>
           </div>
@@ -828,4 +912,39 @@
       Everyone in this stage/region is already grouped.
     </div>
   <% end %>
+
+  <div
+    :if={@selected_fixture_id}
+    phx-click="close_match_entry"
+    class="fixed inset-0 z-40 bg-ink-950/50"
+  >
+  </div>
+
+  <div class={[
+    "fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col bg-white shadow-xl transition-transform duration-300 ease-out",
+    @selected_fixture_id && "translate-x-0",
+    !@selected_fixture_id && "translate-x-full"
+  ]}>
+    <div class="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+      <div class="text-[15.5px] font-bold text-ink-950">Match entry</div>
+      <button
+        type="button"
+        phx-click="close_match_entry"
+        aria-label="Close"
+        class="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-400 hover:bg-ink-50 hover:text-ink-700"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-4">
+      <.live_component
+        :if={@selected_fixture_id}
+        module={MatchEntryComponent}
+        id={"match-entry-#{@selected_fixture_id}"}
+        fixture_id={@selected_fixture_id}
+        current_admin={@current_admin}
+      />
+    </div>
+  </div>
 </AdminComponents.app_shell>

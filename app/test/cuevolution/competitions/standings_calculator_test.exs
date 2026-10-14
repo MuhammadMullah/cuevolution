@@ -179,5 +179,70 @@ defmodule Cuevolution.Competitions.StandingsCalculatorTest do
       assert present.points == 3
       assert present.bonus == 0
     end
+
+    test "a drawn match (nil winner_id) counts points for both sides and a win for neither" do
+      # Regional's 4-frame format allows a 2-2 draw — `match/5`'s winner
+      # atom becomes `nil` here, same shape `to_calculator_match/1` produces
+      # for a real tie.
+      standings =
+        StandingsCalculator.rank(
+          [:a, :b],
+          [
+            match(nil, :a, :b, 2, 2)
+            |> Map.put(:points_a, 2)
+            |> Map.put(:points_b, 2)
+          ],
+          cascade: :points_first
+        )
+
+      a = entry(standings, :a)
+      b = entry(standings, :b)
+
+      assert a.wins == 0 and a.losses == 0
+      assert b.wins == 0 and b.losses == 0
+      assert a.points == 2 and b.points == 2
+    end
+
+    test "awards the Regional 4-0 clean-sweep bonus" do
+      standings =
+        StandingsCalculator.rank(
+          [:a, :b],
+          [match(:a, :a, :b, 4, 0)],
+          cascade: :points_first
+        )
+
+      a = entry(standings, :a)
+      assert a.points == 5
+      assert a.bonus == 1
+    end
+
+    test "does not award the Regional 4-0 clean-sweep bonus to a walkover" do
+      standings =
+        StandingsCalculator.rank(
+          [:present, :absent],
+          [
+            match(:present, :present, :absent, 4, 0)
+            |> Map.put(:status, "walkover")
+            |> Map.put(:points_a, 3)
+          ],
+          cascade: :points_first
+        )
+
+      present = entry(standings, :present)
+      assert present.points == 3
+      assert present.bonus == 0
+    end
+  end
+
+  describe "rank/2 — a drawn match under the default :wins_first cascade" do
+    test "counts points for neither side and a win for neither" do
+      standings = StandingsCalculator.rank([:a, :b], [match(nil, :a, :b, 2, 2)])
+
+      a = entry(standings, :a)
+      b = entry(standings, :b)
+
+      assert a.wins == 0 and a.losses == 0
+      assert b.wins == 0 and b.losses == 0
+    end
   end
 end

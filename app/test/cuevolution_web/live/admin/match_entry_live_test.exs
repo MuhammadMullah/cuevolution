@@ -20,7 +20,8 @@ defmodule CuevolutionWeb.Admin.MatchEntryLiveTest do
   end
 
   test "venue representative can record a final score", %{conn: conn} do
-    fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M6")
+    # Pinned to Grassroots — the legacy five-frame format, not Regional's.
+    fixture = fixture_on_stage("Grassroots", %{match_id: "SP26-NBO-MS-A-R1-M6"})
     conn = log_in_admin(conn, "venue_representative")
     {:ok, view, html} = live(conn, ~p"/admin/matches/#{fixture.id}")
 
@@ -53,7 +54,8 @@ defmodule CuevolutionWeb.Admin.MatchEntryLiveTest do
 
   test "the verify panel shows and verifies the recorded final score",
        %{conn: conn} do
-    fixture = insert(:fixture, match_id: "SP26-NBO-MS-A-R1-M8")
+    # Pinned to Grassroots — the legacy five-frame format, not Regional's.
+    fixture = fixture_on_stage("Grassroots", %{match_id: "SP26-NBO-MS-A-R1-M8"})
     rep = insert(:admin, role: "venue_representative")
     {:ok, _result} = Competitions.record_frames(fixture, rep, [:a, :a, :a, :b, :b])
 
@@ -79,5 +81,74 @@ defmodule CuevolutionWeb.Admin.MatchEntryLiveTest do
     result = Cuevolution.Repo.get!(Cuevolution.Competitions.MatchResult, fixture.result_id)
     assert result.score["participant_a_frames"] == 4
     assert result.score["participant_b_frames"] == 1
+  end
+
+  test "a Regional fixture shows the four-frame format and awards the clean-sweep bonus",
+       %{conn: conn} do
+    fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M14"})
+    conn = log_in_admin(conn, "venue_representative")
+    {:ok, view, html} = live(conn, ~p"/admin/matches/#{fixture.id}")
+
+    assert html =~ "four-frame match"
+    assert html =~ ~s(max="4")
+
+    html =
+      view
+      |> form("#record-final-score", %{
+        "result" => %{"participant_a_score" => "4", "participant_b_score" => "0"}
+      })
+      |> render_submit()
+
+    assert html =~ "Four frames recorded."
+
+    result =
+      Cuevolution.Repo.get_by!(Cuevolution.Competitions.MatchResult, fixture_id: fixture.id)
+
+    assert result.winner_participation_id == fixture.participant_a_id
+    assert result.score["points_a"] == 5
+  end
+
+  test "a Regional fixture accepts a 2-2 draw on verify, clearing the winner", %{conn: conn} do
+    fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M15"})
+    rep = insert(:admin, role: "venue_representative")
+
+    {:ok, _result} =
+      Competitions.record_final_score(fixture, rep, %{
+        "participant_a_score" => "3",
+        "participant_b_score" => "1"
+      })
+
+    conn = log_in_admin(conn, "tournament_director")
+    {:ok, view, _html} = live(conn, ~p"/admin/matches/#{fixture.id}")
+
+    html =
+      view
+      |> form("#verify-result", %{
+        "result" => %{"participant_a_score" => "2", "participant_b_score" => "2"}
+      })
+      |> render_submit()
+
+    assert html =~ "verified"
+
+    fixture = Cuevolution.Repo.get!(Cuevolution.Competitions.Fixture, fixture.id)
+    result = Cuevolution.Repo.get!(Cuevolution.Competitions.MatchResult, fixture.result_id)
+    assert is_nil(result.winner_participation_id)
+    assert result.score["points_a"] == 2
+    assert result.score["points_b"] == 2
+  end
+
+  test "an invalid Regional score shows a stage-aware error message", %{conn: conn} do
+    fixture = fixture_on_stage("Regional", %{match_id: "SP26-NBO-MS-A-R1-M16"})
+    conn = log_in_admin(conn, "venue_representative")
+    {:ok, view, _html} = live(conn, ~p"/admin/matches/#{fixture.id}")
+
+    html =
+      view
+      |> form("#record-final-score", %{
+        "result" => %{"participant_a_score" => "3", "participant_b_score" => "2"}
+      })
+      |> render_submit()
+
+    assert html =~ "0 to 4, summing to 4"
   end
 end
