@@ -14,11 +14,11 @@ module "cuevolution" {
   application_secrets_json      = var.application_secrets_json
   application_secrets_version   = var.application_secrets_version
   africastalking_sender_id      = var.africastalking_sender_id
-  db_tier                       = "db-custom-4-16384"
+  db_tier                       = "db-custom-2-8192"
   db_version                    = var.db_version
   db_name                       = var.db_name
   db_user                       = var.db_user
   db_password_version           = 1
-  vm_machine_type               = "e2-standard-2"
+  vm_machine_type               = "e2-medium"
   ssh_public_key                = var.ssh_public_key
 }
