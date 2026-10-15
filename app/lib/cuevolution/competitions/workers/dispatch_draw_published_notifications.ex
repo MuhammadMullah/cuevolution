@@ -17,21 +17,38 @@ defmodule Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications do
   import Ecto.Query
 
   alias Cuevolution.Accounts.Player
-  alias Cuevolution.Competitions.{Fixture, Group, GroupMembership, Round, StageParticipation}
+
+  alias Cuevolution.Competitions.{
+    Draw,
+    Fixture,
+    Group,
+    GroupMembership,
+    Round,
+    StageParticipation
+  }
+
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"draw_id" => draw_id}}) do
+    stage_name = stage_name(draw_id)
+
     entries =
       draw_id
       |> notifications_by_recipient()
       |> Enum.map(fn {player, fixtures} ->
-        {player, %{fixtures: fixtures}, "draw_published:#{draw_id}:#{player.id}"}
+        {player, %{fixtures: fixtures, stage: stage_name},
+         "draw_published:#{draw_id}:#{player.id}"}
       end)
 
     Notifications.dispatch_many(entries, :draw_published)
+  end
+
+  defp stage_name(draw_id) do
+    from(d in Draw, join: s in assoc(d, :stage), where: d.id == ^draw_id, select: s.name)
+    |> Repo.one!()
   end
 
   # A draw's groups are always a single category (male, female, or team),

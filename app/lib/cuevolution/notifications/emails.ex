@@ -106,16 +106,18 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
-  @doc "Sent when a Grassroots draw is published for the player."
-  def draw_published(player, _payload) do
+  @doc "Sent when a draw is published for the player. `payload` must contain `:stage`."
+  def draw_published(player, payload) do
+    %{stage: stage} = payload
     first_name = esc(player.first_name)
+    stage_esc = esc(stage)
 
     base(player)
-    |> subject("You've been drawn — Grassroots")
+    |> subject("You've been drawn — #{stage}")
     |> html_body(
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
-      <p style="margin:0 0 16px;">You've been drawn into your Grassroots group. Log in to see your upcoming fixtures.</p>
+      <p style="margin:0 0 16px;">You've been drawn into your #{stage_esc} group. Log in to see your upcoming fixtures.</p>
       #{button("View My Fixtures", url("/fixtures"))}
       <p style="margin:16px 0 0;">Please carry a copy of your ID for verification at your matches.</p>
       """)
@@ -123,7 +125,7 @@ defmodule Cuevolution.Notifications.Emails do
     |> text_body("""
     Hi #{player.first_name},
 
-    You've been drawn into your Grassroots group. Log in to see your upcoming fixtures: #{url("/fixtures")}
+    You've been drawn into your #{stage} group. Log in to see your upcoming fixtures: #{url("/fixtures")}
 
     Please carry a copy of your ID for verification at your matches.
     """)

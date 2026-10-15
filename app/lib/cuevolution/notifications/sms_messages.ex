@@ -21,8 +21,11 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "SportPesa National Pool Circuit: You've been drawn vs #{opponent} at #{venue} on #{date} #{time}. Good luck!"
   end
 
-  def draw_published(_player, _payload) do
-    "SportPesa National Pool Circuit: You've been drawn. Log in to see your fixtures. Carry a copy of your ID for verification at your matches."
+  @doc "Sent when a draw is published. `payload` must contain `:stage` (e.g. Regional)."
+  def draw_published(_player, payload) do
+    %{stage: stage} = payload
+
+    "SportPesa National Pool Circuit: You've been drawn into your #{stage} group. Log in to see your fixtures. Carry a copy of your ID for verification at your matches."
   end
 
   def grassroots_match_reminder(_player, %{deadline: deadline}) do

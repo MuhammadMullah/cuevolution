@@ -34,7 +34,7 @@ defmodule Cuevolution.Notifications do
     "team_player_left" => ~w(team_name player_name roster_count eligible),
     "player_location_updated" => ~w(region_name venue_name),
     "venue_deactivated" => ~w(venue_name suggested_venues),
-    "draw_published" => ~w(fixtures),
+    "draw_published" => ~w(fixtures stage),
     "grassroots_match_reminder" => ~w(deadline),
     "grassroots_deadline_apology" => ~w(deadline),
     "birthday_greeting" => []
