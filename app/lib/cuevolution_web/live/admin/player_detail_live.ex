@@ -28,6 +28,7 @@ defmodule CuevolutionWeb.PlayerDetailLive do
        page_title: "Player Detail",
        player: player,
        notifications: notifications,
+       gender_form: to_form(Player.gender_changeset(player, %{}), as: :player),
        anonymize_warnings: nil,
        editing_venue: false,
        venue_options: [],
@@ -80,6 +81,35 @@ defmodule CuevolutionWeb.PlayerDetailLive do
     else
       {:noreply,
        put_flash(socket, :error, "You don't have permission to change a player's location.")}
+    end
+  end
+
+  def handle_event("save_gender", %{"player" => %{"gender" => gender}}, socket) do
+    case Accounts.admin_change_gender(
+           socket.assigns.player,
+           gender,
+           socket.assigns.current_admin
+         ) do
+      {:ok, player} ->
+        {:noreply,
+         socket
+         |> assign(player: Repo.preload(player, [:region, :preferred_venue], force: true))
+         |> assign(:gender_form, to_form(Player.gender_changeset(player, %{}), as: :player))
+         |> put_flash(
+           :info,
+           "Player category updated. The old unplayed draw assignment was removed."
+         )}
+
+      {:error, :has_recorded_results} ->
+        {:noreply,
+         put_flash(socket, :error, "This player's category cannot change after recorded results.")}
+
+      {:error, :unauthorized} ->
+        {:noreply,
+         put_flash(socket, :error, "You don't have permission to change a player's category.")}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :gender_form, to_form(changeset, as: :player))}
     end
   end
 

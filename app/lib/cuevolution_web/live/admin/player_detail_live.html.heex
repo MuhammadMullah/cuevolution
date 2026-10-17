@@ -35,6 +35,20 @@
       </div>
     </div>
 
+    <div
+      :if={Admin.can?(@current_admin, :manage_players)}
+      id="player-gender-form"
+      class="mt-4 flex flex-wrap items-end gap-2 border-t border-ink-100 pt-4"
+    >
+      <.input
+        field={@gender_form[:gender]}
+        type="select"
+        label="Competition category"
+        options={[{"Male", "male"}, {"Female", "female"}]}
+        phx-change="save_gender"
+      />
+    </div>
+
     <div class="border-t border-ink-100 pt-3">
       <div class="flex items-center justify-between gap-3">
         <div>

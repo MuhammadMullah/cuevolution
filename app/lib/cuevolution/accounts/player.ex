@@ -158,6 +158,14 @@ defmodule Cuevolution.Accounts.Player do
     )
   end
 
+  @doc "Updates the player's competition category."
+  def gender_changeset(player, attrs) do
+    player
+    |> cast(attrs, [:gender])
+    |> validate_required([:gender])
+    |> validate_inclusion(:gender, @genders)
+  end
+
   @doc "Updates just the region (spec 003 US3) — caller (`Accounts.change_region/2`) enforces the region-lock before calling this."
   def region_changeset(player, attrs) do
     player

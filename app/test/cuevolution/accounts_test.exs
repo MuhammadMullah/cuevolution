@@ -1,6 +1,8 @@
 defmodule Cuevolution.AccountsTest do
   use Cuevolution.DataCase, async: true
 
+  import Ecto.Query
+
   alias Cuevolution.Accounts
   alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.AdminActionLog
@@ -8,6 +10,8 @@ defmodule Cuevolution.AccountsTest do
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.{GroupMembership, Stage, StageParticipation}
+  alias Cuevolution.Repo
   alias Cuevolution.Teams
 
   describe "authenticate_admin/2" do
@@ -1048,6 +1052,40 @@ defmodule Cuevolution.AccountsTest do
                Accounts.update_personal_details(player, %{"location" => "Nakuru"})
 
       assert updated.email == "keep@example.com"
+    end
+  end
+
+  describe "admin_change_gender/3" do
+    test "updates the participation category and removes an unplayed draw assignment" do
+      player = insert(:player, gender: "female")
+      stage = Repo.get_by!(Stage, order: 1)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          stage_id: stage.id,
+          category: "female"
+        )
+
+      group =
+        insert(:group,
+          stage_id: stage.id,
+          region_id: player.region_id,
+          category: "female",
+          draw_id: nil
+        )
+
+      insert(:group_membership, group_id: group.id, stage_participation_id: participation.id)
+      admin = insert(:admin, role: "tournament_director")
+
+      assert {:ok, updated} = Accounts.admin_change_gender(player, "male", admin)
+      assert updated.gender == "male"
+      assert Repo.get!(StageParticipation, participation.id).category == "male"
+
+      refute Repo.exists?(
+               from gm in GroupMembership, where: gm.stage_participation_id == ^participation.id
+             )
     end
   end
 

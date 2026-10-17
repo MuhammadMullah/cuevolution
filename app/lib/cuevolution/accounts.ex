@@ -15,6 +15,9 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Accounts.PlayerToken
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.Fixture
+  alias Cuevolution.Competitions.GroupMembership
+  alias Cuevolution.Competitions.MatchResult
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications
   alias Cuevolution.Notifications.Workers.SendAdminInvitationEmailWorker
@@ -951,6 +954,85 @@ defmodule Cuevolution.Accounts do
     player
     |> Player.personal_details_changeset(attrs)
     |> Repo.update()
+  end
+
+  @doc "Corrects a player's competition gender and removes an unplayed stale draw assignment."
+  def admin_change_gender(%Player{} = player, gender, %Admin{} = admin) do
+    with true <- Admin.can?(admin, :manage_players),
+         true <- gender in ["male", "female"] do
+      do_admin_change_gender(player, gender, admin)
+    else
+      false -> {:error, :unauthorized}
+    end
+  end
+
+  defp do_admin_change_gender(player, gender, admin) do
+    participation =
+      Repo.one(
+        from sp in StageParticipation,
+          where: sp.player_id == ^player.id,
+          limit: 1
+      )
+
+    if participation && participation.category != gender &&
+         participation_has_result?(participation.id) do
+      {:error, :has_recorded_results}
+    else
+      persist_gender_change(player, gender, participation, admin)
+    end
+  end
+
+  defp persist_gender_change(player, gender, participation, admin) do
+    Multi.new()
+    |> Multi.update(:player, Player.gender_changeset(player, %{gender: gender}))
+    |> Multi.run(:participation, fn repo, _changes ->
+      update_participation_category(repo, participation, gender)
+    end)
+    |> Multi.run(:log, fn _repo, %{player: updated} ->
+      log_admin_action("change_player_gender", admin, updated,
+        prior_value: %{"gender" => player.gender},
+        new_value: %{"gender" => gender}
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: updated}} -> {:ok, updated}
+      {:error, :player, changeset, _changes} -> {:error, changeset}
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  defp update_participation_category(_repo, nil, _gender), do: {:ok, nil}
+
+  defp update_participation_category(repo, participation, gender) do
+    if participation.category == gender do
+      {:ok, participation}
+    else
+      repo.delete_all(
+        from gm in GroupMembership,
+          where: gm.stage_participation_id == ^participation.id
+      )
+
+      repo.delete_all(
+        from f in Fixture,
+          where:
+            is_nil(f.result_id) and
+              (f.participant_a_id == ^participation.id or f.participant_b_id == ^participation.id)
+      )
+
+      participation
+      |> StageParticipation.changeset(%{category: gender})
+      |> repo.update()
+    end
+  end
+
+  defp participation_has_result?(participation_id) do
+    Repo.exists?(
+      from mr in MatchResult,
+        join: f in Fixture,
+        on: f.id == mr.fixture_id,
+        where: f.participant_a_id == ^participation_id or f.participant_b_id == ^participation_id
+    )
   end
 
   @doc "Saves a player's identification details required for match verification."
