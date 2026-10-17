@@ -10,7 +10,7 @@ defmodule Cuevolution.AccountsTest do
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
-  alias Cuevolution.Competitions.{GroupMembership, Stage, StageParticipation}
+  alias Cuevolution.Competitions.{Draw, GroupMembership, Stage, StageParticipation}
   alias Cuevolution.Repo
   alias Cuevolution.Teams
 
@@ -1005,6 +1005,23 @@ defmodule Cuevolution.AccountsTest do
       new_region = build(:region)
       assert {:error, :region_locked} = Accounts.change_region(player, new_region.id)
     end
+
+    test "change_region/2 also re-stamps the player's existing undrawn StageParticipation" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      new_region = build(:region)
+
+      assert {:ok, updated} = Accounts.change_region(player, new_region.id)
+      assert updated.region_id == new_region.id
+      assert Repo.get!(StageParticipation, participation.id).region_id == new_region.id
+    end
   end
 
   describe "update_personal_details/2" do
@@ -1230,6 +1247,68 @@ defmodule Cuevolution.AccountsTest do
 
       assert {:error, changeset} = Accounts.admin_change_venue(player, nil, admin)
       refute changeset.valid?
+    end
+  end
+
+  describe "admin_change_location/4" do
+    test "also re-stamps the player's existing undrawn StageParticipation with the new region" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      new_region = build(:region)
+      new_venue = insert(:venue, region_id: new_region.id)
+      admin = insert(:admin, role: "super_admin")
+
+      assert {:ok, updated} =
+               Accounts.admin_change_location(player, new_region.id, new_venue.id, admin)
+
+      assert updated.region_id == new_region.id
+      assert Repo.get!(StageParticipation, participation.id).region_id == new_region.id
+    end
+
+    test "leaves an already-drawn StageParticipation's region untouched" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      group = insert(:group, region_id: player.region_id, category: player.gender)
+
+      {:ok, draw} =
+        %Draw{}
+        |> Draw.changeset(%{
+          stage_id: group.stage_id,
+          region_id: player.region_id,
+          category: player.gender,
+          state: "draft",
+          formula_group_count: 1
+        })
+        |> Repo.insert()
+
+      Repo.update!(Ecto.Changeset.change(group, draw_id: draw.id))
+      insert(:group_membership, group_id: group.id, stage_participation_id: participation.id)
+
+      new_region = build(:region)
+      new_venue = insert(:venue, region_id: new_region.id)
+      admin = insert(:admin, role: "super_admin")
+
+      assert {:ok, updated} =
+               Accounts.admin_change_location(player, new_region.id, new_venue.id, admin)
+
+      assert updated.region_id == new_region.id
+
+      assert Repo.get!(StageParticipation, participation.id).region_id ==
+               player.region_id
     end
   end
 

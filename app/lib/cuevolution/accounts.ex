@@ -1047,9 +1047,11 @@ defmodule Cuevolution.Accounts do
     if region_locked?(player) do
       {:error, :region_locked}
     else
-      player
-      |> Player.region_changeset(%{region_id: region_id})
-      |> Repo.update()
+      persist_region_change(
+        player,
+        Player.region_changeset(player, %{region_id: region_id}),
+        region_id
+      )
     end
   end
 
@@ -1136,6 +1138,15 @@ defmodule Cuevolution.Accounts do
          prior_region_id,
          prior_venue_id
        ) do
+    # Unlike the self-service `change_region*` paths, this admin path has no
+    # `region_locked?/1` gate (it exists to correct a player after that lock
+    # has already taken effect), so the region_id re-stamp below is scoped
+    # to `Competitions.undrawn_participation_ids/1` rather than every
+    # participation the player has — a participation already dealt into a
+    # group or carrying a match result keeps its original `region_id`,
+    # preserving that completed draw's history.
+    safe_participation_ids = Competitions.undrawn_participation_ids(player.id)
+
     Multi.new()
     |> Multi.update(
       :player,
@@ -1143,6 +1154,13 @@ defmodule Cuevolution.Accounts do
         region_id: region_id,
         preferred_venue_id: venue.id
       })
+    )
+    |> Multi.update_all(
+      :participations,
+      fn _changes ->
+        from(sp in StageParticipation, where: sp.id in ^safe_participation_ids)
+      end,
+      set: [region_id: region_id]
     )
     |> Multi.run(:log, fn _repo, %{player: updated} ->
       log_location_change(
@@ -1329,9 +1347,41 @@ defmodule Cuevolution.Accounts do
     if region_locked?(player) do
       {:error, :region_locked}
     else
-      player
-      |> Player.region_and_venue_changeset(%{region_id: region_id, preferred_venue_id: venue_id})
-      |> Repo.update()
+      persist_region_change(
+        player,
+        Player.region_and_venue_changeset(player, %{
+          region_id: region_id,
+          preferred_venue_id: venue_id
+        }),
+        region_id
+      )
+    end
+  end
+
+  # Updates the player, then re-stamps `region_id` onto whichever of their
+  # `StageParticipation` rows are still undrawn and result-free
+  # (`Competitions.undrawn_participation_ids/1`) — never a row that's
+  # already been dealt into a group or played a match, so a region
+  # correction never drags completed draw history into a different region.
+  # Without this, a Regional-category (female/team) participation keeps the
+  # `region_id` it was stamped with at enrollment — unlike a Grassroots male
+  # draw, which reads the player's live `preferred_venue_id` instead — so a
+  # region correction before that participation's draw silently leaves its
+  # draw eligibility pointing at the old region.
+  defp persist_region_change(player, player_changeset, region_id) do
+    safe_ids = Competitions.undrawn_participation_ids(player.id)
+
+    Multi.new()
+    |> Multi.update(:player, player_changeset)
+    |> Multi.update_all(
+      :participations,
+      fn _changes -> from(sp in StageParticipation, where: sp.id in ^safe_ids) end,
+      set: [region_id: region_id]
+    )
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{player: updated}} -> {:ok, updated}
+      {:error, :player, changeset, _changes} -> {:error, changeset}
     end
   end
 

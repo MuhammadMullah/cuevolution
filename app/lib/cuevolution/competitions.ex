@@ -4794,6 +4794,48 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
+  Ids of `player_id`'s own `StageParticipation` rows (directly theirs, not
+  via a team) that have no drawn group membership and no recorded match
+  result — the rows it's still safe to re-stamp with a corrected
+  `region_id`. Per-participation version of `player_has_draw?/1` and
+  `player_has_match_result?/1`'s checks, used by `Accounts`' region-change
+  functions so that an admin correcting a player's region after one
+  participation has already been drawn doesn't silently drag that
+  participation's completed draw history into a different region along
+  with it — only participations still ahead of any draw move.
+  """
+  def undrawn_participation_ids(player_id) do
+    drawn_ids =
+      from gm in GroupMembership,
+        join: g in Group,
+        on: g.id == gm.group_id,
+        where: not is_nil(g.draw_id),
+        select: gm.stage_participation_id
+
+    resulted_from_a =
+      from mr in MatchResult,
+        join: f in Fixture,
+        on: f.id == mr.fixture_id,
+        select: f.participant_a_id
+
+    resulted_from_b =
+      from mr in MatchResult,
+        join: f in Fixture,
+        on: f.id == mr.fixture_id,
+        select: f.participant_b_id
+
+    resulted_ids = resulted_from_a |> union_all(^resulted_from_b)
+
+    from(sp in StageParticipation,
+      where:
+        sp.player_id == ^player_id and sp.id not in subquery(drawn_ids) and
+          sp.id not in subquery(resulted_ids),
+      select: sp.id
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Whether `player_id` (individually, or via their team) has a fixture with
   no recorded result yet (spec 010 US2/FR-007) — the anonymize
   pending-fixture warning.
