@@ -8,6 +8,7 @@ defmodule Cuevolution.AccountsTest do
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Accounts.Region
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Teams
 
   describe "authenticate_admin/2" do
@@ -978,6 +979,26 @@ defmodule Cuevolution.AccountsTest do
 
       assert {:ok, updated} = Accounts.change_region(player, new_region.id)
       assert updated.region_id == new_region.id
+    end
+
+    # The Stages page filters on the participation's own region snapshot,
+    # so a player left behind there is invisible under every region tab.
+    test "change_region/2 carries the player's stage participations across" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      new_region = build(:region)
+
+      assert {:ok, _updated} = Accounts.change_region(player, new_region.id)
+
+      assert Cuevolution.Repo.get!(StageParticipation, participation.id).region_id ==
+               new_region.id
     end
 
     test "change_region/2 rejects the change when locked, even bypassing any UI check" do

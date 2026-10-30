@@ -37,9 +37,67 @@ defmodule Cuevolution.Accounts.ListPlayersFilteredTest do
       target = insert(:player, username: "SpecialPlayer")
       _other = insert(:player, username: "someoneelse")
 
-      results = Accounts.list_players_filtered(%{username: "special"})
+      results = Accounts.list_players_filtered(%{search: "special"})
 
       assert [found] = results
+      assert found.id == target.id
+    end
+
+    test "filters by name as well as username" do
+      target =
+        insert(:player, first_name: "Martin", last_name: "Mwangi", username: "Lesta")
+
+      _other = insert(:player, first_name: "Jeff", last_name: "Kibet", username: "Blackmamba")
+
+      for term <- ["Martin", "Mwangi", "Martin Mwangi", "Mwangi Martin", "martin mwangi", "Lesta"] do
+        assert [found] = Accounts.list_players_filtered(%{search: term}),
+               "expected #{term} to match exactly one player"
+
+        assert found.id == target.id
+      end
+    end
+
+    test "ignores the @ the console prints in front of a username" do
+      target = insert(:player, username: "MAS")
+
+      for term <- ["MAS", "@MAS", "mas", " @MAS "] do
+        assert [found] = Accounts.list_players_filtered(%{search: term})
+        assert found.id == target.id
+      end
+    end
+
+    test "still matches usernames that contain @ themselves" do
+      bk = insert(:player, username: "Bk@123")
+      vans = insert(:player, username: "@Vans01")
+
+      for {term, expected} <- [
+            {"Bk@123", bk},
+            {"@Bk@123", bk},
+            {"BK@123", bk},
+            {"@Vans01", vans},
+            {"Vans01", vans},
+            {"@@Vans01", vans}
+          ] do
+        assert [found] = Accounts.list_players_filtered(%{search: term}),
+               "expected #{term} to match exactly one player"
+
+        assert found.id == expected.id
+      end
+    end
+
+    test "treats a blank term as no filter" do
+      insert_list(3, :player)
+
+      for term <- [nil, "", "   "] do
+        assert length(Accounts.list_players_filtered(%{search: term})) == 3
+      end
+    end
+
+    test "matches LIKE metacharacters literally" do
+      target = insert(:player, first_name: "Fifty", last_name: "Percent%")
+      _other = insert(:player, first_name: "Other", last_name: "Player")
+
+      assert [found] = Accounts.list_players_filtered(%{search: "Percent%"})
       assert found.id == target.id
     end
 
@@ -70,7 +128,7 @@ defmodule Cuevolution.Accounts.ListPlayersFilteredTest do
         Accounts.list_players_filtered(%{
           region_id: region.id,
           category: "female",
-          username: "combo"
+          search: "combo"
         })
 
       assert [found] = results

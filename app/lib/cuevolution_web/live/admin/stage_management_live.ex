@@ -73,12 +73,13 @@ defmodule CuevolutionWeb.StageManagementLive do
 
   def handle_event("filter_participants", %{"filter" => params}, socket) do
     region = Enum.find(socket.assigns.regions, &(&1.id == params["region_id"]))
+    category = blank_to_nil(params["category"])
 
     {:noreply,
      socket
      |> assign(:region, region)
-     |> assign(:category, params["category"])
-     |> assign_previous_stage(socket.assigns.stage, params["category"])
+     |> assign(:category, category)
+     |> assign_previous_stage(socket.assigns.stage, category)
      |> assign(:venue_filter, blank_to_nil(params["venue_id"]))
      |> assign_filter_form()
      |> load_participations()}
@@ -249,7 +250,7 @@ defmodule CuevolutionWeb.StageManagementLive do
       :participations,
       Competitions.list_participations(%{
         stage_id: socket.assigns.stage.id,
-        region_id: socket.assigns.region.id,
+        region_id: region_id(socket),
         category: socket.assigns.category,
         venue_id: socket.assigns.venue_filter,
         search: socket.assigns.search_filter
@@ -284,13 +285,19 @@ defmodule CuevolutionWeb.StageManagementLive do
 
   defp assign_filter_form(socket) do
     params = %{
-      "region_id" => socket.assigns.region.id,
+      "region_id" => region_id(socket),
       "category" => socket.assigns.category,
       "venue_id" => socket.assigns.venue_filter
     }
 
     assign(socket, :filter_form, to_form(params, as: :filter))
   end
+
+  # Region and category are both clearable now ("All regions"/"All
+  # categories"): a participation carries its own snapshot of each, taken
+  # at enrollment, and a snapshot that has since drifted from the player's
+  # profile used to leave them unreachable from every tab on this page.
+  defp region_id(socket), do: socket.assigns.region && socket.assigns.region.id
 
   defp assign_search_form(socket) do
     assign(socket, :search_form, to_form(%{"term" => socket.assigns.search_filter}, as: :search))

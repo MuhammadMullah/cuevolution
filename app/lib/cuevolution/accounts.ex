@@ -21,6 +21,7 @@ defmodule Cuevolution.Accounts do
   alias Cuevolution.Notifications.Workers.SendAdminPasswordResetEmailWorker
   alias Cuevolution.Notifications.Workers.SendPasswordResetEmailWorker
   alias Cuevolution.Repo
+  alias Cuevolution.SearchTerm
   alias Cuevolution.Teams.Team
   alias Cuevolution.Venues
   alias Cuevolution.Venues.Venue
@@ -960,14 +961,30 @@ defmodule Cuevolution.Accounts do
     |> Repo.update()
   end
 
-  @doc "Updates `player`'s region, rejecting the change once `region_locked?/1` is true."
+  @doc """
+  Updates `player`'s region, rejecting the change once `region_locked?/1`
+  is true.
+
+  Their stage participations are repointed at the new region in the same
+  transaction — the Stages page filters on the participation's own region
+  column, so leaving it behind would drop the player out of every region
+  tab there. `region_locked?/1` already guarantees no draw exists yet, so
+  nothing downstream is anchored to the old region.
+  """
   def change_region(%Player{} = player, region_id) do
     if region_locked?(player) do
       {:error, :region_locked}
     else
-      player
-      |> Player.region_changeset(%{region_id: region_id})
-      |> Repo.update()
+      Multi.new()
+      |> Multi.update(:player, Player.region_changeset(player, %{region_id: region_id}))
+      |> Multi.run(:participations, fn _repo, %{player: updated} ->
+        {:ok, Competitions.realign_participation_regions(updated.id, updated.region_id)}
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{player: updated}} -> {:ok, updated}
+        {:error, :player, changeset, _changes} -> {:error, changeset}
+      end
     end
   end
 
@@ -1062,6 +1079,9 @@ defmodule Cuevolution.Accounts do
         preferred_venue_id: venue.id
       })
     )
+    |> Multi.run(:participations, fn _repo, %{player: updated} ->
+      {:ok, Competitions.realign_participation_regions(updated.id, updated.region_id)}
+    end)
     |> Multi.run(:log, fn _repo, %{player: updated} ->
       log_location_change(
         action_type,
@@ -1323,17 +1343,18 @@ defmodule Cuevolution.Accounts do
   Filterable, index-backed player directory query (spec 010 US1).
 
   Supported filters: `:region_id`, `:venue_id` (`preferred_venue_id`),
-  `:category` (gender), `:username` (case-insensitive substring search),
-  `:stage_id` (current `Competitions.StageParticipation`, via an indexed
-  `EXISTS` subquery rather than loading every participation into memory —
-  see the admin Directory, which used to do exactly that).
+  `:category` (gender), `:search` (case-insensitive substring over name
+  *and* username — see `filter_by_search/2`), `:stage_id` (current
+  `Competitions.StageParticipation`, via an indexed `EXISTS` subquery
+  rather than loading every participation into memory — see the admin
+  Directory, which used to do exactly that).
   """
   def list_players_filtered(filters) do
     Player
     |> filter_by_region(filters[:region_id])
     |> filter_by_venue(filters[:venue_id])
     |> filter_by_category(filters[:category])
-    |> filter_by_username(filters[:username])
+    |> filter_by_search(filters[:search])
     |> filter_by_stage(filters[:stage_id])
     |> order_by(asc: :username)
     |> preload(:region)
@@ -1347,7 +1368,7 @@ defmodule Cuevolution.Accounts do
     |> filter_by_region(filters[:region_id])
     |> filter_by_venue(filters[:venue_id])
     |> filter_by_category(filters[:category])
-    |> filter_by_username(filters[:username])
+    |> filter_by_search(filters[:search])
     |> filter_by_stage(filters[:stage_id])
     |> Repo.aggregate(:count, :id)
   end
@@ -1367,11 +1388,29 @@ defmodule Cuevolution.Accounts do
   defp filter_by_category(query, nil), do: query
   defp filter_by_category(query, category), do: where(query, gender: ^category)
 
-  defp filter_by_username(query, nil), do: query
+  # Matches the term against username *and* the player's name, in both
+  # orders — the Directory lists players by name while storing a separate
+  # handle, so an admin searching "Martin Mwangi" for @Lesta otherwise got
+  # nothing back. `SearchTerm.patterns/1` absorbs the input noise (stray
+  # whitespace, the `@` the UI prints before a username); an empty list
+  # means the term held nothing searchable, so the filter is skipped.
+  defp filter_by_search(query, term) do
+    case SearchTerm.patterns(term) do
+      [] -> query
+      patterns -> where(query, ^player_search_match(patterns))
+    end
+  end
 
-  defp filter_by_username(query, username) do
-    pattern = "%" <> escape_like_pattern(username) <> "%"
-    where(query, [p], ilike(p.username, ^pattern))
+  defp player_search_match(patterns) do
+    Enum.reduce(patterns, dynamic(false), fn pattern, acc ->
+      dynamic(
+        [p],
+        ^acc or ilike(p.username, ^pattern) or ilike(p.first_name, ^pattern) or
+          ilike(p.last_name, ^pattern) or
+          ilike(fragment("? || ' ' || ?", p.first_name, p.last_name), ^pattern) or
+          ilike(fragment("? || ' ' || ?", p.last_name, p.first_name), ^pattern)
+      )
+    end)
   end
 
   defp filter_by_stage(query, nil), do: query

@@ -138,6 +138,7 @@
               <.input
                 field={@filter_form[:region_id]}
                 type="select"
+                prompt="All regions"
                 options={Enum.map(@regions, &{&1.name, &1.id})}
                 class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               />
@@ -147,6 +148,7 @@
               <.input
                 field={@filter_form[:category]}
                 type="select"
+                prompt="All categories"
                 options={@categories}
                 class="w-full rounded-full border border-ink-300 bg-white px-3 py-2 text-sm text-ink-950 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
               />
@@ -212,9 +214,9 @@
       :if={@participations == []}
       class="rounded-2xl border border-ink-200 bg-white px-[22px] py-9 text-center text-sm text-ink-400 shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
     >
-      {if @venue_filter || @search_filter,
+      {if @venue_filter || @search_filter || @region || @category,
         do: "No participants match these filters.",
-        else: "No participants for this stage/region/category yet."}
+        else: "No participants in this stage yet."}
     </div>
   </div>
 

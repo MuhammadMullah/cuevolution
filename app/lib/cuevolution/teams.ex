@@ -14,6 +14,7 @@ defmodule Cuevolution.Teams do
   alias Cuevolution.Competitions.StageParticipation
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
+  alias Cuevolution.SearchTerm
   alias Cuevolution.Teams.Team
   alias Cuevolution.Teams.TeamInvitation
   alias Cuevolution.Teams.Workers.ExpireTeamInvitationWorker
@@ -945,11 +946,21 @@ defmodule Cuevolution.Teams do
   defp filter_by_venue(query, nil), do: query
   defp filter_by_venue(query, venue_id), do: where(query, match_venue_id: ^venue_id)
 
-  defp filter_by_name(query, nil), do: query
-
+  # Shares `SearchTerm.patterns/1` with the player side of the Directory so
+  # one term behaves identically against players and teams.
   defp filter_by_name(query, name) do
-    pattern = "%" <> String.replace(name, ~w(% _), fn c -> "\\" <> c end) <> "%"
-    where(query, [t], ilike(t.name, ^pattern))
+    case SearchTerm.patterns(name) do
+      [] ->
+        query
+
+      patterns ->
+        where(
+          query,
+          ^Enum.reduce(patterns, dynamic(false), fn pattern, acc ->
+            dynamic([t], ^acc or ilike(t.name, ^pattern))
+          end)
+        )
+    end
   end
 
   defp filter_by_stage(query, nil), do: query

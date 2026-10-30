@@ -40,6 +40,166 @@ defmodule CuevolutionWeb.StageManagementLiveTest do
     assert html =~ player.first_name
   end
 
+  # A participation carries its own region/category snapshot taken at
+  # enrollment. When one drifts from the player's profile, these filters are
+  # the only way the row stays reachable at all.
+  describe "All regions / All categories filters" do
+    setup %{conn: conn} do
+      grassroots = Repo.get_by!(Stage, name: "Grassroots")
+      [region_a, region_b | _] = Accounts.list_regions()
+
+      here = insert(:player, region_id: region_a.id, gender: "male", last_name: "Inregion")
+      elsewhere = insert(:player, region_id: region_b.id, gender: "male", last_name: "Offregion")
+      female = insert(:player, region_id: region_a.id, gender: "female", last_name: "Othercat")
+
+      for {player, region, category} <- [
+            {here, region_a, "male"},
+            {elsewhere, region_b, "male"},
+            {female, region_a, "female"}
+          ] do
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          region_id: region.id,
+          category: category,
+          player_id: player.id
+        )
+      end
+
+      {:ok, view, _html} = live(log_in_admin(conn), ~p"/admin/stages")
+
+      %{view: view, here: here, elsewhere: elsewhere, female: female, region_a: region_a}
+    end
+
+    defp filter(view, params) do
+      view |> form("#participant-filter-form", filter: params) |> render_change()
+    end
+
+    test "default view is still scoped to one region and category", %{
+      view: view,
+      here: here,
+      elsewhere: elsewhere,
+      female: female,
+      region_a: region_a
+    } do
+      html = filter(view, %{"region_id" => region_a.id, "category" => "male"})
+
+      assert html =~ here.last_name
+      refute html =~ elsewhere.last_name
+      refute html =~ female.last_name
+    end
+
+    test "clearing the region shows participants from every region", %{
+      view: view,
+      here: here,
+      elsewhere: elsewhere
+    } do
+      html = filter(view, %{"region_id" => "", "category" => "male"})
+
+      assert html =~ here.last_name
+      assert html =~ elsewhere.last_name
+    end
+
+    test "clearing the category shows every category", %{
+      view: view,
+      here: here,
+      female: female,
+      region_a: region_a
+    } do
+      html = filter(view, %{"region_id" => region_a.id, "category" => ""})
+
+      assert html =~ here.last_name
+      assert html =~ female.last_name
+    end
+
+    test "clearing both reaches a participation stranded on either axis", %{
+      view: view,
+      here: here,
+      elsewhere: elsewhere,
+      female: female
+    } do
+      html = filter(view, %{"region_id" => "", "category" => ""})
+
+      assert html =~ here.last_name
+      assert html =~ elsewhere.last_name
+      assert html =~ female.last_name
+    end
+  end
+
+  describe "participant search" do
+    setup %{conn: conn} do
+      grassroots = Repo.get_by!(Stage, name: "Grassroots")
+      region = List.first(Accounts.list_regions())
+
+      player =
+        insert(:player,
+          region_id: region.id,
+          gender: "male",
+          first_name: "Mohamed",
+          last_name: "Said",
+          username: "MAS"
+        )
+
+      other =
+        insert(:player,
+          region_id: region.id,
+          gender: "male",
+          first_name: "Vanessa",
+          last_name: "Otieno",
+          username: "@Vans01"
+        )
+
+      for p <- [player, other] do
+        insert(:stage_participation,
+          stage_id: grassroots.id,
+          region_id: region.id,
+          category: "male",
+          player_id: p.id
+        )
+      end
+
+      {:ok, view, _html} = live(log_in_admin(conn), ~p"/admin/stages")
+
+      %{view: view, player: player, other: other}
+    end
+
+    defp search(view, term) do
+      view |> form("#participant-search-form", search: %{"term" => term}) |> render_change()
+    end
+
+    test "matches on name as well as username", %{view: view, player: player, other: other} do
+      for term <- ["Mohamed", "Said", "Mohamed Said", "Said Mohamed", "mohamed said"] do
+        html = search(view, term)
+        assert html =~ player.last_name, "expected #{term} to match"
+        refute html =~ other.last_name
+      end
+    end
+
+    test "matches a username typed with the @ prefix the UI shows", %{view: view, player: player} do
+      for term <- ["MAS", "@MAS", "mas", " @MAS "] do
+        assert search(view, term) =~ player.last_name, "expected #{inspect(term)} to match"
+      end
+    end
+
+    test "matches a username that itself contains @", %{view: view, other: other} do
+      for term <- ["@Vans01", "Vans01", "@@Vans01", "@VANS01"] do
+        assert search(view, term) =~ other.last_name, "expected #{term} to match"
+      end
+    end
+
+    test "a blank term clears the filter rather than hiding everyone", %{
+      view: view,
+      player: player,
+      other: other
+    } do
+      refute search(view, "Mohamed") =~ other.last_name
+
+      html = search(view, "   ")
+
+      assert html =~ player.last_name
+      assert html =~ other.last_name
+    end
+  end
+
   test "advancing a participant moves them to the next stage", %{conn: conn} do
     grassroots = Repo.get_by!(Stage, name: "Grassroots")
     region = List.first(Accounts.list_regions())
