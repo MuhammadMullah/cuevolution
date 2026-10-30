@@ -8,6 +8,7 @@ defmodule Cuevolution.Factory do
 
   alias Cuevolution.Competitions.{
     CuevoPointsEntry,
+    Draw,
     Fixture,
     Group,
     GroupMembership,
@@ -135,6 +136,16 @@ defmodule Cuevolution.Factory do
       stage_id: stage.id,
       category: player.gender,
       joined_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+  end
+
+  def draw_factory do
+    %Draw{
+      stage_id: build(:stage).id,
+      region_id: build(:region).id,
+      category: Enum.random(~w(male female team)),
+      state: "published",
+      formula_group_count: 2
     }
   end
 

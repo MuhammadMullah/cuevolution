@@ -32,6 +32,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
+  alias Cuevolution.SearchTerm
   alias Cuevolution.Teams
   alias Cuevolution.Teams.Team
   alias Cuevolution.Venues.Venue
@@ -536,17 +537,26 @@ defmodule Cuevolution.Competitions do
     )
   end
 
-  defp participant_name_match(nil), do: dynamic(true)
-
+  # Shares `SearchTerm.patterns/1` with the Directory so one typed term
+  # behaves the same on both pages — including the `@` the UI prints before
+  # a username, which is not part of the stored handle.
   defp participant_name_match(search) do
-    pattern = "%" <> escape_like_pattern(search) <> "%"
+    case SearchTerm.patterns(search) do
+      [] ->
+        dynamic(true)
 
-    dynamic(
-      [player: player, team: team],
-      ilike(fragment("? || ' ' || ?", player.first_name, player.last_name), ^pattern) or
-        ilike(player.username, ^pattern) or
-        ilike(team.name, ^pattern)
-    )
+      patterns ->
+        Enum.reduce(patterns, dynamic(false), fn pattern, acc ->
+          dynamic(
+            [player: player, team: team],
+            ^acc or
+              ilike(fragment("? || ' ' || ?", player.first_name, player.last_name), ^pattern) or
+              ilike(fragment("? || ' ' || ?", player.last_name, player.first_name), ^pattern) or
+              ilike(player.first_name, ^pattern) or ilike(player.last_name, ^pattern) or
+              ilike(player.username, ^pattern) or ilike(team.name, ^pattern)
+          )
+        end)
+    end
   end
 
   @doc """
@@ -4777,6 +4787,39 @@ defmodule Cuevolution.Competitions do
         f.participant_b_id in subquery(participation_ids)
     )
     |> Repo.exists?()
+  end
+
+  @doc """
+  Repoints `player_id`'s stage participations at `region_id`, returning the
+  number of rows realigned.
+
+  `enroll_player_changeset/1` snapshots the player's region onto the
+  participation at enrollment and nothing refreshed it afterwards, while
+  the admin Stages page filters on exactly that column — so a player whose
+  region was corrected silently dropped out of every region's participant
+  list: still in `players`, unreachable in the console.
+
+  Participations already dealt into a published draw are deliberately left
+  behind: their group, fixtures and results all belong to the old region,
+  so moving one across regions is a competition decision for an admin to
+  make explicitly, not a side effect of editing a profile. Those are still
+  reachable on the Stages page via its "All regions" filter.
+  """
+  def realign_participation_regions(player_id, region_id) do
+    drawn_participation_ids =
+      GroupMembership
+      |> join(:inner, [gm], g in Group, on: g.id == gm.group_id)
+      |> where([_gm, g], not is_nil(g.draw_id))
+      |> select([gm], gm.stage_participation_id)
+
+    {count, _} =
+      StageParticipation
+      |> where([sp], sp.player_id == ^player_id)
+      |> where([sp], sp.region_id != ^region_id)
+      |> where([sp], sp.id not in subquery(drawn_participation_ids))
+      |> Repo.update_all(set: [region_id: region_id, updated_at: NaiveDateTime.utc_now(:second)])
+
+    count
   end
 
   @doc """

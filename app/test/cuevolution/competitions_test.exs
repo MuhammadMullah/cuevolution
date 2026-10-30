@@ -348,6 +348,89 @@ defmodule Cuevolution.CompetitionsTest do
     end
   end
 
+  describe "realign_participation_regions/2" do
+    test "repoints a player's participations at their new region" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      new_region = build(:region)
+
+      assert Competitions.realign_participation_regions(player.id, new_region.id) == 1
+      assert Repo.get!(StageParticipation, participation.id).region_id == new_region.id
+    end
+
+    # A drawn participation's group, fixtures and results all belong to the
+    # old region, so moving it across is a competition decision, not a data
+    # correction — it stays put and stays reachable via "All regions".
+    test "leaves a participation already dealt into a published draw alone" do
+      player = insert(:player)
+
+      participation =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      drawn_group = insert(:group, draw_id: insert(:draw).id)
+
+      insert(:group_membership,
+        group_id: drawn_group.id,
+        stage_participation_id: participation.id
+      )
+
+      new_region = build(:region)
+
+      assert Competitions.realign_participation_regions(player.id, new_region.id) == 0
+      assert Repo.get!(StageParticipation, participation.id).region_id == player.region_id
+    end
+
+    test "still moves an undrawn participation for a player who has another that is drawn" do
+      player = insert(:player)
+
+      drawn =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      undrawn =
+        insert(:stage_participation,
+          player_id: player.id,
+          region_id: player.region_id,
+          category: player.gender
+        )
+
+      drawn_group = insert(:group, draw_id: insert(:draw).id)
+      insert(:group_membership, group_id: drawn_group.id, stage_participation_id: drawn.id)
+
+      new_region = build(:region)
+
+      assert Competitions.realign_participation_regions(player.id, new_region.id) == 1
+      assert Repo.get!(StageParticipation, undrawn.id).region_id == new_region.id
+      assert Repo.get!(StageParticipation, drawn.id).region_id == player.region_id
+    end
+
+    test "is a no-op when the region already matches" do
+      player = insert(:player)
+
+      insert(:stage_participation,
+        player_id: player.id,
+        region_id: player.region_id,
+        category: player.gender
+      )
+
+      assert Competitions.realign_participation_regions(player.id, player.region_id) == 0
+    end
+  end
+
   describe "stages_by_participant/2" do
     test "maps each player/team id to its current stage" do
       grassroots = stage("Grassroots")

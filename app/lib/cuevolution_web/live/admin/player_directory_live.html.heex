@@ -40,7 +40,8 @@
     <div class="min-w-[220px] flex-1">
       <.input
         field={@filter_form[:search]}
-        placeholder="Search name or @username…"
+        phx-debounce="300"
+        placeholder="Search name or username…"
         class="w-full rounded-full border border-ink-300 bg-white px-4 py-2.5 font-sans text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
       />
     </div>
