@@ -218,6 +218,39 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
+  @doc "One-off announcement to a player who has advanced to the Circuit Round."
+  def circuit_advancement(player) do
+    first_name = esc(player.first_name)
+
+    base(player)
+    |> subject("Congratulations — you've advanced to the Circuit Round!")
+    |> html_body(
+      layout("""
+      <p style="margin:0 0 16px;">Hi #{first_name},</p>
+      <p style="margin:0 0 16px;">
+        We'd like to congratulate you for advancing to the <strong>Circuit Round</strong>
+        of the SportPesa National Pool League!
+      </p>
+      <p style="margin:0 0 16px;">
+        Your fixtures for the new round will appear in the app as soon as the Circuit
+        draw is published.
+      </p>
+      #{button("View your fixtures", url("/fixtures"))}
+      """)
+    )
+    |> text_body("""
+    Hi #{player.first_name},
+
+    We'd like to congratulate you for advancing to the Circuit Round of the
+    SportPesa National Pool League!
+
+    Your fixtures for the new round will appear in the app as soon as the
+    Circuit draw is published.
+
+    View your fixtures: #{url("/fixtures")}
+    """)
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload

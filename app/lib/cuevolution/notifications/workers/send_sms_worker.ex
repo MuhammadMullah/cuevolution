@@ -79,4 +79,8 @@ defmodule Cuevolution.Notifications.Workers.SendSmsWorker do
   defp build_body(%{event_type: "birthday_greeting", player: player}) do
     SmsMessages.birthday_greeting(player)
   end
+
+  defp build_body(%{event_type: "circuit_advancement", player: player}) do
+    SmsMessages.circuit_advancement(player)
+  end
 end

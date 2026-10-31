@@ -76,4 +76,8 @@ defmodule Cuevolution.Notifications.Workers.SendEmailWorker do
   defp build_email(%{event_type: "birthday_greeting", player: player}) do
     Emails.birthday_greeting(player)
   end
+
+  defp build_email(%{event_type: "circuit_advancement", player: player}) do
+    Emails.circuit_advancement(player)
+  end
 end
