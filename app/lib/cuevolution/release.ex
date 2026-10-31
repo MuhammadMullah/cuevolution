@@ -296,6 +296,47 @@ defmodule Cuevolution.Release do
     :ok
   end
 
+  @doc """
+  One-off: congratulates every player now sitting at Circuit on advancing
+  there, over each player's own preferred channel(s) — email, SMS, or both.
+  See `Cuevolution.Competitions.notify_circuit_advancement/1` for who is
+  included and excluded.
+
+  Safe to re-run: each recipient's notification is keyed by player id, so a
+  second run sends nothing. Delivery itself is handled by the
+  `:notifications` Oban queue, so the sends drain on the running node — not
+  in this `eval` session.
+
+  Preview the recipient list without sending anything first:
+
+      bin/cuevolution eval 'Cuevolution.Release.notify_circuit_advancement(dry_run: true)'
+      bin/cuevolution eval 'Cuevolution.Release.notify_circuit_advancement()'
+      bin/cuevolution eval 'Cuevolution.Release.notify_circuit_advancement(categories: ["male"])'
+  """
+  def notify_circuit_advancement(opts \\ []) do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    %{recipients: recipients, dispatched: dispatched} =
+      Cuevolution.Competitions.notify_circuit_advancement(opts)
+
+    by_preference = Enum.frequencies_by(recipients, & &1.notification_preference)
+    emails = Map.get(by_preference, "email", 0) + Map.get(by_preference, "both", 0)
+    texts = Map.get(by_preference, "sms", 0) + Map.get(by_preference, "both", 0)
+
+    IO.puts("Circuit advancement announcement: #{length(recipients)} recipient(s)")
+    IO.puts("  #{emails} email(s), #{texts} SMS")
+
+    if dispatched do
+      IO.puts("Queued on the :notifications queue. Re-running this task sends nothing.")
+    else
+      IO.puts("DRY RUN - nothing was queued. Recipients:")
+      Enum.each(recipients, &IO.puts("  @#{&1.username} (#{&1.notification_preference})"))
+    end
+
+    :ok
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end

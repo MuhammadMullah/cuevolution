@@ -9,6 +9,7 @@ defmodule Cuevolution.CompetitionsTest do
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
   alias Cuevolution.Competitions.StageParticipation
+  alias Cuevolution.Notifications.Notification
 
   defp stage(name), do: Repo.get_by!(Stage, name: name)
 
@@ -3084,6 +3085,115 @@ defmodule Cuevolution.CompetitionsTest do
                Competitions.move_back_to_previous_stage(participation, admin)
 
       assert Repo.get!(StageParticipation, participation.id).stage_id == stage("Regional").id
+    end
+  end
+
+  describe "notify_circuit_advancement/1" do
+    defp circuit_player(attrs) do
+      {category, attrs} = Keyword.pop!(attrs, :category)
+      player = insert(:player, attrs)
+
+      insert(:stage_participation,
+        player_id: player.id,
+        region_id: player.region_id,
+        stage_id: stage("Circuit").id,
+        category: category
+      )
+
+      player
+    end
+
+    defp notified_channels(player_id) do
+      Notification
+      |> where([n], n.player_id == ^player_id and n.event_type == "circuit_advancement")
+      |> select([n], n.channel)
+      |> Repo.all()
+      |> Enum.sort()
+    end
+
+    test "notifies every player at Circuit over their own preferred channels" do
+      both = circuit_player(category: "male", gender: "male", notification_preference: "both")
+
+      email_only =
+        circuit_player(category: "female", gender: "female", notification_preference: "email")
+
+      sms_only = circuit_player(category: "male", gender: "male", notification_preference: "sms")
+
+      %{recipients: recipients, dispatched: true} = Competitions.notify_circuit_advancement()
+
+      assert Enum.map(recipients, & &1.id) |> Enum.sort() ==
+               Enum.sort([both.id, email_only.id, sms_only.id])
+
+      assert notified_channels(both.id) == ["email", "sms"]
+      assert notified_channels(email_only.id) == ["email"]
+      assert notified_channels(sms_only.id) == ["sms"]
+
+      assert_enqueued(worker: Cuevolution.Notifications.Workers.SendEmailWorker)
+      assert_enqueued(worker: Cuevolution.Notifications.Workers.SendSmsWorker)
+    end
+
+    test "excludes other stages, team participations, and anonymized players" do
+      at_circuit = circuit_player(category: "male", gender: "male")
+
+      elsewhere = insert(:player)
+
+      insert(:stage_participation,
+        player_id: elsewhere.id,
+        region_id: elsewhere.region_id,
+        stage_id: stage("Regional").id,
+        category: "male"
+      )
+
+      insert(:stage_participation,
+        stage_id: stage("Circuit").id,
+        category: "team",
+        player_id: nil,
+        team_id: insert(:team).id
+      )
+
+      anonymized =
+        circuit_player(
+          category: "male",
+          gender: "male",
+          anonymized_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      %{recipients: recipients} = Competitions.notify_circuit_advancement()
+
+      assert Enum.map(recipients, & &1.id) == [at_circuit.id]
+      assert notified_channels(elsewhere.id) == []
+      assert notified_channels(anonymized.id) == []
+    end
+
+    test ":categories narrows the cohort" do
+      male = circuit_player(category: "male", gender: "male")
+      female = circuit_player(category: "female", gender: "female")
+
+      %{recipients: recipients} = Competitions.notify_circuit_advancement(categories: ["male"])
+
+      assert Enum.map(recipients, & &1.id) == [male.id]
+      assert notified_channels(female.id) == []
+    end
+
+    test "is idempotent — a re-run sends nothing a second time" do
+      player = circuit_player(category: "male", gender: "male", notification_preference: "both")
+
+      Competitions.notify_circuit_advancement()
+      Competitions.notify_circuit_advancement()
+
+      assert notified_channels(player.id) == ["email", "sms"]
+    end
+
+    test "dry_run: true resolves the cohort without sending" do
+      player = circuit_player(category: "male", gender: "male", notification_preference: "both")
+
+      assert %{recipients: [resolved], dispatched: false} =
+               Competitions.notify_circuit_advancement(dry_run: true)
+
+      assert resolved.id == player.id
+      assert notified_channels(player.id) == []
+      refute_enqueued(worker: Cuevolution.Notifications.Workers.SendEmailWorker)
+      refute_enqueued(worker: Cuevolution.Notifications.Workers.SendSmsWorker)
     end
   end
 end

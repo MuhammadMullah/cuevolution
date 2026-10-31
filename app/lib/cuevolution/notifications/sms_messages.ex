@@ -37,6 +37,12 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "On behalf of Sportpesa and the entire pool community, we wish you a very happy birthday! Have a fantastic day."
   end
 
+  @doc "One-off announcement to a player who has advanced to the Circuit Round."
+  def circuit_advancement(player) do
+    "Hi #{player.first_name}, we'd like to congratulate you for advancing to the Circuit Round " <>
+      "of the SportPesa National Pool League!"
+  end
+
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(_player, payload) do
     %{team_name: team_name} = payload

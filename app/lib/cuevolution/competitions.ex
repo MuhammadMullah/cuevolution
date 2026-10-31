@@ -98,6 +98,11 @@ defmodule Cuevolution.Competitions do
     Repo.one!(from s in Stage, where: s.name == "Regional")
   end
 
+  @doc "The Circuit Round — the capped stage male players reach out of Regional."
+  def circuit_stage do
+    Repo.one!(from s in Stage, where: s.name == "Circuit")
+  end
+
   @doc "Players who have played fewer than half of their active fixtures at `stage_id` (a Grassroots-round stage)."
   def players_with_grassroots_match_backlog(stage_id) do
     stage_id
@@ -849,6 +854,70 @@ defmodule Cuevolution.Competitions do
 
   defp check_bulk_advance_region(%{region_id: region_id}, region_id), do: :ok
   defp check_bulk_advance_region(_participation, _region_id), do: {:error, :wrong_region}
+
+  @circuit_advancement_batch_size 200
+
+  @doc """
+  One-off announcement: congratulates every player currently sitting at
+  Circuit on advancing there, over whichever channel(s) each player's
+  `notification_preference` asks for (email, SMS, or both — routed by
+  `Notifications.dispatch_many/2`, not decided here).
+
+  `:categories` defaults to `["male", "female"]`; pass `["male"]` to
+  announce to one category only. Team participations are never included —
+  a `Notification` row addresses a `Player`, and a team's participation has
+  no `player_id` at all. Anonymized players are excluded: their email and
+  mobile number are scrubbed placeholders (see
+  `Player.anonymize_changeset/2`), so a send would either bounce or reach
+  a recycled number.
+
+  Idempotent by construction: each recipient's idempotency key is
+  `"circuit_advancement:<player_id>"`, which `dispatch_many/2` dedupes at
+  the DB level — a second run (or two operators each running it once)
+  writes no second `Notification` row and enqueues no second send. That's
+  what makes this safe to re-run after a partial failure, rather than
+  something that must be run exactly once.
+
+  Dispatch is chunked so a few thousand recipients don't become one
+  multi-thousand-row `insert_all` holding a connection.
+
+  Pass `dry_run: true` to resolve the recipient list and send nothing.
+
+  Returns `%{recipients: [%Player{}], dispatched: boolean()}`.
+  """
+  def notify_circuit_advancement(opts \\ []) do
+    categories = Keyword.get(opts, :categories, ["male", "female"])
+    dry_run? = Keyword.get(opts, :dry_run, false)
+    recipients = circuit_advancement_recipients(categories)
+
+    if not dry_run? do
+      recipients
+      |> Enum.chunk_every(@circuit_advancement_batch_size)
+      |> Enum.each(fn chunk ->
+        chunk
+        |> Enum.map(&{&1, %{}, "circuit_advancement:#{&1.id}"})
+        |> Notifications.dispatch_many(:circuit_advancement)
+      end)
+    end
+
+    %{recipients: recipients, dispatched: not dry_run?}
+  end
+
+  defp circuit_advancement_recipients(categories) do
+    circuit = circuit_stage()
+
+    from(sp in StageParticipation,
+      join: p in Player,
+      on: p.id == sp.player_id,
+      where:
+        sp.stage_id == ^circuit.id and sp.category in ^categories and
+          is_nil(p.anonymized_at),
+      order_by: p.username,
+      select: p
+    )
+    |> Repo.all()
+    |> Enum.uniq_by(& &1.id)
+  end
 
   @doc """
   Manually undoes an advance: moves `participation` back one stage, for when

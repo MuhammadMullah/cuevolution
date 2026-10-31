@@ -37,7 +37,8 @@ defmodule Cuevolution.Notifications do
     "draw_published" => ~w(fixtures),
     "grassroots_match_reminder" => ~w(deadline),
     "grassroots_deadline_apology" => ~w(deadline),
-    "birthday_greeting" => []
+    "birthday_greeting" => [],
+    "circuit_advancement" => []
   }
 
   @doc """
