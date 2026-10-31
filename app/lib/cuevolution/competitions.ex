@@ -857,6 +857,13 @@ defmodule Cuevolution.Competitions do
 
   @circuit_advancement_batch_size 200
 
+  # Scopes the idempotency key to one announcement. `dispatch_many/2` dedupes
+  # on that key forever, so a recipient who already got an earlier
+  # "circuit_advancement" message would be silently skipped by a later one
+  # reusing the key — the send would look like it worked and reach nobody.
+  # Bump this for each new announcement.
+  @circuit_advancement_campaign "circuit1-eldoret-2026-11"
+
   @doc """
   One-off announcement: congratulates every player currently sitting at
   Circuit on advancing there, over whichever channel(s) each player's
@@ -872,7 +879,7 @@ defmodule Cuevolution.Competitions do
   a recycled number.
 
   Idempotent by construction: each recipient's idempotency key is
-  `"circuit_advancement:<player_id>"`, which `dispatch_many/2` dedupes at
+  `"circuit_advancement:<campaign>:<player_id>"`, which `dispatch_many/2` dedupes at
   the DB level — a second run (or two operators each running it once)
   writes no second `Notification` row and enqueues no second send. That's
   what makes this safe to re-run after a partial failure, rather than
@@ -895,7 +902,7 @@ defmodule Cuevolution.Competitions do
       |> Enum.chunk_every(@circuit_advancement_batch_size)
       |> Enum.each(fn chunk ->
         chunk
-        |> Enum.map(&{&1, %{}, "circuit_advancement:#{&1.id}"})
+        |> Enum.map(&{&1, %{}, "circuit_advancement:#{@circuit_advancement_campaign}:#{&1.id}"})
         |> Notifications.dispatch_many(:circuit_advancement)
       end)
     end

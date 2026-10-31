@@ -218,36 +218,52 @@ defmodule Cuevolution.Notifications.Emails do
     """)
   end
 
-  @doc "One-off announcement to a player who has advanced to the Circuit Round."
+  @doc "One-off announcement of Circuit 1 (Timba XO, Eldoret, 6-8 November 2026) to the players who qualified for it."
   def circuit_advancement(player) do
     first_name = esc(player.first_name)
 
     base(player)
-    |> subject("Congratulations — you've advanced to the Circuit Round!")
+    |> subject("Circuit 1, Eldoret \u2014 6th\u20138th November")
     |> html_body(
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
       <p style="margin:0 0 16px;">
-        We'd like to congratulate you for advancing to the <strong>Circuit Round</strong>
-        of the SportPesa National Pool League!
+        Congratulations once again on securing your places in the
+        <strong>SportPesa National Pool Circuit 2026/27</strong>!
       </p>
       <p style="margin:0 0 16px;">
-        Your fixtures for the new round will appear in the app as soon as the Circuit
-        draw is published.
+        The stage is set for <strong>Circuit 1 in Eldoret</strong>, the first of three
+        exciting circuits!
       </p>
-      #{button("View your fixtures", url("/fixtures"))}
+      <p style="margin:0 0 16px;">
+        We look forward to welcoming you to <strong>Timba XO, Eldoret, from
+        6th\u20138th November</strong>, as we kick off this exciting chapter of competitive pool.
+      </p>
+      <p style="margin:0 0 16px;">
+        Wishing you all the best as you prepare to showcase your skills and compete among
+        the country's finest.
+      </p>
+      <p style="margin:0 0 16px;">See you in Eldoret! \u{1F525}</p>
+      #{button("Open Cuevolution", url("/"))}
       """)
     )
     |> text_body("""
     Hi #{player.first_name},
 
-    We'd like to congratulate you for advancing to the Circuit Round of the
-    SportPesa National Pool League!
+    Congratulations once again on securing your places in the SportPesa National
+    Pool Circuit 2026/27!
 
-    Your fixtures for the new round will appear in the app as soon as the
-    Circuit draw is published.
+    The stage is set for Circuit 1 in Eldoret, the first of three exciting circuits!
 
-    View your fixtures: #{url("/fixtures")}
+    We look forward to welcoming you to Timba XO, Eldoret, from 6th\u20138th November,
+    as we kick off this exciting chapter of competitive pool.
+
+    Wishing you all the best as you prepare to showcase your skills and compete
+    among the country's finest.
+
+    See you in Eldoret! \u{1F525}
+
+    Open Cuevolution: #{url("/")}
     """)
   end
 

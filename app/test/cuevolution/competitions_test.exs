@@ -3184,6 +3184,22 @@ defmodule Cuevolution.CompetitionsTest do
       assert notified_channels(player.id) == ["email", "sms"]
     end
 
+    test "scopes the idempotency key to the announcement, not just the event" do
+      player = circuit_player(category: "male", gender: "male")
+
+      Competitions.notify_circuit_advancement()
+
+      key =
+        Notification
+        |> where([n], n.player_id == ^player.id and n.event_type == "circuit_advancement")
+        |> select([n], n.idempotency_key)
+        |> Repo.one!()
+
+      # A key of just "circuit_advancement:<player_id>" would make every future
+      # announcement a silent no-op for anyone already messaged once.
+      assert key == "circuit_advancement:circuit1-eldoret-2026-11:#{player.id}:email"
+    end
+
     test "dry_run: true resolves the cohort without sending" do
       player = circuit_player(category: "male", gender: "male", notification_preference: "both")
 
