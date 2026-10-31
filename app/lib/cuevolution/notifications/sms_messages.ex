@@ -37,10 +37,20 @@ defmodule Cuevolution.Notifications.SmsMessages do
     "On behalf of Sportpesa and the entire pool community, we wish you a very happy birthday! Have a fantastic day."
   end
 
-  @doc "One-off announcement to a player who has advanced to the Circuit Round."
-  def circuit_advancement(player) do
-    "Hi #{player.first_name}, we'd like to congratulate you for advancing to the Circuit Round " <>
-      "of the SportPesa National Pool League!"
+  @doc """
+  One-off announcement of Circuit 1 (Timba XO, Eldoret, 6-8 November 2026) to
+  the players who qualified for it. The email carries the full wording; this
+  is the condensed version.
+
+  Deliberately kept to 150 characters, plain hyphen and no emoji: that keeps
+  it GSM-7 and so a single billed segment. An en dash or an emoji anywhere in
+  the body forces the whole message to UCS-2 (67 chars per concatenated
+  segment instead of 153) — the full-length wording bills as 7 segments per
+  recipient, this bills as 1.
+  """
+  def circuit_advancement(_player) do
+    "Congratulations on securing your place in the SportPesa National Pool Circuit 2026/27! " <>
+      "Circuit 1 is at Timba XO, Eldoret, 6-8 Nov. See you in Eldoret!"
   end
 
   @doc "Sent when a captain adds the player to a team's roster."
