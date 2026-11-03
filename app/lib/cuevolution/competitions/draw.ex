@@ -67,8 +67,15 @@ defmodule Cuevolution.Competitions.Draw do
   defp validate_exactly_one_scope(changeset) do
     venue_id = get_field(changeset, :venue_id)
     region_id = get_field(changeset, :region_id)
+    category = get_field(changeset, :category)
 
     case {venue_id, region_id} do
+      # The Circuit team event is national: one draw for the whole country,
+      # belonging to neither a venue nor a region. Only a team draw may be
+      # scope-less — for a men's or ladies' draw a missing scope is a bug.
+      {nil, nil} when category == "team" ->
+        changeset
+
       {nil, nil} ->
         add_error(changeset, :venue_id, "either a venue or a region must be set")
 

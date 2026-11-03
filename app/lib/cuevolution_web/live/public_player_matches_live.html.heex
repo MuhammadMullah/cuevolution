@@ -1,0 +1,108 @@
+<div class="min-h-screen bg-ink-50">
+  <header class="border-b border-ink-200 bg-white">
+    <div class="mx-auto flex max-w-2xl items-center gap-3 px-4 py-4">
+      <div>
+        <p class="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-red-500">
+          SportPesa National Pool Circuit
+        </p>
+        <h1 class="text-xl font-bold tracking-tight text-ink-950">
+          {if @player, do: "#{@player.first_name} #{@player.last_name}", else: "Player"}
+        </h1>
+        <p :if={@player} class="font-mono text-[12px] text-ink-500">@{@player.username}</p>
+      </div>
+      <.link
+        navigate={~p"/live"}
+        class="ml-auto text-[13px] font-semibold text-ink-500 hover:text-ink-950"
+      >
+        All live scores
+      </.link>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-2xl px-4 py-6">
+    <div
+      :if={is_nil(@player)}
+      class="rounded-2xl border border-ink-200 bg-white px-5 py-10 text-center"
+    >
+      <p class="font-semibold text-ink-900">No player with that username</p>
+      <p class="mt-1 text-[13.5px] text-ink-500">
+        <span class="font-mono">{@username}</span>
+        is not a registered player. Check the link, or browse the
+        <.link navigate={~p"/live"} class="font-semibold text-ink-950 underline">
+          live scores
+        </.link>
+        instead.
+      </p>
+    </div>
+
+    <div
+      :if={@player && @matches == []}
+      class="rounded-2xl border border-ink-200 bg-white px-5 py-10 text-center"
+    >
+      <p class="font-semibold text-ink-900">No matches yet</p>
+      <p class="mt-1 text-[13.5px] text-ink-500">
+        This page fills in as soon as a draw puts them in a match.
+      </p>
+    </div>
+
+    <div :if={@matches != []} class="space-y-2.5">
+      <p class="text-[12.5px] text-ink-500">
+        {length(@matches)} {if length(@matches) == 1, do: "match", else: "matches"} &middot; {@played} played
+      </p>
+
+      <.link
+        :for={match <- @matches}
+        navigate={~p"/m/#{match.match_id}"}
+        class="block overflow-hidden rounded-2xl border border-ink-200 bg-white hover:border-ink-300"
+      >
+        <div class="flex items-center gap-3 border-b border-ink-100 px-4 py-2">
+          <span class={[
+            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em]",
+            match.state == :live && "bg-red-50 text-red-700",
+            match.state == :final && "bg-green-50 text-green-700",
+            match.state == :walkover && "bg-amber-50 text-amber-700",
+            match.state == :upcoming && "bg-ink-100 text-ink-500"
+          ]}>
+            <span
+              :if={match.state == :live}
+              class="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500"
+            />
+            {match.state_label}
+          </span>
+          <span class="truncate text-[12px] text-ink-500">
+            {match.stage} &middot; {match.round}
+          </span>
+          <span class="ml-auto shrink-0 text-[11.5px] text-ink-400">
+            {match.start || "TBC"}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-3 px-4 py-3">
+          <span
+            :if={match.outcome}
+            class={[
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+              match.outcome == :won && "bg-green-100 text-green-700",
+              match.outcome == :lost && "bg-red-100 text-red-700",
+              match.outcome == :drawn && "bg-ink-100 text-ink-500"
+            ]}
+          >
+            {match.outcome_letter}
+          </span>
+          <span class="flex-1 truncate text-[14.5px] text-ink-950">
+            <span class="font-semibold">{match.mine}</span>
+            <span class="text-ink-400">v</span>
+            {match.opponent}
+          </span>
+          <span class="shrink-0 font-mono text-[15px] tabular-nums text-ink-600">
+            {match.my_score}&ndash;{match.their_score}
+          </span>
+        </div>
+      </.link>
+    </div>
+
+    <p :if={@player} class="mt-4 text-center text-[12px] text-ink-400">
+      This page updates itself as frames are recorded. Tap a match for its own page.
+    </p>
+  </main>
+</div>

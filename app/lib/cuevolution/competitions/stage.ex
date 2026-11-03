@@ -31,6 +31,25 @@ defmodule Cuevolution.Competitions.Stage do
   @doc "True if `stage` behaves like a Grassroots round (see `grassroots_round_names/0`)."
   def grassroots?(%__MODULE__{name: name}), do: name in grassroots_round_names()
 
-  @doc "True if `stage` is round-robin/group-based rather than knockout-bracket-based."
+  @doc """
+  Stages whose **team** event is round-robin even though the stage itself is
+  knockout. The Circuit runs its men's and ladies' events as double-elimination
+  brackets, but the team event as two national groups of ten (spec 014).
+  """
+  def team_round_robin_stage_names, do: ["Circuit"]
+
+  @doc """
+  True if `stage` is round-robin/group-based rather than knockout-bracket-based.
+
+  The single-argument form answers for the stage as a whole. Prefer
+  `round_robin?/2` wherever a category is in hand: format is a property of the
+  event, not only of the stage, and at the Circuit the two disagree.
+  """
   def round_robin?(%__MODULE__{name: name}), do: name in round_robin_stage_names()
+
+  @doc "True if the `category` event at `stage` is played as round-robin groups."
+  def round_robin?(%__MODULE__{name: name} = stage, "team"),
+    do: round_robin?(stage) or name in team_round_robin_stage_names()
+
+  def round_robin?(%__MODULE__{} = stage, _category), do: round_robin?(stage)
 end

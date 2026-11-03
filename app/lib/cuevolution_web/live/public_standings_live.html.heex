@@ -1,0 +1,222 @@
+<div class="min-h-screen bg-ink-50">
+  <header class="border-b border-ink-200 bg-white">
+    <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-4">
+      <div>
+        <p class="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-red-500">
+          SportPesa National Pool Circuit
+        </p>
+        <h1 class="text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">
+          Live scores &amp; standings
+        </h1>
+      </div>
+
+      <span class="ml-auto inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[12px] font-semibold text-red-700">
+        <span class="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
+        {@live_count} in play
+      </span>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-4 py-5">
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <div class="flex gap-1 rounded-xl bg-ink-100 p-1">
+        <button
+          :for={{label, view} <- [{"Live", :live}, {"Table", :table}]}
+          type="button"
+          phx-click="switch"
+          phx-value-view={view}
+          class={[
+            "rounded-lg px-4 py-1.5 text-[13.5px] font-semibold",
+            @view == view && "bg-white text-ink-950 shadow-sm",
+            @view != view && "text-ink-500 hover:text-ink-950"
+          ]}
+        >
+          {label}
+        </button>
+      </div>
+
+      <div class="flex gap-5 overflow-x-auto border-b border-ink-200">
+        <button
+          :for={{slug, label} <- @tabs}
+          type="button"
+          phx-click="switch"
+          phx-value-tab={slug}
+          class={[
+            "whitespace-nowrap border-b-2 px-0.5 pb-2 text-[14px] font-semibold",
+            @tab == slug && "border-red-500 text-ink-950",
+            @tab != slug && "border-transparent text-ink-500 hover:text-ink-950"
+          ]}
+        >
+          {label}
+        </button>
+      </div>
+    </div>
+
+    <%!-- Live: what is happening right now, then what is next, then what has
+          just finished. --%>
+    <div :if={@view == :live} class="space-y-6">
+      <section>
+        <h2 class="mb-2 text-[13px] font-bold tracking-tight text-ink-950">In play</h2>
+
+        <p
+          :if={@matches.live == []}
+          class="rounded-2xl border border-ink-200 bg-white px-5 py-6 text-center text-[13.5px] text-ink-400"
+        >
+          No matches in play right now.
+        </p>
+
+        <div class="grid gap-2.5 sm:grid-cols-2">
+          <article
+            :for={fixture <- @matches.live}
+            class="rounded-2xl border-2 border-red-500 bg-white px-4 py-3"
+          >
+            <div class="mb-1 flex items-center justify-between text-[11px] text-ink-500">
+              <span>{fixture.round.name} · race to {fixture.round.race_to}</span>
+              <span class="rounded-full bg-red-500 px-2 py-0.5 font-semibold text-white">
+                Live
+              </span>
+            </div>
+
+            <div
+              :for={
+                {side, participant} <- [
+                  {"a", fixture.participant_a},
+                  {"b", fixture.participant_b}
+                ]
+              }
+              class="flex items-center gap-3 py-0.5"
+            >
+              <span class="flex-1 truncate text-[15px] font-medium text-ink-950">
+                {side_name(participant)}
+              </span>
+              <span class="text-xl font-bold tabular-nums text-ink-950">
+                {side_score(fixture, side) || 0}
+              </span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section :if={@matches.next != []}>
+        <h2 class="mb-2 text-[13px] font-bold tracking-tight text-ink-950">Up next</h2>
+
+        <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white">
+          <div
+            :for={fixture <- @matches.next}
+            class="flex items-center gap-3 border-b border-ink-100 px-4 py-2.5 text-[14px] last:border-0"
+          >
+            <span class="w-16 shrink-0 font-mono text-[11px] text-ink-400">
+              {start_time(fixture) || "—"}
+            </span>
+            <span class="flex-1 truncate text-ink-950">
+              {side_name(fixture.participant_a)} <span class="text-ink-400">v</span>
+              {side_name(fixture.participant_b)}
+            </span>
+            <span class="hidden shrink-0 text-[11px] text-ink-400 sm:inline">
+              {fixture.round.name}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section :if={@matches.recent != []}>
+        <h2 class="mb-2 text-[13px] font-bold tracking-tight text-ink-950">Just finished</h2>
+
+        <div class="overflow-hidden rounded-2xl border border-ink-200 bg-white">
+          <div
+            :for={fixture <- @matches.recent}
+            class="flex items-center gap-3 border-b border-ink-100 px-4 py-2.5 text-[14px] last:border-0"
+          >
+            <span class={[
+              "flex-1 truncate",
+              won?(fixture, "a") && "font-bold text-ink-950",
+              !won?(fixture, "a") && "text-ink-500"
+            ]}>
+              {side_name(fixture.participant_a)}
+            </span>
+            <span class="shrink-0 font-bold tabular-nums text-ink-950">
+              {side_score(fixture, "a")}–{side_score(fixture, "b")}
+            </span>
+            <span class={[
+              "flex-1 truncate text-right",
+              won?(fixture, "b") && "font-bold text-ink-950",
+              !won?(fixture, "b") && "text-ink-500"
+            ]}>
+              {side_name(fixture.participant_b)}
+            </span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <%!-- Table: the SP Points ranking that decides who reaches the Finals. --%>
+    <div :if={@view == :table}>
+      <p
+        :if={@rows == []}
+        class="rounded-2xl border border-ink-200 bg-white px-5 py-6 text-center text-[13.5px] text-ink-400"
+      >
+        No standings yet for this category.
+      </p>
+
+      <div :if={@rows != []} class="overflow-x-auto rounded-2xl border border-ink-200 bg-white">
+        <table class="w-full min-w-[760px] border-collapse">
+          <thead>
+            <tr>
+              <th
+                :for={{label, title, align} <- standings_columns()}
+                scope="col"
+                title={title}
+                class={[
+                  "whitespace-nowrap px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-500",
+                  align
+                ]}
+              >
+                {label}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={row <- @rows} class="border-t border-ink-100">
+              <td class="px-3 py-2.5 text-[13px] tabular-nums text-ink-400">{row.rank}</td>
+              <td class="px-3 py-2.5">
+                <span class="block text-[14px] font-medium text-ink-950">{row.name}</span>
+                <span class="block text-[11px] text-ink-400">{row.stage}</span>
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {row.played}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {row.won}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {row.lost}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {signed(row.match_difference)}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {row.frames_won}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {row.frames_lost}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[13px] tabular-nums text-ink-600">
+                {signed(row.frame_difference)}
+              </td>
+              <td class="px-3 py-2.5 text-right text-[14px] font-bold tabular-nums text-ink-950">
+                {row.sp_points}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="mt-3 text-[12px] text-ink-400">
+        MP played · MW won · ML lost · MD match difference · FW frames won · FL frames lost ·
+        FD frame difference. Ranked on SP Points first, then match difference, then frame
+        difference, then frames won. SP Points: 2 for playing, 3 a match won, plus 20 champion /
+        10 runner-up / 5 semi-finalist, carried across Eldoret, Nakuru and Mombasa.
+      </p>
+    </div>
+  </main>
+</div>

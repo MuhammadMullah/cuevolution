@@ -34,6 +34,15 @@ defmodule CuevolutionWeb.Router do
     get "/legal/tos", PageController, :tos
 
     live_session :player_guest do
+      # Spectator view: no account, no controls, just the live bracket results
+      # and the SP Points table.
+      live "/live", PublicStandingsLive, :index
+
+      # Shareable links. `/m/<match reference>` is one match; `/p/<username>`
+      # is every match of one player. Both are read-only and carry no contact
+      # details — they are sent to whoever wants to follow along.
+      live "/m/:match_id", PublicMatchLive, :show
+      live "/p/:username", PublicPlayerMatchesLive, :show
       live "/register", RegistrationLive, :new
       live "/login", PlayerLoginLive, :new
       live "/forgot-password", ForgotPasswordLive, :new
@@ -106,6 +115,7 @@ defmodule CuevolutionWeb.Router do
         {CuevolutionWeb.AdminAuth, {:ensure_permission, :access_results}}
       ] do
       live "/results", AdminResultsLive, :index
+      live "/standings", Admin.StandingsLive, :index
       live "/matches/:id", Admin.MatchEntryLive, :show
     end
 

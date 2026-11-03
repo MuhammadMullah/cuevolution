@@ -68,6 +68,7 @@ defmodule CuevolutionWeb.AdminComponents do
     # {"Draws", "⚏", "/admin/draws"},
     {"Venue fixtures", "☎", "/admin/venue-fixtures"},
     {"Results & Points", "◔", "/admin/results"},
+    {"Standings", "☗", "/admin/standings"},
     {"Directory", "☰", "/admin/players"},
     {"Audit Log", "◷", "/admin/audit-log"},
     {"Venues", "⚑", "/admin/venues"}
@@ -300,6 +301,7 @@ defmodule CuevolutionWeb.AdminComponents do
   defp nav_active?(active, "/admin/draws"), do: active == :draws
   defp nav_active?(active, "/admin/venue-fixtures"), do: active == :venue_fixtures
   defp nav_active?(active, "/admin/results"), do: active == :results
+  defp nav_active?(active, "/admin/standings"), do: active == :standings
   defp nav_active?(active, "/admin/players"), do: active == :directory
   defp nav_active?(active, "/admin/venues"), do: active == :venues
   defp nav_active?(active, "/admin/audit-log"), do: active == :notifications
@@ -320,6 +322,9 @@ defmodule CuevolutionWeb.AdminComponents do
         Admin.can?(admin, :manage_fixtures)
 
       {_, _, "/admin/results"} ->
+        Admin.can?(admin, :access_results)
+
+      {_, _, "/admin/standings"} ->
         Admin.can?(admin, :access_results)
 
       {_, _, "/admin/stages"} ->
