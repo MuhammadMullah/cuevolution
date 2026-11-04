@@ -44,10 +44,10 @@ defmodule Cuevolution.Competitions.CircuitBracketTest do
       # Official men's race lengths survive the round trip.
       by_name = Map.new(rounds, &{&1.name, &1})
       assert by_name["Winners Round 1"].race_to == 6
-      # Every men's match is a race to 6 under the Nov 2026 brief — the
-      # losers' side is no longer shorter.
-      assert by_name["Losers Round 1"].race_to == 6
-      assert by_name["Final"].race_to == 6
+      # The two exceptions to the race to 6: the losers' side is shorter and
+      # the final is longer.
+      assert by_name["Losers Round 1"].race_to == 5
+      assert by_name["Final"].race_to == 7
     end
 
     test "fills Winners Round 1 from the draw and leaves the rest open" do

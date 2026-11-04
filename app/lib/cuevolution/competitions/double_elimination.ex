@@ -49,13 +49,14 @@ defmodule Cuevolution.Competitions.DoubleElimination do
 
   import Bitwise, only: [bsl: 2]
 
-  # Per the Nov 2026 brief, every men's match is a race to 6 — the losers'
-  # side and the final are no longer exceptions. The ladies' lengths are the
-  # previous ones, pending the format decision.
+  # Race lengths from the format sheet: the men play a race to 6 from the
+  # round of 128 down to the semifinals, with two exceptions — the losers'
+  # side is shorter at 5, and the final is longer at 7. The sheet names no
+  # other exception, so the semifinal runs at the knockout length.
   @formats %{
     "male" => %{
       depth: 3,
-      races: %{winners: 6, losers: 6, knockout: 6, semifinal: 6, final: 6}
+      races: %{winners: 6, losers: 5, knockout: 6, semifinal: 6, final: 7}
     },
     "female" => %{
       depth: 2,

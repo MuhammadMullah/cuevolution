@@ -83,10 +83,17 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
       assert counts["L1"] + counts["L2"] + counts["L3"] + counts["L4"] == 96
     end
 
-    test "every men's match is a race to 6" do
+    test "the men race to 6, except the losers' side at 5 and the final at 7" do
       %{rounds: rounds} = DE.build(Enum.to_list(1..128), category: "male")
+      races = Map.new(rounds, &{&1.code, &1.race_to})
 
-      assert rounds |> Enum.map(& &1.race_to) |> Enum.uniq() == [6]
+      # Round of 128 down to the semifinals, on the winners' side and in the
+      # single elimination that follows it.
+      for code <- ~w(W1 W2 W3 R32 R16 QF SF), do: assert(races[code] == 6)
+
+      # Both exceptions: every losers' round is shorter, the final longer.
+      for code <- ~w(L1 L2 L3 L4), do: assert(races[code] == 5)
+      assert races["F"] == 7
     end
 
     test "the ladies' bracket is unchanged, pending the format decision" do
