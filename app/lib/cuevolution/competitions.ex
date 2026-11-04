@@ -2776,8 +2776,16 @@ defmodule Cuevolution.Competitions do
 
   @doc "`fixture.scheduled_at` (stored UTC) converted to EAT for display — the one shared function used everywhere a fixture time renders (spec 007 FR-008)."
   def fixture_time_in_eat(%Fixture{scheduled_at: scheduled_at}) do
-    DateTime.add(scheduled_at, @eat_offset_seconds, :second)
+    to_eat(scheduled_at)
   end
+
+  @doc """
+  A stored UTC time as EAT, for the callers that hold a plain `DateTime`
+  rather than a whole fixture — the fixture list selects times without
+  loading the structs around them.
+  """
+  def to_eat(nil), do: nil
+  def to_eat(%DateTime{} = utc), do: DateTime.add(utc, @eat_offset_seconds, :second)
 
   @doc """
   Updates `fixture`'s venue/schedule (spec 007 FR-003). Editable until a
@@ -6469,6 +6477,114 @@ defmodule Cuevolution.Competitions do
   @doc "Cuevo Points entries already recorded against `match_result_id` — the points-entry form's pre-fill."
   def points_entries_for_result(match_result_id) do
     Repo.all(from e in CuevoPointsEntry, where: e.match_result_id == ^match_result_id)
+  end
+
+  # ------------------------------------------------------- the fixture list
+
+  @doc """
+  Every fixture for `category` across the ranked stages, for the public
+  fixture list.
+
+  Returns lean maps, not structs. A men's draw is 239 matches, and loading
+  each one as a `Fixture` with both participations and their players preloaded
+  is a couple of megabytes held in every connected socket, to render two names
+  and a score. This selects the dozen fields the page actually shows.
+
+  Returned in play order — round, then the slot within it — which is also the
+  order the match numbers run in, so M1 is the first match of the draw.
+
+  The whole category comes back in one go rather than a page at a time: the
+  caller needs the counts for every status to label its filters, and a filter
+  that changed the match numbers would be worse than useless.
+  """
+  def public_fixtures(category) do
+    ranked_stage_ids()
+    |> fixture_list_query(category)
+    |> order_by([f, r], asc: r.sequence, asc_nulls_last: f.slot, asc: f.match_id)
+    |> Repo.all()
+  end
+
+  defp fixture_list_query(stage_ids, "team") do
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: g in Group,
+      on: g.id == r.group_id,
+      where:
+        g.stage_id in ^stage_ids and g.category == "team" and is_nil(g.region_id) and
+          is_nil(g.venue_id)
+    )
+    |> join_fixture_sides()
+    |> select([f, r, g, _pa, _pb, apl, bpl, atm, btm, mr], %{
+      id: f.id,
+      match_id: f.match_id,
+      slot: f.slot,
+      loser_to_fixture_id: f.loser_to_fixture_id,
+      status: f.status,
+      bye: f.bye,
+      scheduled_at: f.scheduled_at,
+      live_score: f.live_score,
+      round_name: r.name,
+      round_sequence: r.sequence,
+      race_to: r.race_to,
+      group_name: g.name,
+      a_id: f.participant_a_id,
+      b_id: f.participant_b_id,
+      a_player: fragment("? || ' ' || ?", apl.first_name, apl.last_name),
+      b_player: fragment("? || ' ' || ?", bpl.first_name, bpl.last_name),
+      a_team: atm.name,
+      b_team: btm.name,
+      score: mr.score,
+      winner_id: mr.winner_participation_id
+    })
+  end
+
+  defp fixture_list_query(stage_ids, category) do
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: kb in KnockoutBracket,
+      on: kb.id == r.knockout_bracket_id,
+      where: kb.stage_id in ^stage_ids and kb.category == ^category
+    )
+    |> join_fixture_sides()
+    |> select([f, r, _kb, _pa, _pb, apl, bpl, atm, btm, mr], %{
+      id: f.id,
+      match_id: f.match_id,
+      slot: f.slot,
+      loser_to_fixture_id: f.loser_to_fixture_id,
+      status: f.status,
+      bye: f.bye,
+      scheduled_at: f.scheduled_at,
+      live_score: f.live_score,
+      round_name: r.name,
+      round_sequence: r.sequence,
+      race_to: r.race_to,
+      # A bracket fixture belongs to a round, not a group — only the team
+      # event plays in groups.
+      group_name: nil,
+      a_id: f.participant_a_id,
+      b_id: f.participant_b_id,
+      a_player: fragment("? || ' ' || ?", apl.first_name, apl.last_name),
+      b_player: fragment("? || ' ' || ?", bpl.first_name, bpl.last_name),
+      a_team: atm.name,
+      b_team: btm.name,
+      score: mr.score,
+      winner_id: mr.winner_participation_id
+    })
+  end
+
+  # The third binding is the Group for teams and the KnockoutBracket for
+  # singles; everything after it lines up either way.
+  defp join_fixture_sides(query) do
+    query
+    |> join(:left, [f], pa in StageParticipation, on: pa.id == f.participant_a_id)
+    |> join(:left, [f], pb in StageParticipation, on: pb.id == f.participant_b_id)
+    |> join(:left, [_f, _r, _x, pa], apl in Player, on: apl.id == pa.player_id)
+    |> join(:left, [_f, _r, _x, _pa, pb], bpl in Player, on: bpl.id == pb.player_id)
+    |> join(:left, [_f, _r, _x, pa], atm in Team, on: atm.id == pa.team_id)
+    |> join(:left, [_f, _r, _x, _pa, pb], btm in Team, on: btm.id == pb.team_id)
+    |> join(:left, [f], mr in MatchResult, on: mr.id == f.result_id)
   end
 
   # ------------------------------------------------------- shareable matches
