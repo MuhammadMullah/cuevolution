@@ -11,20 +11,22 @@ config :cuevolution, Cuevolution.Repo,
   hostname: "localhost",
   database: "cuevolution_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  # ExUnit runs `schedulers_online() * 2` cases at once, so a pool of the same
-  # size leaves no headroom: a test that needs a second checkout — a LiveView
-  # spawning, a Task given sandbox access — waits on a connection that only
-  # frees when another test finishes. Under the Nov 2026 bracket, which is
-  # roughly double the fixtures, that showed up as connections being dropped
-  # mid-test in tests that had nothing to do with each other.
-  pool_size: System.schedulers_online() * 4,
+  # ExUnit runs `schedulers_online() * 2` cases at once, so a pool of exactly
+  # that size leaves no headroom: a test needing a second checkout — a
+  # LiveView spawning, a Task given sandbox access — waits on a connection
+  # that only frees when another test finishes. A little spare fixes that.
+  #
+  # Not more than a little, though. This is one of several apps that may share
+  # a local Postgres, and the server's `max_connections` is the real ceiling:
+  # size the pool so the suite fits alongside whatever else is connected,
+  # rather than claiming a third of the server. If tests start failing with
+  # "tcp recv: closed" in unrelated places, check `pg_stat_activity` for idle
+  # connections from other projects before suspecting the tests.
+  pool_size: System.schedulers_online() * 2 + 6,
   # A men's Circuit draw is 239 fixtures under the Nov 2026 format, roughly
-  # double what it was, and several tests draw and play one. Under a full
-  # parallel run that was long enough to push connections past the queue
-  # target and have them dropped mid-test, which surfaced as unrelated
-  # "tcp recv: closed" failures.
+  # double what it was, and several tests draw and play one, so a checkout is
+  # held for longer than it used to be.
   queue_target: 5000,
-  queue_interval: 10_000,
   ownership_timeout: 120_000
 
 # Oban jobs are enqueued but never auto-processed in test; assert on them
