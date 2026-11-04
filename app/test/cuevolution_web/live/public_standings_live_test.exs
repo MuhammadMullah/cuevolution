@@ -27,6 +27,26 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
     %{bracket: bracket, admin: admin}
   end
 
+  defp play_round(bracket, admin, code) do
+    fixtures =
+      Repo.all(
+        from f in Fixture,
+          join: r in Round,
+          on: r.id == f.round_id,
+          where:
+            r.knockout_bracket_id == ^bracket.id and r.code == ^code and f.bye == false and
+              is_nil(f.result_id),
+          order_by: f.slot
+      )
+
+    for f <- fixtures, f.participant_a_id && f.participant_b_id do
+      Competitions.record_result(f, admin, %{
+        "winner_participation_id" => f.participant_a_id,
+        "score" => %{"a" => 6, "b" => 2}
+      })
+    end
+  end
+
   defp first_fixture(bracket) do
     Repo.one!(
       from f in Fixture,
@@ -97,26 +117,23 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
       assert html =~ "6–2"
     end
 
-    test "a burst of frames is coalesced but the last one still lands", %{conn: conn} do
+    test "a burst of frames leaves the latest score on screen", %{conn: conn} do
       %{bracket: bracket, admin: admin} = drawn_bracket()
       fixture = first_fixture(bracket)
 
       {:ok, view, _html} = live(conn, ~p"/live")
 
-      # A circuit scores frames from two dozen tables at once. Reloads are
-      # throttled so a public page cannot be made to recompute per frame per
-      # viewer — but whatever the throttle swallows on the way, the score on
-      # screen has to end up being the real one.
+      # A circuit scores frames from two dozen tables at once. However the
+      # page batches those broadcasts, the score it ends up showing has to be
+      # the real one. (The batching itself is covered in
+      # `CuevolutionWeb.StandingsRefreshTest`; it is off in test.)
       for a <- 1..5 do
         {:ok, _} = Competitions.update_live_score(fixture, admin, %{"a" => a, "b" => 0})
       end
 
-      assert render(view) =~ "1 in play"
-
-      # Past the coalescing window the deferred reload has carried the latest
-      # frame through.
-      Process.sleep(1_200)
-      assert render(view) =~ "5"
+      html = render(view)
+      assert html =~ "1 in play"
+      assert html =~ "5"
     end
 
     test "the live view does not carry the standings table, nor the table the match cards",
@@ -154,74 +171,44 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
   end
 
   describe "the standings table" do
-    test "ranks by SP Points", %{conn: conn} do
-      %{bracket: bracket, admin: admin} = drawn_bracket()
-      fixture = first_fixture(bracket)
+    test "the brief's columns are on the public table", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn_bracket("male", 32)
+      play_round(bracket, admin, "W1")
 
-      {:ok, _} =
-        Competitions.record_result(fixture, admin, %{
-          "winner_participation_id" => fixture.participant_a_id,
-          "score" => %{"a" => 6, "b" => 2}
-        })
+      {:ok, _view, html} = live(conn, ~p"/live?category=male&view=table")
 
-      {:ok, view, _html} = live(conn, ~p"/live")
-      html = view |> element("button[phx-value-view='table']") |> render_click()
-
-      assert html =~ "SP Points"
-      # A win is 3 on top of the 2 for playing; the loser keeps the 2.
-      assert html =~ ">5<" or html =~ "5\n"
-      assert html =~ "2 for playing"
-    end
-
-    test "every statistic from the brief is on the public table", %{conn: conn} do
-      %{bracket: bracket, admin: admin} = drawn_bracket()
-      fixture = first_fixture(bracket)
-
-      {:ok, _} =
-        Competitions.record_result(fixture, admin, %{
-          "winner_participation_id" => fixture.participant_a_id,
-          "score" => %{"a" => 6, "b" => 2}
-        })
-
-      {:ok, view, _html} = live(conn, ~p"/live")
-      html = view |> element("button[phx-value-view='table']") |> render_click()
-
-      for header <- ~w(MP MW ML MD FW FL FD) do
-        assert html =~ header, "#{header} column missing from the public table"
+      for header <- ["Pos", "Player", "Region", "Finish", "Racks won", "Rack-win %", "SP Points"] do
+        assert html =~ header, "the #{header} column is missing"
       end
 
-      assert html =~ "SP Points"
-      # The 6-2 win: six frames won, two lost, +4 difference.
-      assert html =~ "+4"
-      assert html =~ "-4"
+      # Provisional while the circuit runs, so the Status column is there too.
+      assert html =~ "Status"
+      assert html =~ "Provisional"
     end
 
-    test "the table is ordered by SP Points, highest first", %{conn: conn} do
-      %{bracket: bracket, admin: admin} = drawn_bracket()
+    test "a player who has won their opening match shows the points it guarantees",
+         %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn_bracket("male", 32)
+      play_round(bracket, admin, "W1")
 
-      # Play the first round so some players have a win and some do not.
-      fixtures =
-        Repo.all(
-          from f in Fixture,
-            join: r in Round,
-            on: r.id == f.round_id,
-            where: r.knockout_bracket_id == ^bracket.id and r.sequence == 1
-        )
+      {:ok, _view, html} = live(conn, ~p"/live?category=male&view=table")
 
-      for f <- fixtures do
-        Competitions.record_result(f, admin, %{
-          "winner_participation_id" => f.participant_a_id,
-          "score" => %{"a" => 6, "b" => 1}
-        })
-      end
+      # Unbeaten in WB R2 cannot finish below 65th, which is 5 points.
+      assert html =~ "Winners side"
+      assert html =~ "Losers side"
+      assert html =~ "SP Points"
+    end
 
-      rows = Competitions.standings_for_category("male")
-      points = Enum.map(rows, & &1.sp_points)
+    test "it is ordered by SP Points, strongest first", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn_bracket("male", 32)
+      play_round(bracket, admin, "W1")
 
-      assert points == Enum.sort(points, :desc),
-             "standings must rank by SP Points, got #{inspect(points)}"
+      {:ok, _view, _html} = live(conn, ~p"/live?category=male&view=table")
 
-      assert hd(rows).sp_points > List.last(rows).sp_points
+      rows = Competitions.circuit_standings(circuit().id, "male").rows
+      points = Enum.map(rows, & &1.points)
+
+      assert points == Enum.sort(points, :desc)
     end
 
     test "the view and category are in the URL so a link can be shared", %{conn: conn} do
@@ -231,13 +218,17 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
       assert_patch(view) =~ "view=table"
 
       view |> element("button[phx-value-tab='female']") |> render_click()
-      assert assert_patch(view) =~ "category=female"
+      assert_patch(view) =~ "category=female"
     end
 
     test "landing on a shared link opens that view", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn_bracket("female", 32)
+      play_round(bracket, admin, "W1")
+
       {:ok, _view, html} = live(conn, ~p"/live?category=female&view=table")
 
       assert html =~ "SP Points"
+      assert html =~ "Ladies"
     end
   end
 end

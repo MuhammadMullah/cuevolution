@@ -1,5 +1,8 @@
 defmodule CuevolutionWeb.Admin.StandingsLiveTest do
-  @moduledoc false
+  @moduledoc """
+  The per-circuit standings table from the SP Points & Standings brief
+  (Nov 2026) — provisional while the circuit runs, final once it is over.
+  """
   use CuevolutionWeb.ConnCase, async: true
 
   import Ecto.Query
@@ -22,9 +25,7 @@ defmodule CuevolutionWeb.Admin.StandingsLiveTest do
 
   defp as_td(conn), do: log_in_admin(conn, insert(:admin, role: "tournament_director"))
 
-  # Draws a bracket and plays its opening round, so some players have a win
-  # and frames, and the rest have neither.
-  defp played_bracket(category \\ "male", count \\ 8) do
+  defp bracket_for(category, count) do
     stage = circuit()
     admin = insert(:admin, role: "tournament_director")
 
@@ -33,24 +34,41 @@ defmodule CuevolutionWeb.Admin.StandingsLiveTest do
     end
 
     {:ok, %{bracket: bracket}} = Competitions.draw_circuit_bracket(stage.id, category, admin)
+    %{bracket: bracket, admin: admin}
+  end
 
+  defp play_round(bracket, admin, code) do
     fixtures =
       Repo.all(
         from f in Fixture,
           join: r in Round,
           on: r.id == f.round_id,
-          where: r.knockout_bracket_id == ^bracket.id and r.sequence == 1,
+          where:
+            r.knockout_bracket_id == ^bracket.id and r.code == ^code and f.bye == false and
+              is_nil(f.result_id),
           order_by: f.slot
       )
 
-    for f <- fixtures do
+    for f <- fixtures, f.participant_a_id && f.participant_b_id do
       Competitions.record_result(f, admin, %{
         "winner_participation_id" => f.participant_a_id,
         "score" => %{"a" => 6, "b" => 2}
       })
     end
 
-    %{bracket: bracket, admin: admin, fixtures: fixtures}
+    fixtures
+  end
+
+  defp play_out(bracket, admin) do
+    codes =
+      Repo.all(
+        from r in Round,
+          where: r.knockout_bracket_id == ^bracket.id,
+          order_by: r.sequence,
+          select: r.code
+      )
+
+    Enum.each(codes, &play_round(bracket, admin, &1))
   end
 
   describe "reaching the table" do
@@ -65,192 +83,125 @@ defmodule CuevolutionWeb.Admin.StandingsLiveTest do
     end
   end
 
-  describe "the ten columns" do
-    test "every statistic from the brief is present", %{conn: conn} do
-      played_bracket()
+  describe "the brief's columns" do
+    test "the provisional view carries Status, the final view does not", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
+      play_round(bracket, admin, "W1")
 
       {:ok, _view, html} = live(as_td(conn), ~p"/admin/standings")
 
-      for header <- ~w(MP MW ML MD FW FL FD) do
-        assert html =~ ">\n              #{header}" or html =~ header
+      assert html =~ "Provisional"
+      assert html =~ "Status"
+      assert html =~ "Winners side"
+      assert html =~ "Losers side"
+
+      play_out(bracket, admin)
+
+      {:ok, _view, final} = live(as_td(conn), ~p"/admin/standings")
+
+      assert final =~ "Final"
+      refute final =~ "Winners side"
+    end
+
+    test "every column the brief lists is present", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
+      play_out(bracket, admin)
+
+      {:ok, _view, html} = live(as_td(conn), ~p"/admin/standings")
+
+      for header <- [
+            "Pos",
+            "Player",
+            "Region",
+            "Finish",
+            "Racks won",
+            "Racks played",
+            "Rack-win %",
+            "SP Points"
+          ] do
+        assert html =~ header, "the #{header} column is missing"
+      end
+    end
+
+    test "rack-win % is shown to one decimal place", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
+      play_out(bracket, admin)
+
+      {:ok, _view, html} = live(as_td(conn), ~p"/admin/standings")
+
+      # Every match here was 6-2, so a winner's share is 6/8 = 75.0%.
+      assert html =~ "75.0%"
+    end
+  end
+
+  describe "shared positions" do
+    setup do
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
+      play_out(bracket, admin)
+      %{standings: Competitions.circuit_standings(circuit().id, "male")}
+    end
+
+    test "the table locks, bands share their points, and every place is accounted for",
+         %{standings: standings} do
+      assert standings.state == :final
+
+      bands = Enum.group_by(standings.rows, & &1.position)
+
+      for {position, band} <- bands do
+        points = band |> Enum.map(& &1.points) |> Enum.uniq()
+
+        assert length(points) == 1,
+               "position #{inspect(position)} has mixed points #{inspect(points)}"
+
+        {from, to} = position
+
+        assert to - from + 1 == length(band),
+               "band #{from}-#{to} holds #{length(band)} players"
       end
 
-      assert html =~ "SP Points"
-      assert html =~ "Player"
+      covered =
+        bands |> Map.keys() |> Enum.flat_map(fn {from, to} -> Enum.to_list(from..to) end)
+
+      assert Enum.sort(covered) == Enum.to_list(1..16)
     end
 
-    test "the figures are right for a 6-2 win", %{conn: conn} do
-      %{fixtures: [first | _]} = played_bracket()
+    test "a shared position prints with an equals sign", %{standings: standings} do
+      semis = Enum.filter(standings.rows, &(&1.finish == :semi_finalist))
 
-      winner = Repo.preload(first, participant_a: :player).participant_a
-      loser = Repo.preload(first, participant_b: :player).participant_b
-
-      rows = Competitions.standings_for_category("male")
-      won = Enum.find(rows, &(&1.id == winner.id))
-      lost = Enum.find(rows, &(&1.id == loser.id))
-
-      assert %{played: 1, won: 1, lost: 0, match_difference: 1} = won
-      assert %{frames_won: 6, frames_lost: 2, frame_difference: 4} = won
-      assert won.sp_points == 5
-
-      assert %{played: 1, won: 0, lost: 1, match_difference: -1} = lost
-      assert %{frames_won: 2, frames_lost: 6, frame_difference: -4} = lost
-      assert lost.sp_points == 2
-    end
-
-    test "a difference of zero or less is shown without a plus sign", %{conn: conn} do
-      played_bracket()
-
-      {:ok, _view, html} = live(as_td(conn), ~p"/admin/standings")
-
-      assert html =~ "+4"
-      assert html =~ "-4"
+      assert length(semis) == 2
+      assert Enum.all?(semis, &(Competitions.position_label(&1, :final) == "3="))
+      assert Competitions.position_label(hd(standings.rows), :final) == "1"
     end
   end
 
   describe "ranking order" do
-    test "SP Points come first" do
-      played_bracket()
-      rows = Competitions.standings_for_category("male")
+    test "SP Points first, then rack-win %" do
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
+      play_out(bracket, admin)
 
-      assert Enum.map(rows, & &1.sp_points) == Enum.sort(Enum.map(rows, & &1.sp_points), :desc)
-    end
+      rows = Competitions.circuit_standings(circuit().id, "male").rows
 
-    test "players level on points are split by match then frame difference" do
-      played_bracket()
-      rows = Competitions.standings_for_category("male")
-
-      # Within each SP Points band the order must never improve as you go down.
-      rows
-      |> Enum.chunk_by(& &1.sp_points)
-      |> Enum.each(fn band ->
-        keys = Enum.map(band, &{-&1.match_difference, -&1.frame_difference, -&1.frames_won})
-        assert keys == Enum.sort(keys), "a points band is out of order: #{inspect(keys)}"
-      end)
-    end
-
-    test "frame difference separates players level on points and matches" do
-      stage = circuit()
-      admin = insert(:admin, role: "tournament_director")
-
-      players =
-        for _ <- 1..8, do: insert(:stage_participation, stage_id: stage.id, category: "male")
-
-      {:ok, %{bracket: bracket}} = Competitions.draw_circuit_bracket(stage.id, "male", admin)
-
-      [narrow, wide | _] =
-        Repo.all(
-          from f in Fixture,
-            join: r in Round,
-            on: r.id == f.round_id,
-            where: r.knockout_bracket_id == ^bracket.id and r.sequence == 1,
-            order_by: f.slot,
-            limit: 2
-        )
-
-      # Same points, same match difference, different frame difference.
-      Competitions.record_result(narrow, admin, %{
-        "winner_participation_id" => narrow.participant_a_id,
-        "score" => %{"a" => 6, "b" => 5}
-      })
-
-      Competitions.record_result(wide, admin, %{
-        "winner_participation_id" => wide.participant_a_id,
-        "score" => %{"a" => 6, "b" => 0}
-      })
-
-      rows = Competitions.standings_for_category("male")
-      assert length(players) == 8
-
-      wide_row = Enum.find(rows, &(&1.id == wide.participant_a_id))
-      narrow_row = Enum.find(rows, &(&1.id == narrow.participant_a_id))
-
-      assert wide_row, "the 6-0 winner is missing from the standings"
-      assert narrow_row, "the 6-5 winner is missing from the standings"
-
-      # Both on 5 points and +1 match difference, so frame difference decides.
-      assert wide_row.sp_points == narrow_row.sp_points
-      assert wide_row.match_difference == narrow_row.match_difference
-      assert wide_row.frame_difference > narrow_row.frame_difference
-
-      assert wide_row.rank < narrow_row.rank,
-             "a 6-0 win should rank above a 6-5 win, got " <>
-               "6-0 #{inspect(Map.take(wide_row, [:rank, :sp_points, :match_difference, :frame_difference]))} " <>
-               "vs 6-5 #{inspect(Map.take(narrow_row, [:rank, :sp_points, :match_difference, :frame_difference]))}"
-    end
-  end
-
-  describe "sorting" do
-    test "a column can be sorted without changing anyone's rank", %{conn: conn} do
-      played_bracket()
-
-      {:ok, view, _html} = live(as_td(conn), ~p"/admin/standings")
-
-      ranks_before =
-        Competitions.standings_for_category("male") |> Enum.map(&{&1.id, &1.rank}) |> Map.new()
-
-      view |> element("button[phx-value-by='frames_lost']") |> render_click()
-      assert_patch(view) =~ "sort=frames_lost"
-
-      ranks_after =
-        Competitions.standings_for_category("male") |> Enum.map(&{&1.id, &1.rank}) |> Map.new()
-
-      assert ranks_before == ranks_after
-    end
-
-    test "clicking the active column flips the direction", %{conn: conn} do
-      played_bracket()
-
-      {:ok, view, _html} = live(as_td(conn), ~p"/admin/standings")
-
-      view |> element("button[phx-value-by='frames_won']") |> render_click()
-      assert assert_patch(view) =~ "dir=desc"
-
-      view |> element("button[phx-value-by='frames_won']") |> render_click()
-      assert assert_patch(view) =~ "dir=asc"
-    end
-
-    test "the category and sort survive a reload", %{conn: conn} do
-      played_bracket("female")
-
-      {:ok, _view, html} =
-        live(as_td(conn), ~p"/admin/standings?category=female&sort=sp_points&dir=desc")
-
-      assert html =~ "Ladies&#39; Singles" or html =~ "Ladies' Singles"
+      keys = Enum.map(rows, &{-&1.points, -(&1.rack_win_pct || -1)})
+      assert keys == Enum.sort(keys), "the table is not in the published order"
     end
   end
 
   describe "live updates" do
     test "a result recorded elsewhere updates the table", %{conn: conn} do
-      %{bracket: bracket, admin: admin} = played_bracket()
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
 
       {:ok, view, _html} = live(as_td(conn), ~p"/admin/standings")
-
-      next =
-        Repo.one!(
-          from f in Fixture,
-            join: r in Round,
-            on: r.id == f.round_id,
-            where:
-              r.knockout_bracket_id == ^bracket.id and r.sequence == 2 and
-                not is_nil(f.participant_a_id) and not is_nil(f.participant_b_id),
-            limit: 1
-        )
 
       parent = self()
 
       Task.async(fn ->
         Sandbox.allow(Repo, parent, self())
-
-        Competitions.record_result(next, admin, %{
-          "winner_participation_id" => next.participant_a_id,
-          "score" => %{"a" => 6, "b" => 0}
-        })
+        play_round(bracket, admin, "W1")
       end)
       |> Task.await()
 
-      # Two wins and twelve frames now exist for somebody.
-      assert render(view) =~ "8"
+      # Winning the opening round guarantees at least 65th — 5 points.
+      assert render(view) =~ "5"
     end
   end
 end

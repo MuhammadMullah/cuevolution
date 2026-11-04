@@ -397,7 +397,7 @@ defmodule CuevolutionWeb.GroupManagementCircuitTest do
     test "list view groups matches by round with progress", %{view: view} do
       html = view |> element("button[phx-value-view='list']") |> render_click()
 
-      assert html =~ "All 27"
+      assert html =~ "All 29"
       assert html =~ "Up next"
       assert html =~ "of 8 played"
     end

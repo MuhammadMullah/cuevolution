@@ -78,16 +78,33 @@ defmodule CuevolutionWeb.PublicStandingsLive do
     |> load_view(socket.assigns.view, category)
   end
 
-  defp load_view(socket, :table, category) do
+  # The published per-circuit table (SP Points & Standings brief, Nov 2026).
+  # The team event is a round robin with no bracket, so it keeps the cumulative
+  # table it already had — the brief covers singles only.
+  defp load_view(socket, :table, "team" = category) do
     assign(socket,
       rows: Competitions.standings_for_category(category),
+      standings_state: :team,
       matches: @no_matches
     )
+  end
+
+  defp load_view(socket, :table, category) do
+    stage = Competitions.circuit_stage()
+
+    case Competitions.circuit_standings(stage.id, category) do
+      nil ->
+        assign(socket, rows: [], standings_state: :provisional, matches: @no_matches)
+
+      %{rows: rows, state: state} ->
+        assign(socket, rows: rows, standings_state: state, matches: @no_matches)
+    end
   end
 
   defp load_view(socket, :live, category) do
     assign(socket,
       rows: [],
+      standings_state: :provisional,
       matches: Competitions.live_matches_for_category(category)
     )
   end
@@ -115,20 +132,54 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   def won?(_fixture, _side), do: false
 
   @doc false
-  def standings_columns do
+  def standings_columns(:team) do
     [
       {"#", "Rank", "text-left"},
-      {"Player", "Player name", "text-left"},
-      {"MP", "Matches played", "text-right"},
-      {"MW", "Matches won", "text-right"},
-      {"ML", "Matches lost", "text-right"},
-      {"MD", "Match difference (MW − ML)", "text-right"},
-      {"FW", "Frames won", "text-right"},
-      {"FL", "Frames lost", "text-right"},
-      {"FD", "Frame difference (FW − FL)", "text-right"},
+      {"Player", "Team", "text-left"},
+      {"P", "Matches played", "text-right"},
+      {"W", "Matches won", "text-right"},
+      {"L", "Matches lost", "text-right"},
       {"SP Points", "SportPesa Points", "text-right"}
     ]
   end
+
+  def standings_columns(state) do
+    base = [
+      {"Pos", "Position", "text-left"},
+      {"Player", "Player", "text-left"},
+      {"Region", "Region", "text-left"},
+      {"Finish", "Where their circuit ended", "text-left"},
+      {"P", "Matches played, byes and walkovers included", "text-right"},
+      {"W", "Matches won, byes and walkovers included", "text-right"},
+      {"Racks won", "Racks won, byes and walkovers excluded", "text-right"},
+      {"Rack-win %", "Racks won / racks played", "text-right"},
+      {"SP Points", "SportPesa Points", "text-right"}
+    ]
+
+    case state do
+      :provisional ->
+        {before, rest} = Enum.split(base, 3)
+        before ++ [{"Status", "Which side of the bracket they are on", "text-left"}] ++ rest
+
+      _final ->
+        base
+    end
+  end
+
+  @doc false
+  def standings_cell(row, "Pos", :team), do: row.rank
+  def standings_cell(row, "Pos", state), do: Competitions.position_label(row, state)
+  def standings_cell(row, "Player", _state), do: row.name
+  def standings_cell(row, "Region", _state), do: row.region
+  def standings_cell(row, "Status", _state), do: Competitions.status_label(row)
+  def standings_cell(row, "Finish", _state), do: row.finish_label
+  def standings_cell(row, "P", _state), do: row.played
+  def standings_cell(row, "W", _state), do: row.won
+  def standings_cell(row, "L", _state), do: Map.get(row, :lost)
+  def standings_cell(row, "Racks won", _state), do: row.racks_won
+  def standings_cell(row, "Rack-win %", _state), do: Competitions.rack_win_label(row) || "-"
+  def standings_cell(row, "SP Points", :team), do: row.sp_points
+  def standings_cell(row, "SP Points", _state), do: row.points
 
   @doc false
   def signed(value) when value > 0, do: "+#{value}"

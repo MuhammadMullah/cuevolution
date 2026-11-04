@@ -1,8 +1,18 @@
 <AdminComponents.app_shell current_admin={@current_admin} active={:standings} flash={@flash}>
   <AdminComponents.eyebrow class="mb-1.5">Rankings</AdminComponents.eyebrow>
-  <h1 class="mb-[18px] text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
-    Player standings
-  </h1>
+
+  <div class="mb-[18px] flex flex-wrap items-center gap-3">
+    <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
+      Player standings
+    </h1>
+    <span class={[
+      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em]",
+      @state == :final && "bg-ink-950 text-white",
+      @state == :provisional && "bg-amber-50 text-amber-700"
+    ]}>
+      {if @state == :final, do: "Final", else: "Provisional"}
+    </span>
+  </div>
 
   <div class="mb-5 flex gap-5 overflow-x-auto border-b border-ink-200">
     <button
@@ -31,31 +41,19 @@
     :if={@rows != []}
     class="overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <table class="w-full min-w-[820px] border-collapse">
+    <table class="w-full min-w-[900px] border-collapse">
       <thead>
         <tr>
           <th
-            :for={{key, short, full, align} <- columns()}
+            :for={{short, full, align} <- columns(@state)}
             scope="col"
             title={full}
             class={[
-              "sticky top-0 whitespace-nowrap bg-ink-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide",
-              align,
-              @sort_by == key && "text-ink-950",
-              @sort_by != key && "text-ink-500"
+              "sticky top-0 whitespace-nowrap bg-ink-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-500",
+              align
             ]}
           >
-            <button
-              type="button"
-              phx-click="sort"
-              phx-value-by={key}
-              class="inline-flex items-center gap-1 hover:text-ink-950"
-            >
-              {short}
-              <span :if={@sort_by == key} aria-hidden="true">
-                {if @sort_dir == :asc, do: "▲", else: "▼"}
-              </span>
-            </button>
+            {short}
           </th>
         </tr>
       </thead>
@@ -63,20 +61,25 @@
       <tbody>
         <tr
           :for={row <- @rows}
-          class="border-t border-ink-100 hover:bg-ink-25"
+          class={[
+            "border-t border-ink-100 hover:bg-ink-25",
+            row.finish == :champion && "bg-gold-50/50"
+          ]}
         >
           <td
-            :for={{key, _short, _full, align} <- columns()}
+            :for={{short, _full, align} <- columns(@state)}
             class={[
               "whitespace-nowrap px-4 py-2.5 text-[14px]",
               align,
-              key in ~w(rank) && "tabular-nums text-ink-400",
-              key == "name" && "font-medium text-ink-950",
-              key == "sp_points" && "font-bold tabular-nums text-ink-950",
-              key not in ~w(rank name sp_points) && "tabular-nums text-ink-600"
+              short == "Player" && "font-medium text-ink-950",
+              short == "SP Points" && "font-bold tabular-nums text-ink-950",
+              short == "Pos" && "tabular-nums text-ink-400",
+              short not in ["Player", "SP Points", "Pos", "Region", "Status", "Finish"] &&
+                "tabular-nums text-ink-600",
+              short in ["Region", "Status", "Finish"] && "text-ink-600"
             ]}
           >
-            {cell(row, key)}
+            {cell(row, short, @state)}
           </td>
         </tr>
       </tbody>
@@ -84,8 +87,14 @@
   </div>
 
   <p :if={@rows != []} class="mt-3 text-[12px] leading-relaxed text-ink-400">
-    Ranked on SP Points first, then match difference, then frame difference, then frames won.
-    Sorting a column is a view of the same table — the rank stays as published. Updates as
-    results are recorded.
+    Ranked on SP Points, then rack-win %. Players knocked out at the same stage share a position,
+    shown as <span class="font-mono">3=</span>, and share their points — rack-win % only orders
+    the rows inside a shared position, it never moves anyone up or down it. P and W include
+    walkovers and byes; the rack columns leave them out.
+    <span :if={@state == :provisional}>
+      This table is provisional while the circuit is running: each player is scored on the stage
+      they have reached so far.
+    </span>
+    <span :if={@state == :final}>This circuit is over and the table is final.</span>
   </p>
 </AdminComponents.app_shell>

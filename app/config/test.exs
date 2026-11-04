@@ -11,8 +11,23 @@ config :cuevolution, Cuevolution.Repo,
   hostname: "localhost",
   database: "cuevolution_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2,
-  queue_target: 5000
+  # ExUnit runs `schedulers_online() * 2` cases at once, so a pool of exactly
+  # that size leaves no headroom: a test needing a second checkout — a
+  # LiveView spawning, a Task given sandbox access — waits on a connection
+  # that only frees when another test finishes. A little spare fixes that.
+  #
+  # Not more than a little, though. This is one of several apps that may share
+  # a local Postgres, and the server's `max_connections` is the real ceiling:
+  # size the pool so the suite fits alongside whatever else is connected,
+  # rather than claiming a third of the server. If tests start failing with
+  # "tcp recv: closed" in unrelated places, check `pg_stat_activity` for idle
+  # connections from other projects before suspecting the tests.
+  pool_size: System.schedulers_online() * 2 + 6,
+  # A men's Circuit draw is 239 fixtures under the Nov 2026 format, roughly
+  # double what it was, and several tests draw and play one, so a checkout is
+  # held for longer than it used to be.
+  queue_target: 5000,
+  ownership_timeout: 120_000
 
 # Oban jobs are enqueued but never auto-processed in test; assert on them
 # explicitly with Oban.Testing instead.
@@ -76,3 +91,9 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# The standings pages coalesce a burst of "standings" broadcasts into one
+# reload per second. That topic is global and these tests run async, so in test
+# the coalescing is off and every broadcast lands at once; the coalescing logic
+# itself is covered directly in `CuevolutionWeb.StandingsRefreshTest`.
+config :cuevolution, :standings_refresh_interval_ms, 0

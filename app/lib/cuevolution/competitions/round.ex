@@ -7,6 +7,10 @@ defmodule Cuevolution.Competitions.Round do
 
   schema "rounds" do
     field :name, :string
+    # The bracket engine's short code for this round — "W1", "L4", "R32", "SF",
+    # "F". The stable identity the SP Points rules are written against; nil for
+    # a round-robin round, which has no bracket position.
+    field :code, :string
     # Set only for Circuit double-elimination rounds (spec 014); nil for the
     # round-robin rounds at Grassroots/Regional.
     field :bracket_side, :string
@@ -34,6 +38,7 @@ defmodule Cuevolution.Competitions.Round do
       :group_id,
       :knockout_bracket_id,
       :name,
+      :code,
       :bracket_side,
       :sequence,
       :race_to

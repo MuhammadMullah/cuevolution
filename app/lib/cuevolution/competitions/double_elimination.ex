@@ -2,48 +2,73 @@ defmodule Cuevolution.Competitions.DoubleElimination do
   @moduledoc """
   Builds the Circuit stage bracket as plain data — no `Repo`, no side effects.
 
-  The Circuit format is a *truncated* double elimination followed by a straight
-  knockout (see `project-scope/specs/014-circuit-stage-format/`):
+  Double elimination runs for `depth` winners' rounds, then the survivors —
+  the still-unbeaten half of the winners' side plus the one-loss half of the
+  losers' side — play straight single elimination to a champion.
 
-    * **Winners Round 1** — the whole field. Winners stay unbeaten, losers drop.
-    * **Winners Round 2** — the unbeaten half. Winners qualify, losers drop.
-    * **Losers Round 1** — the WR1 losers. Losing here is a second loss: out.
-    * **Losers Round 2 (crossover)** — LR1 winners meet the WR2 droppers.
-    * **Knockout** — the unbeaten half plus the one-loss survivors, single
-      elimination down to a champion.
+  **Men (SP Points & Standings brief, Nov 2026): `depth: 3`.** A 128 draw runs
+  WB R1-R3 and LB R1-R4, leaving 32 players (16 a side) for the single
+  elimination:
 
-  A 128 field produces 64 qualifiers and 223 matches; a 64 field produces 32
-  qualifiers and 93. Those totals, the seeding, and all three pairing rules
-  below are taken from the 2026 sample draw rather than invented here:
+      WB R1  128 -> 64   losers to LB R1
+      WB R2   64 -> 32   losers to LB R2
+      WB R3   32 -> 16   losers to LB R4, winners to the last 32
+      LB R1   64 -> 32   losers out, 97-128
+      LB R2   64 -> 32   losers out,  65-96   (LB R1 winners + WB R2 losers)
+      LB R3   32 -> 16   losers out,  49-64
+      LB R4   32 -> 16   losers out,  33-48   (LB R3 winners + WB R3 losers)
+      Last 32 onwards    single elimination
+
+  **Ladies: `depth: 2`,** the shallower bracket that was in use before the
+  brief. The brief leaves the 48-player ladies format open, so this is
+  deliberately unchanged until it is decided — see `@formats`.
+
+  Three pairing rules, in each case chosen so a player does not immediately
+  meet somebody they have just played:
 
     * **Seeding** is the standard recursive bracket order — 1 v 128, 64 v 65,
       32 v 97, 33 v 96 … (`seed_order/1`).
-    * **The crossover is mirrored**: `L2-k` pairs the loser of `W2-(n+1-k)`
-      against the `L1-k` winner, the winners'-side player in slot A.
-    * **The knockout is offset by half a round**: `K-j` pairs the `W2-j` winner
-      against the `L2-m` winner where `m` is `j` rotated by half the round.
-      Pairing `W2-j` with `L2-j` instead would put a player straight back in
-      against someone they already knocked out in WR1 — the offset exists to
-      prevent that, and `double_elimination_test.exs` asserts it holds for
-      every match in a 128 draw.
+    * **Every crossover is mirrored**: the losers of `Wi` enter `L(2i-2)` from
+      the far end, in slot A, so the winners'-side dropper is always on top of
+      the card.
+    * **The single-elimination draw is offset by half a round**: the `L(2d-2)`
+      winners are rotated against the `Wd` winners. Pairing them straight
+      across would put a player back in against someone they knocked out in
+      WB R1. `double_elimination_test.exs` asserts no first-round rematch for
+      a full 128 draw.
 
-  `build/1` returns `%{rounds: [...], fixtures: [...]}` where each fixture
+  The brief lists the last-32 draw as an open item ("are winners'-side
+  qualifiers paired against losers'-side qualifiers?"), so the rotation here is
+  a defensible default rather than a confirmed rule.
+
+  `build/2` returns `%{rounds: [...], fixtures: [...]}` where each fixture
   carries where its winner goes and where its loser goes, as
   `{fixture_code, :a | :b}` or `nil` for "eliminated". Persisting that graph is
-  `Competitions.generate_circuit_bracket/2`'s job, not this module's.
+  `Competitions.generate_circuit_bracket/4`'s job, not this module's.
   """
 
-  # Race lengths from the official SportPesa National Pool Circuit 2026/27
-  # format sheet: "race to N all through", with the losers' side shorter and
-  # the final longer. The sheet calls out only the final as an exception at
-  # the business end, so the semifinal runs at the knockout length.
-  @races %{
-    "male" => %{winners: 6, losers: 5, knockout: 6, semifinal: 6, final: 7},
-    "female" => %{winners: 4, losers: 3, knockout: 4, semifinal: 4, final: 5}
+  import Bitwise, only: [bsl: 2]
+
+  # Per the Nov 2026 brief, every men's match is a race to 6 — the losers'
+  # side and the final are no longer exceptions. The ladies' lengths are the
+  # previous ones, pending the format decision.
+  @formats %{
+    "male" => %{
+      depth: 3,
+      races: %{winners: 6, losers: 6, knockout: 6, semifinal: 6, final: 6}
+    },
+    "female" => %{
+      depth: 2,
+      races: %{winners: 4, losers: 3, knockout: 4, semifinal: 4, final: 5}
+    }
   }
 
+  @doc ~S(The bracket format for `category` — `%{depth: n, races: map}`.)
+  def format_for(category) when is_map_key(@formats, category),
+    do: Map.fetch!(@formats, category)
+
   @doc ~S(The official race lengths for `category` — "male" or "female".)
-  def races_for(category) when is_map_key(@races, category), do: Map.fetch!(@races, category)
+  def races_for(category), do: format_for(category).races
 
   @doc """
   Builds the full bracket for `entrants` (a list of anything — participation
@@ -51,8 +76,11 @@ defmodule Cuevolution.Competitions.DoubleElimination do
 
   Options:
 
-    * `:category` — `"male"` (default) or `"female"`, which selects the
-      official race lengths for that event.
+    * `:category` — `"male"` (default) or `"female"`, which selects that
+      event's bracket depth and race lengths.
+    * `:depth` — how many winners' rounds run before the single elimination,
+      overriding the category's. 3 leaves a last 32 from a 128 draw, 2 a
+      last 64.
     * `:races` — a map merged over the category's defaults, for a one-off
       variation without editing the module.
     * `:byes` — `:seeded` (default) puts the byes on the strongest seeds, which
@@ -65,24 +93,43 @@ defmodule Cuevolution.Competitions.DoubleElimination do
   def build(entrants, opts \\ []) when is_list(entrants) do
     field = length(entrants)
     bracket = bracket_size(field)
+    format = format_for(Keyword.get(opts, :category, "male"))
+    races = Map.merge(format.races, Map.new(Keyword.get(opts, :races, %{})))
 
     if bracket < 8 do
       raise ArgumentError, "a Circuit bracket needs at least 5 entrants, got #{field}"
     end
 
-    races =
-      opts
-      |> Keyword.get(:category, "male")
-      |> races_for()
-      |> Map.merge(Map.new(Keyword.get(opts, :races, %{})))
+    # The format's depth is what a full field plays. A smaller draw — a demo, a
+    # regional one-off — cannot support three winners' rounds and still have a
+    # final left, so it runs the deepest double elimination it has room for
+    # rather than refusing to draw at all.
+    depth = min(Keyword.get(opts, :depth, format.depth), max_depth(bracket))
 
     slots = assign_slots(entrants, bracket, opts)
 
-    rounds = build_rounds(bracket, races)
-    fixtures = build_fixtures(bracket, slots)
-
-    %{rounds: rounds, fixtures: fixtures, bracket_size: bracket, byes: bracket - field}
+    %{
+      rounds: build_rounds(bracket, depth, races),
+      fixtures: build_fixtures(bracket, depth, slots),
+      bracket_size: bracket,
+      depth: depth,
+      byes: bracket - field,
+      qualifiers: single_elimination_size(bracket, depth)
+    }
   end
+
+  @doc """
+  The deepest double elimination a `bracket` can run and still have a final:
+  each winners' round halves the field, and the single elimination needs at
+  least two players at the end of it.
+  """
+  def max_depth(bracket), do: max(trunc(:math.log2(bracket)) - 1, 1)
+
+  @doc "How many players reach the single-elimination phase of a `bracket`."
+  def single_elimination_size(bracket, depth), do: div(bracket, bsl(1, depth - 1))
+
+  @doc "How many losers' rounds a depth-`depth` bracket has."
+  def losers_round_count(depth), do: 2 * depth - 2
 
   @doc "The smallest power of two that holds `field`."
   def bracket_size(field) when field > 0 do
@@ -178,32 +225,42 @@ defmodule Cuevolution.Competitions.DoubleElimination do
 
   # ------------------------------------------------------------------ rounds
 
-  defp build_rounds(bracket, races) do
-    w1 = div(bracket, 2)
-    w2 = div(bracket, 4)
+  defp build_rounds(bracket, depth, races) do
+    winners =
+      for i <- 1..depth do
+        %{
+          code: "W#{i}",
+          name: "Winners Round #{i}",
+          side: "winners",
+          matches: winners_matches(bracket, i),
+          race_to: races.winners
+        }
+      end
 
-    [
-      %{
-        code: "W1",
-        name: "Winners Round 1",
-        side: "winners",
-        matches: w1,
-        race_to: races.winners
-      },
-      %{
-        code: "W2",
-        name: "Winners Round 2",
-        side: "winners",
-        matches: w2,
-        race_to: races.winners
-      },
-      %{code: "L1", name: "Losers Round 1", side: "losers", matches: w2, race_to: races.losers},
-      %{code: "L2", name: "Losers Round 2", side: "losers", matches: w2, race_to: races.losers}
-    ] ++ knockout_rounds(div(bracket, 2), races)
+    losers =
+      for j <- 1..losers_round_count(depth) do
+        %{
+          code: "L#{j}",
+          name: "Losers Round #{j}",
+          side: "losers",
+          matches: losers_matches(bracket, j),
+          race_to: races.losers
+        }
+      end
+
+    winners ++ losers ++ knockout_rounds(single_elimination_size(bracket, depth), races)
   end
 
-  # The knockout starts with half the field — the unbeaten quarter plus the
-  # one-loss quarter — and halves from there down to the final.
+  # `Wi` is the i-th halving of the field, so it has bracket / 2^i matches.
+  defp winners_matches(bracket, i), do: div(bracket, bsl(1, i))
+
+  # The losers' side alternates: an odd round pairs up the survivors it already
+  # has, and the even round after it takes in that winners' round's droppers.
+  # Both rounds of a pair are the same size, which is why the index is halved.
+  defp losers_matches(bracket, j), do: div(bracket, bsl(1, div(j + 1, 2) + 1))
+
+  # The single elimination starts with the unbeaten side plus the one-loss
+  # side, and halves from there down to the final.
   defp knockout_rounds(players, races) do
     players
     |> Stream.iterate(&div(&1, 2))
@@ -235,26 +292,26 @@ defmodule Cuevolution.Competitions.DoubleElimination do
 
   # ---------------------------------------------------------------- fixtures
 
-  defp build_fixtures(bracket, slots) do
-    w2 = div(bracket, 4)
-    first_knockout = knockout_code(div(bracket, 2))
+  defp build_fixtures(bracket, depth, slots) do
+    se = single_elimination_size(bracket, depth)
+    first = knockout_code(se)
 
     Enum.concat([
-      w1_fixtures(bracket, slots),
-      w2_fixtures(w2, first_knockout),
-      l1_fixtures(w2),
-      l2_fixtures(w2, first_knockout),
-      List.flatten(knockout_fixtures(div(bracket, 2)))
+      w1_fixtures(bracket, depth, slots, first),
+      Enum.flat_map(2..depth//1, &wn_fixtures(bracket, depth, &1, first)),
+      Enum.flat_map(1..losers_round_count(depth)//1, &ln_fixtures(bracket, depth, &1, first)),
+      List.flatten(knockout_fixtures(se))
     ])
   end
 
-  defp w1_fixtures(bracket, slots) do
+  defp w1_fixtures(bracket, depth, slots, first) do
     bracket
     |> seed_pairs()
     |> Enum.with_index(1)
     |> Enum.map(fn {{high, low}, k} ->
       a = Map.fetch!(slots, high)
       b = Map.fetch!(slots, low)
+      bye? = a == :bye or b == :bye
 
       %{
         code: "W1-#{k}",
@@ -264,66 +321,75 @@ defmodule Cuevolution.Competitions.DoubleElimination do
         b: entrant(b),
         a_seed: high,
         b_seed: low,
-        bye: a == :bye or b == :bye,
-        winner_to: {"W2-#{feed(k)}", feed_side(k)},
+        bye: bye?,
+        winner_to: winners_winner_to(depth, 1, k, first),
         # A bye produces no loser, so nothing is routed into the losers'
         # bracket from here — the slot stays empty and its losers' match
         # becomes a walkover for whoever does turn up.
-        loser_to: if(a == :bye or b == :bye, do: nil, else: {"L1-#{feed(k)}", feed_side(k)})
+        loser_to: unless(bye?, do: {"L1-#{feed(k)}", feed_side(k)})
       }
     end)
   end
 
-  defp w2_fixtures(w2, first_knockout) do
-    for k <- 1..w2 do
+  # Winners' rounds 2..depth. The last one sends its winners into the single
+  # elimination; the rest feed the next winners' round. Losers always drop into
+  # the crossover round `L(2i-2)`, mirrored and in slot A so the
+  # winners'-side player sits on top of the card.
+  defp wn_fixtures(bracket, depth, i, first) do
+    matches = winners_matches(bracket, i)
+    crossover = 2 * i - 2
+
+    for k <- 1..matches do
       %{
-        code: "W2-#{k}",
-        round_code: "W2",
+        code: "W#{i}-#{k}",
+        round_code: "W#{i}",
         slot: k,
         a: nil,
         b: nil,
         bye: false,
-        winner_to: {"#{first_knockout}-#{k}", :a},
-        # Mirrored: the W2-1 loser drops to the far end of the crossover, and
-        # into slot A — whoever arrives from the winners' side is shown on top
-        # of a crossover card, so the chart reads the same way every time.
-        loser_to: {"L2-#{w2 + 1 - k}", :a}
+        winner_to: winners_winner_to(depth, i, k, first),
+        loser_to: {"L#{crossover}-#{matches + 1 - k}", :a}
       }
     end
   end
 
-  defp l1_fixtures(w2) do
-    for k <- 1..w2 do
+  defp winners_winner_to(depth, depth, k, first), do: {"#{first}-#{k}", :a}
+  defp winners_winner_to(_depth, i, k, _first), do: {"W#{i + 1}-#{feed(k)}", feed_side(k)}
+
+  # Losers' rounds. An odd round pairs up whoever is already there; the even
+  # round after it is the crossover that takes the winners'-side droppers into
+  # slot A, so these winners take slot B at the same index.
+  defp ln_fixtures(bracket, depth, j, first) do
+    last = losers_round_count(depth)
+    matches = losers_matches(bracket, j)
+    half = div(matches, 2)
+
+    for k <- 1..matches do
       %{
-        code: "L1-#{k}",
-        round_code: "L1",
+        code: "L#{j}-#{k}",
+        round_code: "L#{j}",
         slot: k,
         a: nil,
         b: nil,
         bye: false,
-        # Slot B: the winners'-side dropper takes the top of the card.
-        winner_to: {"L2-#{k}", :b},
+        winner_to: losers_winner_to(j, last, k, half, matches, first),
+        # Every losers'-round defeat is a second loss: out.
         loser_to: nil
       }
     end
   end
 
-  defp l2_fixtures(w2, first_knockout) do
-    half = div(w2, 2)
+  # The last losers' round feeds the single elimination, rotated by half a
+  # round against the winners' qualifiers so nobody immediately replays the
+  # match that put them here.
+  defp losers_winner_to(last, last, k, half, matches, first),
+    do: {"#{first}-#{rotate(k, half, matches)}", :b}
 
-    for k <- 1..w2 do
-      %{
-        code: "L2-#{k}",
-        round_code: "L2",
-        slot: k,
-        a: nil,
-        b: nil,
-        bye: false,
-        winner_to: {"#{first_knockout}-#{rotate(k, half, w2)}", :b},
-        loser_to: nil
-      }
-    end
-  end
+  defp losers_winner_to(j, _last, k, _half, _matches, _first) when rem(j, 2) == 1,
+    do: {"L#{j + 1}-#{k}", :b}
+
+  defp losers_winner_to(j, _last, k, _half, _matches, _first),
+    do: {"L#{j + 1}-#{feed(k)}", feed_side(k)}
 
   defp knockout_fixtures(players) do
     players

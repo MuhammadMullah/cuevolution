@@ -2,15 +2,21 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
   @moduledoc """
   The singles player standings table for the admin console.
 
-  Ten columns per the committee brief — rank, player, MP, MW, ML, MD, FW, FL,
-  FD and SP Points — for Men's and Ladies' Singles separately.
+  The per-circuit standings table from the SP Points & Standings brief
+  (Nov 2026): Position, Player, Region, Status, Finish, P, W, Racks won, Racks
+  played, Rack-win % and SP Points.
 
-  **SP Points always decide the ranking.** The other statistics only separate
-  players level on points, in the published order: match difference, then
-  frame difference, then frames won (`Competitions.standings_for_category/1`).
-  The column headers are sortable for looking the table over, but sorting by
-  another column never changes a player's rank — the rank is the standing, and
-  it travels with the row.
+  Two views of the same table, and the difference matters:
+
+    * **Provisional**, while the circuit runs — a Status column, and every
+      player scored on the stage they have reached so far.
+    * **Final**, once the final has been played — players out at the same
+      stage share a position (`3=`), the table is marked Final, and it no
+      longer changes.
+
+  Ranked on SP Points, then rack-win %, and nothing else. Rack-win % orders
+  rows *inside* a shared position for display; it never moves a position or
+  changes anyone's points.
 
   Updates itself as results are entered: it subscribes to the `"standings"`
   topic, which every recorded bracket result broadcasts on.
@@ -23,22 +29,13 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
 
   @categories [{"male", "Men's Singles"}, {"female", "Ladies' Singles"}]
 
-  @sortable ~w(rank name played won lost match_difference frames_won frames_lost
-               frame_difference sp_points)
-
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Phoenix.PubSub.subscribe(Cuevolution.PubSub, "standings")
 
     {:ok,
      socket
-     |> assign(
-       page_title: "Standings",
-       categories: @categories,
-       category: "male",
-       sort_by: "rank",
-       sort_dir: :asc
-     )
+     |> assign(page_title: "Standings", categories: @categories, category: "male")
      |> StandingsRefresh.init()
      |> load()}
   end
@@ -46,33 +43,13 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
   @impl true
   def handle_params(params, _uri, socket) do
     category = if params["category"] in ~w(male female), do: params["category"], else: "male"
-    sort_by = if params["sort"] in @sortable, do: params["sort"], else: "rank"
-    sort_dir = if params["dir"] == "desc", do: :desc, else: :asc
 
-    {:noreply,
-     socket
-     |> assign(category: category, sort_by: sort_by, sort_dir: sort_dir)
-     |> load()}
+    {:noreply, socket |> assign(category: category) |> load()}
   end
 
   @impl true
   def handle_event("category", %{"category" => category}, socket) do
-    {:noreply, push_patch(socket, to: path_for(category, "rank", :asc))}
-  end
-
-  def handle_event("sort", %{"by" => by}, socket) when by in @sortable do
-    # Clicking the active column flips it; a new column starts in the
-    # direction that is useful for it — descending for a tally, ascending for
-    # a rank or a name.
-    dir =
-      cond do
-        socket.assigns.sort_by != by and by in ~w(rank name) -> :asc
-        socket.assigns.sort_by != by -> :desc
-        socket.assigns.sort_dir == :asc -> :desc
-        true -> :asc
-      end
-
-    {:noreply, push_patch(socket, to: path_for(socket.assigns.category, by, dir))}
+    {:noreply, push_patch(socket, to: ~p"/admin/standings?#{%{"category" => category}}")}
   end
 
   @impl true
@@ -84,56 +61,46 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
     {:noreply, StandingsRefresh.refreshed(socket, &load/1)}
   end
 
-  defp path_for(category, sort, dir) do
-    ~p"/admin/standings?#{%{"category" => category, "sort" => sort, "dir" => dir}}"
-  end
-
   defp load(socket) do
-    rows =
-      socket.assigns.category
-      |> Competitions.standings_for_category()
-      |> sort_rows(socket.assigns.sort_by, socket.assigns.sort_dir)
+    stage = Competitions.circuit_stage()
 
-    assign(socket, rows: rows)
-  end
-
-  # Sorting is a view over the table, never a re-ranking: `rank` is already on
-  # each row from the published order and is not recomputed here.
-  defp sort_rows(rows, "name", dir), do: Enum.sort_by(rows, & &1.name, dir)
-
-  defp sort_rows(rows, column, dir) do
-    key = String.to_existing_atom(column)
-    Enum.sort_by(rows, &{Map.fetch!(&1, key), &1.name}, dir)
+    case Competitions.circuit_standings(stage.id, socket.assigns.category) do
+      nil -> assign(socket, rows: [], state: :provisional)
+      %{rows: rows, state: state} -> assign(socket, rows: rows, state: state)
+    end
   end
 
   @doc false
-  def columns do
+  def columns(:final) do
     [
-      {"rank", "#", "Rank", "text-left"},
-      {"name", "Player", "Player name", "text-left"},
-      {"played", "MP", "Matches played", "text-right"},
-      {"won", "MW", "Matches won", "text-right"},
-      {"lost", "ML", "Matches lost", "text-right"},
-      {"match_difference", "MD", "Match difference (MW − ML)", "text-right"},
-      {"frames_won", "FW", "Frames won", "text-right"},
-      {"frames_lost", "FL", "Frames lost", "text-right"},
-      {"frame_difference", "FD", "Frame difference (FW − FL)", "text-right"},
-      {"sp_points", "SP Points", "SportPesa Points", "text-right"}
+      {"Pos", "Position", "text-left"},
+      {"Player", "Player", "text-left"},
+      {"Region", "Region", "text-left"},
+      {"Finish", "Where their circuit ended", "text-left"},
+      {"P", "Matches played, byes and walkovers included", "text-right"},
+      {"W", "Matches won, byes and walkovers included", "text-right"},
+      {"Racks won", "Racks won, byes and walkovers excluded", "text-right"},
+      {"Racks played", "Racks played, byes and walkovers excluded", "text-right"},
+      {"Rack-win %", "Racks won / racks played", "text-right"},
+      {"SP Points", "SportPesa Points", "text-right"}
     ]
   end
 
-  @doc false
-  def cell(row, "rank"), do: row.rank
-  def cell(row, "name"), do: row.name
-  def cell(row, "played"), do: row.played
-  def cell(row, "won"), do: row.won
-  def cell(row, "lost"), do: row.lost
-  def cell(row, "match_difference"), do: signed(row.match_difference)
-  def cell(row, "frames_won"), do: row.frames_won
-  def cell(row, "frames_lost"), do: row.frames_lost
-  def cell(row, "frame_difference"), do: signed(row.frame_difference)
-  def cell(row, "sp_points"), do: row.sp_points
+  def columns(:provisional) do
+    {before, rest} = Enum.split(columns(:final), 3)
+    before ++ [{"Status", "Which side of the bracket they are on", "text-left"}] ++ rest
+  end
 
-  defp signed(value) when value > 0, do: "+#{value}"
-  defp signed(value), do: to_string(value)
+  @doc false
+  def cell(row, "Pos", state), do: Competitions.position_label(row, state)
+  def cell(row, "Player", _state), do: row.name
+  def cell(row, "Region", _state), do: row.region
+  def cell(row, "Status", _state), do: Competitions.status_label(row)
+  def cell(row, "Finish", _state), do: row.finish_label
+  def cell(row, "P", _state), do: row.played
+  def cell(row, "W", _state), do: row.won
+  def cell(row, "Racks won", _state), do: row.racks_won
+  def cell(row, "Racks played", _state), do: row.racks_played
+  def cell(row, "Rack-win %", _state), do: Competitions.rack_win_label(row) || "-"
+  def cell(row, "SP Points", _state), do: row.points
 end

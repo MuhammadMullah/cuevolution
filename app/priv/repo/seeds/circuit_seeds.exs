@@ -307,7 +307,7 @@ defmodule Cuevolution.Seeds.Circuit do
   defp play_team_round(round, admin) do
     Enum.each(round.fixtures, fn fixture ->
       if is_nil(fixture.result_id) && fixture.participant_a_id && fixture.participant_b_id do
-        record_team_match(fixture, admin, round.race_to || 14)
+        record_team_match(fixture, admin, round.race_to || 13)
       end
     end)
   end

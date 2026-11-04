@@ -20,7 +20,17 @@ defmodule CuevolutionWeb.StandingsRefresh do
 
   import Phoenix.Component, only: [assign: 2]
 
-  @interval_ms 1_000
+  @default_interval_ms 1_000
+
+  @doc """
+  How long a burst is coalesced over. Configurable because the tests need it
+  off: the `"standings"` topic is global, the standings tests run async, and
+  one test's broadcast would otherwise start another test's clock and leave its
+  own update deferred past the assertion.
+  """
+  def interval_ms do
+    Application.get_env(:cuevolution, :standings_refresh_interval_ms, @default_interval_ms)
+  end
 
   @doc "Assigns the state `refresh/2` needs. Call from `mount/3`."
   def init(socket), do: assign(socket, refresh_pending?: false, refreshed_at: nil)
@@ -36,12 +46,15 @@ defmodule CuevolutionWeb.StandingsRefresh do
     case socket.assigns.refreshed_at do
       _any when socket.assigns.refresh_pending? -> socket
       nil -> run(socket, load)
-      at -> refresh_after(socket, load, now() - at)
+      at -> refresh_after(socket, load, now() - at, interval_ms())
     end
   end
 
-  defp refresh_after(socket, load, waited) when waited >= @interval_ms, do: run(socket, load)
-  defp refresh_after(socket, _load, waited), do: schedule(socket, @interval_ms - waited)
+  defp refresh_after(socket, load, waited, interval) when waited >= interval,
+    do: run(socket, load)
+
+  defp refresh_after(socket, _load, waited, interval),
+    do: schedule(socket, interval - waited)
 
   @doc "Handles the scheduled `:refresh_standings` message."
   def refreshed(socket, load) when is_function(load, 1), do: run(socket, load)

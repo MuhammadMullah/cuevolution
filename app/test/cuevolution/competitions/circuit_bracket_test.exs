@@ -31,12 +31,12 @@ defmodule Cuevolution.Competitions.CircuitBracketTest do
       stage = circuit()
       players = entrants(16, "male")
 
-      assert {:ok, %{bracket: bracket, rounds: 7, fixtures: 27}} =
+      assert {:ok, %{bracket: bracket, rounds: 9, fixtures: 29}} =
                Competitions.generate_circuit_bracket(stage.id, "male", players)
 
       rounds = Repo.all(from r in Round, where: r.knockout_bracket_id == ^bracket.id)
 
-      assert Enum.map(rounds, & &1.sequence) |> Enum.sort() == Enum.to_list(1..7)
+      assert Enum.map(rounds, & &1.sequence) |> Enum.sort() == Enum.to_list(1..9)
 
       assert Enum.map(rounds, & &1.bracket_side) |> Enum.uniq() |> Enum.sort() ==
                ["knockout", "losers", "winners"]
@@ -44,8 +44,10 @@ defmodule Cuevolution.Competitions.CircuitBracketTest do
       # Official men's race lengths survive the round trip.
       by_name = Map.new(rounds, &{&1.name, &1})
       assert by_name["Winners Round 1"].race_to == 6
-      assert by_name["Losers Round 1"].race_to == 5
-      assert by_name["Final"].race_to == 7
+      # Every men's match is a race to 6 under the Nov 2026 brief — the
+      # losers' side is no longer shorter.
+      assert by_name["Losers Round 1"].race_to == 6
+      assert by_name["Final"].race_to == 6
     end
 
     test "fills Winners Round 1 from the draw and leaves the rest open" do
@@ -87,8 +89,11 @@ defmodule Cuevolution.Competitions.CircuitBracketTest do
 
       # The crossover is mirrored and the knockout offset by half a round.
       assert by_match["SP26-NAT-MS-W2-4"].loser_to_fixture_id == by_match["SP26-NAT-MS-L2-1"].id
-      assert by_match["SP26-NAT-MS-W2-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-QF-1"].id
-      assert by_match["SP26-NAT-MS-L2-3"].winner_to_fixture_id == by_match["SP26-NAT-MS-QF-1"].id
+      # Depth 3: the winners' side runs to W3, which feeds the single
+      # elimination, and the losers' side runs to L4.
+      assert by_match["SP26-NAT-MS-W2-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-W3-1"].id
+      assert by_match["SP26-NAT-MS-W3-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-SF-1"].id
+      assert by_match["SP26-NAT-MS-L4-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-SF-2"].id
 
       # Losing on the losers' side ends the run.
       assert by_match["SP26-NAT-MS-L1-1"].loser_to_fixture_id == nil
