@@ -137,7 +137,7 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
       html = view |> element("button[phx-value-view='fixtures']") |> render_click()
 
       assert html =~ "Round 1"
-      assert html =~ "race to 14"
+      assert html =~ "race to 13"
       assert html =~ "To play"
     end
 
@@ -181,7 +181,7 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
 
       html = view |> element("button[phx-value-id='#{fixture.id}']") |> render_click()
 
-      assert html =~ "race to 14"
+      assert html =~ "race to 13"
     end
 
     test "a result recorded elsewhere moves the group table", %{view: view, admin: admin} do
@@ -190,7 +190,7 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
       {:ok, _} =
         Competitions.record_result(fixture, admin, %{
           "winner_participation_id" => fixture.participant_a_id,
-          "score" => %{"a" => 14, "b" => 6}
+          "score" => %{"a" => 13, "b" => 6}
         })
 
       [row | _] =
@@ -200,7 +200,7 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
 
       # 2 for entering + 3 for the win, and the frames carried through.
       assert row.sp_points == 5
-      assert row.frames_won == 14
+      assert row.frames_won == 13
       assert row.frames_lost == 6
 
       html = view |> element("button[phx-value-view='table']") |> render_click()
@@ -213,7 +213,7 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
       {:ok, _} =
         Competitions.record_result(fixture, admin, %{
           "winner_participation_id" => fixture.participant_a_id,
-          "score" => %{"a" => 14, "b" => 0}
+          "score" => %{"a" => 13, "b" => 0}
         })
 
       html = view |> element("button[phx-value-view='table']") |> render_click()

@@ -11,8 +11,21 @@ config :cuevolution, Cuevolution.Repo,
   hostname: "localhost",
   database: "cuevolution_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2,
-  queue_target: 5000
+  # ExUnit runs `schedulers_online() * 2` cases at once, so a pool of the same
+  # size leaves no headroom: a test that needs a second checkout — a LiveView
+  # spawning, a Task given sandbox access — waits on a connection that only
+  # frees when another test finishes. Under the Nov 2026 bracket, which is
+  # roughly double the fixtures, that showed up as connections being dropped
+  # mid-test in tests that had nothing to do with each other.
+  pool_size: System.schedulers_online() * 4,
+  # A men's Circuit draw is 239 fixtures under the Nov 2026 format, roughly
+  # double what it was, and several tests draw and play one. Under a full
+  # parallel run that was long enough to push connections past the queue
+  # target and have them dropped mid-test, which surfaced as unrelated
+  # "tcp recv: closed" failures.
+  queue_target: 5000,
+  queue_interval: 10_000,
+  ownership_timeout: 120_000
 
 # Oban jobs are enqueued but never auto-processed in test; assert on them
 # explicitly with Oban.Testing instead.
@@ -76,3 +89,9 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# The standings pages coalesce a burst of "standings" broadcasts into one
+# reload per second. That topic is global and these tests run async, so in test
+# the coalescing is off and every broadcast lands at once; the coalescing logic
+# itself is covered directly in `CuevolutionWeb.StandingsRefreshTest`.
+config :cuevolution, :standings_refresh_interval_ms, 0

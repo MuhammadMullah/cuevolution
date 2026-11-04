@@ -1547,7 +1547,7 @@
         <p class="text-[12px] leading-relaxed text-ink-400 lg:col-span-2">
           Ranked on SP Points — 2 for entering plus 3 a win — then head-to-head, then frame
           difference. Each team plays the other nine in its group once, three matches at each
-          circuit, race to 14. The top {@circuit_team_advancers} in each group go through to the
+          circuit, race to 13 (best of 25). The top {@circuit_team_advancers} in each group go through to the
           Nationals.
         </p>
       </div>
@@ -1693,6 +1693,22 @@
               name="slot[time]"
               value={slot_time(@circuit_selected_fixture)}
               class="rounded-lg border border-ink-300 px-2.5 py-1.5 text-[13px]"
+            />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for={f[:table_number].id} class="text-[11px] font-semibold text-ink-500">
+              Table
+            </label>
+            <input
+              type="number"
+              id={f[:table_number].id}
+              name="slot[table_number]"
+              min="1"
+              step="1"
+              value={@circuit_selected_fixture.table_number}
+              placeholder="—"
+              class="w-20 rounded-lg border border-ink-300 px-2.5 py-1.5 text-[13px] tabular-nums"
             />
           </div>
 

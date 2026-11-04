@@ -32,6 +32,43 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
     end
   end
 
+  # Entrants spread over `region_count` regions, so the draw is guaranteed to
+  # put teams from the same region in the same group.
+  defp team_entrants_across(count, region_count) do
+    stage = circuit()
+    regions = Cuevolution.Accounts.list_regions() |> Enum.take(region_count)
+
+    for n <- 1..count do
+      region = Enum.at(regions, rem(n, region_count))
+      captain = insert(:player, region_id: region.id)
+      team = insert(:team, region_id: region.id, captain_id: captain.id)
+
+      insert(:stage_participation,
+        stage_id: stage.id,
+        category: "team",
+        player_id: nil,
+        team_id: team.id,
+        region_id: region.id
+      )
+    end
+  end
+
+  # Every round of a group, in play order, as {sequence, derby count}.
+  defp derby_profile(group) do
+    Competitions.circuit_team_rounds(circuit().id)
+    |> Enum.filter(&(&1.group_id == group.id))
+    |> Enum.sort_by(& &1.sequence)
+    |> Enum.map(fn round ->
+      {round.sequence, Enum.count(round.fixtures, &derby?/1)}
+    end)
+  end
+
+  defp derby?(fixture) do
+    a = fixture.participant_a && fixture.participant_a.region_id
+    b = fixture.participant_b && fixture.participant_b.region_id
+    not is_nil(a) and a == b
+  end
+
   defp drawn(count \\ 20) do
     stage = circuit()
     admin = insert(:admin, role: "tournament_director")
@@ -115,6 +152,78 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
     end
   end
 
+  describe "same-region teams play first" do
+    setup do
+      stage = circuit()
+      admin = insert(:admin, role: "tournament_director")
+      # Ten teams over four regions is one group and guarantees derbies, at
+      # half the fixtures of a full twenty-team draw.
+      team_entrants_across(10, 4)
+
+      {:ok, %{groups: groups}} = Competitions.draw_circuit_team_groups(stage.id, admin)
+      %{stage: stage, groups: groups}
+    end
+
+    test "the derbies are front-loaded into the opening rounds", %{groups: groups} do
+      for group <- groups do
+        profile = derby_profile(group)
+        counts = Enum.map(profile, &elem(&1, 1))
+
+        # Rounds are ordered by how many derbies they hold, most first.
+        assert counts == Enum.sort(counts, :desc),
+               "#{group.name} plays its derbies out of order: #{inspect(counts)}"
+
+        # So round one has one, and nothing is left behind a clear round.
+        assert hd(counts) > 0, "#{group.name} has derbies but none in round 1"
+
+        last_derby = profile |> Enum.filter(&(elem(&1, 1) > 0)) |> List.last() |> elem(0)
+
+        case Enum.find(profile, &(elem(&1, 1) == 0)) do
+          nil ->
+            :ok
+
+          {first_clear, _} ->
+            assert last_derby < first_clear,
+                   "a derby is scheduled after a derby-free round in #{group.name}"
+        end
+      end
+    end
+
+    test "within a round the derbies take the earliest match numbers", %{groups: groups} do
+      rounds =
+        Competitions.circuit_team_rounds(circuit().id)
+        |> Enum.filter(fn r -> Enum.any?(groups, &(&1.id == r.group_id)) end)
+
+      for round <- rounds do
+        flags = Enum.map(round.fixtures, &derby?/1)
+        {_derbies, rest} = Enum.split_while(flags, & &1)
+
+        refute Enum.any?(rest),
+               "#{round.name} puts a derby after a non-derby: #{inspect(flags)}"
+      end
+    end
+
+    test "the round robin itself is untouched by the reordering", %{groups: groups} do
+      for group <- groups do
+        rounds =
+          Competitions.circuit_team_rounds(circuit().id)
+          |> Enum.filter(&(&1.group_id == group.id))
+
+        assert length(rounds) == 9
+        assert rounds |> Enum.map(&length(&1.fixtures)) |> Enum.uniq() == [5]
+        assert rounds |> Enum.map(& &1.sequence) |> Enum.sort() == Enum.to_list(1..9)
+
+        pairings =
+          rounds
+          |> Enum.flat_map(& &1.fixtures)
+          |> Enum.map(&MapSet.new([&1.participant_a_id, &1.participant_b_id]))
+
+        assert length(pairings) == 45
+        assert length(Enum.uniq(pairings)) == 45, "a pairing is repeated"
+      end
+    end
+  end
+
   describe "the round robin" do
     test "nine rounds of five matches in each group" do
       %{groups: groups} = drawn()
@@ -161,12 +270,12 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
       end
     end
 
-    test "team matches are race to 14" do
+    test "team matches are race to 13, best of 25" do
       %{groups: [group | _]} = drawn()
 
       races = group.id |> fixtures_in() |> Enum.map(& &1.round.race_to) |> Enum.uniq()
 
-      assert races == [14]
+      assert races == [13]
     end
 
     test "rounds are numbered 1 to 9" do
@@ -176,6 +285,38 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
         group.id |> fixtures_in() |> Enum.map(& &1.round.sequence) |> Enum.uniq() |> Enum.sort()
 
       assert sequences == Enum.to_list(1..9)
+    end
+  end
+
+  describe "scoring a team match" do
+    test "the frame count cannot be pushed past the race" do
+      %{admin: admin, groups: [group | _]} = drawn()
+
+      [fixture | _] =
+        group.id |> fixtures_in() |> Enum.filter(&(&1.round.sequence == 1))
+
+      assert fixture.round.race_to == 13
+
+      # Tapping the plus button more times than the race is long must not
+      # invent frames: 13 wins it, and there is no 14th.
+      for n <- 1..16 do
+        {:ok, updated} = Competitions.update_live_score(fixture, admin, %{"a" => n, "b" => 0})
+        assert updated.live_score["a"] <= 13
+      end
+
+      {:ok, final} = Competitions.update_live_score(fixture, admin, %{"a" => 99, "b" => 0})
+      assert final.live_score["a"] == 13
+    end
+
+    test "both sides are clamped, not just the one in front" do
+      %{admin: admin, groups: [group | _]} = drawn()
+
+      [fixture | _] =
+        group.id |> fixtures_in() |> Enum.filter(&(&1.round.sequence == 1))
+
+      {:ok, updated} = Competitions.update_live_score(fixture, admin, %{"a" => 20, "b" => 30})
+
+      assert updated.live_score == %{"a" => 13, "b" => 13}
     end
   end
 
@@ -191,7 +332,7 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
         {:ok, _} =
           Competitions.record_result(fixture, admin, %{
             "winner_participation_id" => fixture.participant_a_id,
-            "score" => %{"a" => 14, "b" => loser_frames}
+            "score" => %{"a" => 13, "b" => loser_frames}
           })
       end
 
@@ -250,7 +391,7 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
 
       assert Enum.count(rows, &(&1.wins == 1)) == 5
       assert Enum.count(rows, &(&1.losses == 1)) == 5
-      assert Enum.any?(rows, &(&1.frames_won == 14))
+      assert Enum.any?(rows, &(&1.frames_won == 13))
     end
 
     test "the top four in each group are marked as advancing" do
@@ -294,7 +435,7 @@ defmodule Cuevolution.Competitions.CircuitTeamGroupsTest do
       {:ok, _} =
         Competitions.record_result(fixture, admin, %{
           "winner_participation_id" => fixture.participant_a_id,
-          "score" => %{"a" => 14, "b" => 9}
+          "score" => %{"a" => 13, "b" => 9}
         })
 
       assert {:error, :results_recorded} = Competitions.reset_circuit_team_draw(stage.id, admin)

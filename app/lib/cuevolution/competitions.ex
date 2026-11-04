@@ -923,6 +923,7 @@ defmodule Cuevolution.Competitions do
             stage_id: stage_id,
             knockout_bracket_id: bracket.id,
             name: r.name,
+            code: r.code,
             bracket_side: r.side,
             sequence: sequence,
             race_to: r.race_to,
@@ -1038,10 +1039,13 @@ defmodule Cuevolution.Competitions do
   # Same allowance the round-robin stages give a draw before approval.
   @max_circuit_redraws 3
 
-  # Circuit team matches are race to 14 — the longest format in the
-  # competition, and the reason a team round robin is spread across the three
-  # circuit legs rather than played out in one weekend.
-  @circuit_team_race_to 14
+  # Circuit team matches are **race to 13, best of 25** — the longest format in
+  # the competition, and the reason a team round robin is spread across the
+  # three circuit legs rather than played out in one weekend.
+  #
+  # 13 is what "best of 25" means: first to 13 of 25 frames. This was briefly
+  # set to 14, which let the scoring panel count a frame past the win.
+  @circuit_team_race_to 13
 
   # What the spectator page shows at once. Caps exist so a 223-match bracket
   # can never put its whole self on one page, or in one socket's memory.
@@ -2057,7 +2061,7 @@ defmodule Cuevolution.Competitions do
   end
 
   defp build_group_rows(draw, group, participants, location_code, match_ids, now) do
-    rounds = round_robin_rounds(participants)
+    rounds = participants |> round_robin_rounds() |> derbies_first()
 
     {per_round_rows, match_ids} =
       rounds
@@ -2118,7 +2122,7 @@ defmodule Cuevolution.Competitions do
     {{round_row, fixture_rows}, match_ids}
   end
 
-  # Circuit team matches are race to 14 (spec 014). The round-robin rounds at
+  # Circuit team matches are race to 13, best of 25. The round-robin rounds at
   # Grassroots and Regional carry no race length — those stages score frames
   # without a fixed target — so they stay nil, as before.
   defp group_race_to(%Draw{category: "team"} = draw) do
@@ -2359,6 +2363,43 @@ defmodule Cuevolution.Competitions do
 
     {:ok, Enum.map(group_rows, &struct(Group, Map.drop(&1, [:members])))}
   end
+
+  @doc """
+  Reorders a round robin so that same-region meetings are played first.
+
+  Two teams from the same region drawn into the same group have a derby, and a
+  derby left until the last round is one played when both sides know exactly
+  what result each of them needs. Bringing it forward removes that, and because
+  the Circuit team round robin is spread three rounds to a leg, "first" also
+  means the neighbours meet at Eldoret rather than at Mombasa.
+
+  The round-robin structure itself is untouched: each round is a perfect
+  matching and stays intact, only the order of the rounds changes, and within a
+  round the derbies take the lower match numbers. Rounds with more derbies go
+  first, and ties keep the order the circle method produced, so a group whose
+  teams all share a region — every group at Regional — comes out exactly as it
+  went in.
+  """
+  def derbies_first(rounds) do
+    rounds
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {pairs, index} -> {-derby_count(pairs), index} end)
+    |> Enum.map(fn {pairs, _index} -> sort_derbies_first(pairs) end)
+  end
+
+  defp derby_count(pairs), do: Enum.count(pairs, &derby?/1)
+
+  defp sort_derbies_first(pairs) do
+    pairs
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {pair, index} -> {if(derby?(pair), do: 0, else: 1), index} end)
+    |> Enum.map(fn {pair, _index} -> pair end)
+  end
+
+  # A participation with no region cannot be in a derby with anybody, including
+  # another participation with no region — "unknown" is not a place.
+  defp derby?({%{region_id: region}, %{region_id: region}}) when not is_nil(region), do: true
+  defp derby?({_a, _b}), do: false
 
   defp round_robin_rounds([]), do: []
 
@@ -3139,6 +3180,9 @@ defmodule Cuevolution.Competitions do
       |> Fixture.result_changeset(result.id)
       |> Ecto.Changeset.put_change(:status, "completed")
       |> Ecto.Changeset.put_change(:live_score, nil)
+      # The brief asks for a start and an end time. The start is stamped on the
+      # first frame (`update_live_score/3`); this is the end.
+      |> Ecto.Changeset.put_change(:ended_at, DateTime.utc_now(:second))
     end)
     |> Multi.run(:roster_lock, fn _repo, _changes -> lock_rosters_if_team(fixture) end)
     |> Multi.run(:advance, fn repo, %{result: result} ->
@@ -3903,29 +3947,182 @@ defmodule Cuevolution.Competitions do
   end
 
   @doc """
-  SP Points standings for one circuit bracket, strongest first (spec 014).
+  The published per-circuit standings for `stage_id`/`category` — the table in
+  the SP Points & Standings brief.
+
+  Returns `%{rows: [...], state: :provisional | :final, bracket: bracket}`, or
+  `nil` before a draw exists.
+
+  The state matters because the two views are different documents. While the
+  circuit runs the table is **provisional**: it shows a Status column and
+  scores every player on the stage they have reached so far. Once the final is
+  played it is **final** and locked, and the shared positions are the result.
+
+  Each row adds the region to what `sp_points_standings/1` works out, and a
+  `finish_label` — "Champion", "Last 32", "Out - LB R2" — for the Finish
+  column.
+  """
+  def circuit_standings(stage_id, category) do
+    case get_knockout_bracket(stage_id, category) do
+      nil ->
+        nil
+
+      bracket ->
+        rows = sp_points_standings(bracket.id)
+
+        %{
+          bracket: bracket,
+          state: if(circuit_complete?(bracket.id), do: :final, else: :provisional),
+          rows: Enum.map(rows, &present_standings_row/1)
+        }
+    end
+  end
+
+  defp present_standings_row(row) do
+    row
+    |> Map.put(:finish_label, finish_label(row))
+    |> Map.put(:name, participant_name(row.participation))
+    |> Map.put(:region, row.participation.region && row.participation.region.name)
+  end
+
+  # A circuit is over when its final has been played — that is the moment the
+  # brief locks the table.
+  defp circuit_complete?(bracket_id) do
+    Repo.exists?(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        where: r.knockout_bracket_id == ^bracket_id and r.code == "F" and not is_nil(f.result_id)
+    )
+  end
+
+  @doc """
+  The brief's "result type": `:bye`, `:walkover` or `:played`.
+
+  It decides whether a match counts towards the rack columns — byes and
+  walkovers do not, because no racks were played in them — so it is derived
+  from the fixture rather than stored, and cannot drift from the fixture's own
+  state.
+  """
+  def result_type(%Fixture{bye: true}), do: :bye
+  def result_type(%Fixture{status: "walkover"}), do: :walkover
+  def result_type(%Fixture{walkover_kind: kind}) when not is_nil(kind), do: :walkover
+  def result_type(%Fixture{}), do: :played
+
+  @doc """
+  How a player's circuit ended, in the brief's words: "Champion", "Runner-up",
+  "Semi-finalist", "Quarter-finalist", "Last 16", "Out - LB R2", or "Active"
+  while they are still in it.
+  """
+  def finish_label(%{finish: :champion}), do: "Champion"
+  def finish_label(%{finish: :runner_up}), do: "Runner-up"
+  def finish_label(%{finish: :semi_finalist}), do: "Semi-finalist"
+  def finish_label(%{exit_round: nil}), do: "Active"
+  def finish_label(%{exit_round: "QF"}), do: "Quarter-finalist"
+  def finish_label(%{exit_round: "R" <> n}), do: "Last #{n}"
+  def finish_label(%{exit_round: "L" <> n}), do: "Out - LB R#{n}"
+  def finish_label(%{exit_round: code}), do: "Out - #{code}"
+
+  @doc """
+  A shared position as the brief prints it: `3=` for a band of more than one,
+  plain `1` for a band of one, and blank while the table is provisional.
+  """
+  def position_label(_row, :provisional), do: nil
+  def position_label(%{position: nil}, _state), do: nil
+  def position_label(%{position: {n, n}}, _state), do: to_string(n)
+  def position_label(%{position: {from, _to}}, _state), do: "#{from}="
+
+  @doc "Rack-win % to one decimal place, or `nil` when no racks have been played."
+  def rack_win_label(%{rack_win_pct: nil}), do: nil
+  def rack_win_label(%{rack_win_pct: pct}), do: "#{:erlang.float_to_binary(pct, decimals: 1)}%"
+
+  @doc "The Status column of the live view."
+  def status_label(%{status: :winners_side}), do: "Winners side"
+  def status_label(%{status: :losers_side}), do: "Losers side"
+  def status_label(%{status: :eliminated}), do: "Out"
+
+  @doc """
+  SP Points standings for one circuit bracket, strongest first (SP Points &
+  Standings brief, Nov 2026).
 
   Everything is derived from what actually happened in the bracket — who
-  entered, who won which match, who reached the final — so the table cannot
-  drift away from the results. Correct a match and the standings move with it.
+  entered, where each player was knocked out, what they won after the last 32 —
+  so the table cannot drift away from the results. Correct a match and the
+  standings move with it.
 
-  Byes count as wins, per the rules. A bye has no `match_result` (nobody
-  played), so it is counted from the fixture itself rather than from results.
+  Each row carries what the published table needs:
 
-  Returns a list of
-  `%{participation: p, wins: n, finish: atom, points: n}`.
+      %{
+        participation:  the StageParticipation,
+        status:         :winners_side | :losers_side | :eliminated,
+        exit_round:     round code they went out in, nil while still in,
+        finish:         :champion | :runner_up | :semi_finalist | :none,
+        position:       {from, to} — the shared band, nil while provisional,
+        played:         matches, byes and walkovers included,
+        won:            matches won, byes and walkovers included,
+        racks_won:      racks, byes and walkovers excluded,
+        racks_played:   racks, byes and walkovers excluded,
+        rack_win_pct:   racks_won / racks_played * 100, nil with no racks,
+        points:         SP Points
+      }
   """
   def sp_points_standings(bracket_id) do
     rounds = points_rounds(bracket_id, :with_participants)
-    scores = sp_points_by_id(rounds)
+    runs = bracket_runs(rounds)
 
     rounds
     |> bracket_entrants()
     |> Enum.map(fn participation ->
-      score = Map.get(scores, participation.id, %{wins: 0, finish: :none, points: 0})
-      Map.put(score, :participation, participation)
+      runs |> Map.fetch!(participation.id) |> Map.put(:participation, participation)
     end)
-    |> Enum.sort_by(&{-&1.points, -&1.wins})
+    |> rank_standings(rounds)
+  end
+
+  # Ranked on SP Points, then rack-win % — and nothing else. Players out at the
+  # same stage share a position and share their points; rack-win % orders the
+  # rows inside that band for display only, which is why it never reaches the
+  # position itself.
+  defp rank_standings(rows, rounds) do
+    bands = position_bands(rounds)
+
+    rows
+    |> Enum.sort_by(&{-&1.points, -(&1.rack_win_pct || -1)})
+    |> Enum.map(fn row -> Map.put(row, :position, Map.get(bands, band_key(row))) end)
+  end
+
+  # A band is "everyone who went out at this stage", which is exactly what the
+  # brief shares a position between.
+  defp band_key(%{finish: :champion}), do: :champion
+  defp band_key(%{finish: :runner_up}), do: :runner_up
+  defp band_key(%{exit_round: nil}), do: :champion
+  defp band_key(%{exit_round: code}), do: code
+
+  # The position each exit stage is worth, walking back from the final: the
+  # champion is 1, the runner-up 2, then each earlier round's losers.
+  defp position_bands(rounds) do
+    {se, losers} = Enum.split_with(rounds, &(&1.bracket_side == "knockout"))
+
+    se_order = Enum.reverse(se)
+    losers_order = losers |> Enum.filter(&(&1.bracket_side == "losers")) |> Enum.reverse()
+
+    {bands, _next} =
+      Enum.flat_map_reduce(se_order ++ losers_order, 1, fn round, from ->
+        losers_here = Enum.count(round.fixtures, &contested?/1)
+
+        cond do
+          # The final hands out two positions at once.
+          round.bracket_side == "knockout" and from == 1 ->
+            {[{:champion, {1, 1}}, {:runner_up, {2, 2}}], 3}
+
+          losers_here == 0 ->
+            {[], from}
+
+          true ->
+            {[{round.code, {from, from + losers_here - 1}}], from + losers_here}
+        end
+      end)
+
+    Map.new(bands)
   end
 
   # The bracket as the points rules need to see it. `:ids_only` skips the
@@ -3937,7 +4134,11 @@ defmodule Cuevolution.Competitions do
         :with_participants ->
           from(f in Fixture,
             order_by: [asc: f.slot],
-            preload: [:result, participant_a: [:player, :team], participant_b: [:player, :team]]
+            preload: [
+              :result,
+              participant_a: [:player, :team, :region],
+              participant_b: [:player, :team, :region]
+            ]
           )
 
         :ids_only ->
@@ -3952,25 +4153,166 @@ defmodule Cuevolution.Competitions do
     )
   end
 
-  # Wins, finishing position and points for every entrant, keyed by
-  # participation id. Shared by both callers so the lean path can never score
-  # differently from the one on screen.
-  defp sp_points_by_id(rounds) do
-    wins = rounds |> Enum.flat_map(& &1.fixtures) |> count_wins()
-    finishes = finishing_positions(rounds)
+  @doc """
+  Every entrant's run through `rounds`, keyed by participation id — where they
+  went out, what they won, their racks and their SP Points.
+
+  One pass over the bracket rather than a query per player: a 128 draw is 239
+  matches, and the standings need every one of them.
+  """
+  def bracket_runs(rounds) do
+    appearances =
+      for round <- rounds,
+          fixture <- round.fixtures,
+          id <- [fixture.participant_a_id, fixture.participant_b_id],
+          not is_nil(id),
+          reduce: %{} do
+        acc -> Map.update(acc, id, [{round, fixture}], &[{round, fixture} | &1])
+      end
 
     rounds
     |> entrant_ids()
     |> Map.new(fn id ->
-      won = Map.get(wins, id, 0)
-      finish = Map.get(finishes, id, :none)
-      {id, %{wins: won, finish: finish, points: SpPoints.circuit_points(won, finish)}}
+      {id, summarise_run(id, appearances |> Map.get(id, []) |> Enum.reverse())}
     end)
   end
 
+  defp summarise_run(id, played) do
+    decided = Enum.filter(played, fn {_round, fixture} -> decided?(fixture) end)
+
+    lost =
+      Enum.find(decided, fn {round, fixture} ->
+        round.bracket_side in ["losers", "knockout"] and bracket_winner_id(fixture) != id
+      end)
+
+    qualified? = Enum.any?(played, fn {round, _f} -> round.bracket_side == "knockout" end)
+
+    se_wins =
+      Enum.count(decided, fn {round, fixture} ->
+        round.bracket_side == "knockout" and bracket_winner_id(fixture) == id
+      end)
+
+    finish = finish_for(decided, id)
+    exit_round = lost && elem(lost, 0).code
+    # While a player is still in, their points are the ones the stage they have
+    # reached already guarantees them — the brief's "SP Points so far". A
+    # player unbeaten in WB R3 cannot now finish below 33rd, so they show 9,
+    # not the bare 2 for turning up.
+    reached = exit_round || guaranteed_exit(played)
+
+    %{
+      exit_round: exit_round,
+      status: status_for(lost, decided, id),
+      qualified?: qualified?,
+      se_wins: se_wins,
+      finish: finish,
+      played: Enum.count(decided),
+      won: Enum.count(decided, fn {_r, f} -> bracket_winner_id(f) == id end),
+      racks_won: rack_total(decided, id, :for),
+      racks_played: rack_total(decided, id, :total),
+      rack_win_pct: rack_win_pct(decided, id),
+      points:
+        SpPoints.circuit_points(%{
+          qualified?: qualified?,
+          exit_round: reached,
+          se_wins: se_wins,
+          finish: finish
+        })
+    }
+  end
+
+  # The live view's three states. Losing a winners'-round match does not put a
+  # player out — it drops them to the losers' side — so "still in" splits by
+  # whether they have lost anything at all, not by which round they are in.
+  # The worst a still-active player can now finish: whichever losers' round
+  # would eliminate them if they lost every match from here. Unbeaten in `Wi`
+  # they would drop into `L(2i-2)` and go out there; already on the losers'
+  # side they go out in the round they are in. A player in the single
+  # elimination has qualified, which is scored separately.
+  defp guaranteed_exit([]), do: nil
+
+  defp guaranteed_exit(played) do
+    played
+    |> Enum.max_by(fn {round, _fixture} -> round.sequence end)
+    |> elem(0)
+    |> floor_round()
+  end
+
+  defp floor_round(%Round{bracket_side: "knockout"}), do: nil
+  defp floor_round(%Round{bracket_side: "losers", code: code}), do: code
+  defp floor_round(%Round{code: "W1"}), do: "L1"
+
+  defp floor_round(%Round{code: "W" <> n}) do
+    case Integer.parse(n) do
+      {i, ""} when i >= 2 -> "L#{2 * i - 2}"
+      _other -> nil
+    end
+  end
+
+  defp floor_round(%Round{}), do: nil
+
+  defp status_for(nil, decided, id) do
+    if Enum.any?(decided, fn {_round, f} -> bracket_winner_id(f) != id end),
+      do: :losers_side,
+      else: :winners_side
+  end
+
+  defp status_for(_lost, _decided, _id), do: :eliminated
+
+  defp finish_for(decided, id) do
+    Enum.reduce_while(decided, :none, fn {round, fixture}, acc ->
+      cond do
+        round.code == "F" and bracket_winner_id(fixture) == id -> {:halt, :champion}
+        round.code == "F" -> {:halt, :runner_up}
+        round.code == "SF" and bracket_winner_id(fixture) != id -> {:halt, :semi_finalist}
+        true -> {:cont, acc}
+      end
+    end)
+  end
+
+  # Byes and walkovers are left out of the rack columns on purpose: no racks
+  # were played, and counting a 6-0 that nobody broke in would flatter one side
+  # of the bracket over the other.
+  defp rack_total(decided, id, which) do
+    decided
+    |> Enum.filter(&racked?/1)
+    |> Enum.reduce(0, fn {_round, fixture}, acc ->
+      {mine, theirs} = racks_for(fixture, id)
+      acc + if(which == :for, do: mine, else: mine + theirs)
+    end)
+  end
+
+  defp rack_win_pct(decided, id) do
+    case rack_total(decided, id, :total) do
+      0 -> nil
+      total -> rack_total(decided, id, :for) / total * 100
+    end
+  end
+
+  defp racks_for(%Fixture{} = fixture, id) do
+    {a, b} = frames_from_score((fixture.result && fixture.result.score) || %{})
+    if fixture.participant_a_id == id, do: {a, b}, else: {b, a}
+  end
+
+  defp racked?({_round, %Fixture{bye: true}}), do: false
+  defp racked?({_round, %Fixture{status: "walkover"}}), do: false
+  defp racked?({_round, %Fixture{walkover_kind: kind}}) when not is_nil(kind), do: false
+  defp racked?({_round, %Fixture{result: %MatchResult{}}}), do: true
+  defp racked?(_appearance), do: false
+
+  defp decided?(%Fixture{bye: true} = fixture),
+    do: not is_nil(fixture.participant_a_id || fixture.participant_b_id)
+
+  defp decided?(%Fixture{result: %MatchResult{}}), do: true
+  defp decided?(%Fixture{status: "walkover"}), do: true
+  defp decided?(%Fixture{}), do: false
+
+  defp contested?(%Fixture{bye: true}), do: false
+  defp contested?(%Fixture{}), do: true
+
   defp entrant_ids(rounds) do
     rounds
-    |> Enum.take(1)
+    |> Enum.filter(&(&1.code == "W1"))
     |> Enum.flat_map(& &1.fixtures)
     |> Enum.flat_map(&[&1.participant_a_id, &1.participant_b_id])
     |> Enum.reject(&is_nil/1)
@@ -3981,20 +4323,11 @@ defmodule Cuevolution.Competitions do
   # showing-up points even if they lost that one match.
   defp bracket_entrants(rounds) do
     rounds
-    |> Enum.take(1)
+    |> Enum.filter(&(&1.code == "W1"))
     |> Enum.flat_map(& &1.fixtures)
     |> Enum.flat_map(&[&1.participant_a, &1.participant_b])
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq_by(& &1.id)
-  end
-
-  defp count_wins(fixtures) do
-    Enum.reduce(fixtures, %{}, fn fixture, acc ->
-      case bracket_winner_id(fixture) do
-        nil -> acc
-        id -> Map.update(acc, id, 1, &(&1 + 1))
-      end
-    end)
   end
 
   defp bracket_winner_id(%Fixture{bye: true} = fixture),
@@ -4002,58 +4335,6 @@ defmodule Cuevolution.Competitions do
 
   defp bracket_winner_id(%Fixture{result: %{winner_participation_id: id}}), do: id
   defp bracket_winner_id(%Fixture{}), do: nil
-
-  # Only the three bonus-bearing finishes are resolved here; everything else
-  # scores on wins alone, so there is nothing to look up.
-  defp finishing_positions(rounds) do
-    final = List.last(rounds)
-    semis = Enum.at(rounds, -2)
-
-    %{}
-    |> put_final_positions(final)
-    |> put_semi_finalists(semis)
-  end
-
-  defp put_final_positions(acc, nil), do: acc
-
-  defp put_final_positions(acc, %Round{fixtures: [fixture | _]}) do
-    case bracket_winner_id(fixture) do
-      nil ->
-        acc
-
-      champion_id ->
-        runner_up_id =
-          if champion_id == fixture.participant_a_id,
-            do: fixture.participant_b_id,
-            else: fixture.participant_a_id
-
-        acc
-        |> Map.put(champion_id, :champion)
-        |> Map.put_new(runner_up_id, :runner_up)
-    end
-  end
-
-  defp put_final_positions(acc, _round), do: acc
-
-  defp put_semi_finalists(acc, nil), do: acc
-
-  defp put_semi_finalists(acc, %Round{fixtures: fixtures}) do
-    fixtures
-    |> Enum.map(&beaten_participant_id/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.reduce(acc, &Map.put_new(&2, &1, :semi_finalist))
-  end
-
-  defp put_semi_finalists(acc, _round), do: acc
-
-  # Whoever lost this fixture, or nil while it has no recorded winner.
-  defp beaten_participant_id(%Fixture{participant_a_id: a, participant_b_id: b} = fixture) do
-    case bracket_winner_id(fixture) do
-      nil -> nil
-      ^a -> b
-      _other -> a
-    end
-  end
 
   defp downstream_played?(_repo, []), do: false
 
@@ -4122,7 +4403,10 @@ defmodule Cuevolution.Competitions do
     with {:ok, scheduled_at} <- parse_slot_start(date, time),
          :ok <- reject_past_slot(scheduled_at) do
       fixture
-      |> Fixture.schedule_changeset(%{scheduled_at: scheduled_at})
+      |> Fixture.schedule_changeset(%{
+        scheduled_at: scheduled_at,
+        table_number: parse_table_number(attrs["table_number"] || attrs[:table_number])
+      })
       |> Repo.update()
       |> case do
         {:ok, updated} ->
@@ -4134,6 +4418,21 @@ defmodule Cuevolution.Competitions do
       end
     end
   end
+
+  # Blank clears the table, which is what an empty field should mean. Anything
+  # unparseable is treated the same way rather than failing the whole save —
+  # the table number is an optional note, not part of the result.
+  defp parse_table_number(nil), do: nil
+
+  defp parse_table_number(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {number, _rest} when number > 0 -> number
+      _other -> nil
+    end
+  end
+
+  defp parse_table_number(value) when is_integer(value) and value > 0, do: value
+  defp parse_table_number(_value), do: nil
 
   # The start time is what makes a slot, so a blank time clears it — the date
   # field is pre-filled with today, and a date alone must not silently book
@@ -5705,7 +6004,7 @@ defmodule Cuevolution.Competitions do
 
   # A Regional team tie is played as individual frames between named squad
   # members, so its frame count comes from the `MatchFrame` rows. A Circuit
-  # team match is a single aggregate race to 14 with no per-frame records, so
+  # team match is a single aggregate race to 13 with no per-frame records, so
   # when there are no frames to count the score itself is the tally.
   defp frame_tally(%MatchResult{} = result, %Fixture{participant_a: %{category: "team"}}) do
     case tally_match_frames(result) do
@@ -6357,7 +6656,7 @@ defmodule Cuevolution.Competitions do
       |> Enum.flat_map(fn bracket_id ->
         bracket_id
         |> points_rounds(:ids_only)
-        |> sp_points_by_id()
+        |> bracket_runs()
         |> Enum.map(fn {id, score} -> {id, score.points} end)
       end)
       |> Map.new()
@@ -6542,8 +6841,20 @@ defmodule Cuevolution.Competitions do
   # match touching one of `participant_ids` necessarily has its other side
   # in that set too; no rows are missed by filtering this way.
   defp win_loss_by_participant(participant_ids) do
+    # Scoped to the stages this table covers, which is not something the
+    # participation ids can tell us. Advancing a player **moves** their
+    # `StageParticipation` row to the next stage rather than creating a new
+    # one, so its id — and every fixture that ever referenced it — travels with
+    # them. Matching on the id alone therefore counted a player's whole
+    # Grassroots and Regional record as if it were their Circuit record: a
+    # field that had played no Circuit match at all still showed matches,
+    # wins and frames, against zero SP Points.
+    stage_ids = ranked_stage_ids()
+
     MatchResult
     |> join(:inner, [mr], f in Fixture, on: f.id == mr.fixture_id)
+    |> join(:inner, [_mr, f], r in Round, on: r.id == f.round_id)
+    |> where([_mr, _f, r], r.stage_id in ^stage_ids)
     |> where(
       [mr, f],
       f.participant_a_id in ^participant_ids or f.participant_b_id in ^participant_ids

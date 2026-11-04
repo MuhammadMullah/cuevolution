@@ -18,6 +18,12 @@ defmodule Cuevolution.Competitions.Fixture do
     field :bye, :boolean, default: false
     # Running frame count while the match is in play: %{"a" => n, "b" => n}.
     field :live_score, :map
+    # Optional capture fields from the SP Points & Standings brief: which table
+    # the match was played on, when it finished, and any break-and-clears. None
+    # of them affects the points or the standings.
+    field :table_number, :integer
+    field :ended_at, :utc_datetime
+    field :break_and_clears, :integer
     field :winner_to_side, :string
     field :loser_to_side, :string
 
@@ -91,7 +97,12 @@ defmodule Cuevolution.Competitions.Fixture do
   none.
   """
   def schedule_changeset(fixture, attrs) do
-    cast(fixture, attrs, [:scheduled_at])
+    fixture
+    |> cast(attrs, [:scheduled_at, :table_number, :ended_at, :break_and_clears])
+    |> validate_number(:table_number, greater_than: 0)
+    |> validate_number(:break_and_clears, greater_than_or_equal_to: 0)
+    |> check_constraint(:table_number, name: :fixtures_table_number_positive)
+    |> check_constraint(:break_and_clears, name: :fixtures_break_and_clears_not_negative)
   end
 
   @doc "Edit changeset — venue/schedule only. Fixtures with a result are locked; `Competitions.update_fixture/2` enforces that before calling this."

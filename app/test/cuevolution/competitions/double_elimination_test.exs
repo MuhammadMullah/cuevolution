@@ -4,7 +4,6 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
   alias Cuevolution.Competitions.DoubleElimination, as: DE
 
   defp men, do: DE.build(Enum.to_list(1..128))
-  defp by_code(%{fixtures: f}), do: Map.new(f, &{&1.code, &1})
   defp round(%{rounds: r}, code), do: Enum.find(r, &(&1.code == code))
 
   describe "seed_order/1" do
@@ -41,222 +40,207 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
   end
 
   describe "round structure" do
-    test "a 128 field produces the sample draw's match counts" do
-      bracket = men()
-      counts = Map.new(bracket.rounds, &{&1.code, &1.matches})
+    test "a 128 men's field is the brief's bracket exactly" do
+      %{rounds: rounds, depth: depth, qualifiers: qualifiers, fixtures: fixtures} =
+        DE.build(Enum.to_list(1..128), category: "male")
 
-      assert counts["W1"] == 64
-      assert counts["W2"] == 32
-      assert counts["L1"] == 32
-      assert counts["L2"] == 32
-      assert counts["R64"] == 32
-      assert counts["R32"] == 16
-      assert counts["R16"] == 8
-      assert counts["QF"] == 4
-      assert counts["SF"] == 2
-      assert counts["F"] == 1
+      assert depth == 3
+      assert qualifiers == 32
 
-      assert Enum.sum(Enum.map(bracket.rounds, & &1.matches)) == 223
-      assert length(bracket.fixtures) == 223
+      counts = Map.new(rounds, &{&1.code, &1.matches})
+
+      # Double elimination to the last 32: WB R1-R3 and LB R1-R4.
+      assert counts == %{
+               "W1" => 64,
+               "W2" => 32,
+               "W3" => 16,
+               "L1" => 32,
+               "L2" => 32,
+               "L3" => 16,
+               "L4" => 16,
+               "R32" => 16,
+               "R16" => 8,
+               "QF" => 4,
+               "SF" => 2,
+               "F" => 1
+             }
+
+      assert length(fixtures) == 239
     end
 
-    test "a 64 field halves it — the ladies' bracket" do
-      bracket = DE.build(Enum.to_list(1..64))
-      counts = Map.new(bracket.rounds, &{&1.code, &1.matches})
+    test "the losers' rounds eliminate exactly the brief's position bands" do
+      %{rounds: rounds} = DE.build(Enum.to_list(1..128), category: "male")
+      counts = Map.new(rounds, &{&1.code, &1.matches})
+
+      # Everyone beaten in a losers' round is out, so its match count is the
+      # size of that position band: 97-128, 65-96, 49-64, 33-48.
+      assert counts["L1"] == 32
+      assert counts["L2"] == 32
+      assert counts["L3"] == 16
+      assert counts["L4"] == 16
+
+      # 96 out in the double elimination, 32 through to the single.
+      assert counts["L1"] + counts["L2"] + counts["L3"] + counts["L4"] == 96
+    end
+
+    test "every men's match is a race to 6" do
+      %{rounds: rounds} = DE.build(Enum.to_list(1..128), category: "male")
+
+      assert rounds |> Enum.map(& &1.race_to) |> Enum.uniq() == [6]
+    end
+
+    test "the ladies' bracket is unchanged, pending the format decision" do
+      %{rounds: rounds, depth: depth} = DE.build(Enum.to_list(1..64), category: "female")
+
+      assert depth == 2
+      counts = Map.new(rounds, &{&1.code, &1.matches})
 
       assert counts["W1"] == 32
       assert counts["W2"] == 16
       assert counts["L1"] == 16
       assert counts["L2"] == 16
       assert counts["R32"] == 16
-      refute Map.has_key?(counts, "R64")
-      assert Enum.sum(Enum.map(bracket.rounds, & &1.matches)) == 111
+
+      races = Map.new(rounds, &{&1.code, &1.race_to})
+      assert races["W1"] == 4
+      assert races["L1"] == 3
+      assert races["F"] == 5
     end
 
-    test "55 ladies play the 93 matches the format document predicts" do
-      bracket = DE.build(Enum.to_list(1..55), category: "female", byes: :random, rng: 42)
-
-      # 111 slots in a 64 bracket, less 9 byes and the 9 losers'-bracket
-      # walkovers those byes leave behind, is 93 matches actually played.
-      incoming =
-        bracket.fixtures
-        |> Enum.flat_map(fn fx -> Enum.filter([fx.winner_to, fx.loser_to], & &1) end)
-        |> Enum.frequencies_by(fn {code, _side} -> code end)
-
-      byes = Enum.count(bracket.fixtures, & &1.bye)
-
-      walkovers =
-        Enum.count(bracket.fixtures, fn fx ->
-          fx.round_code == "L1" and Map.get(incoming, fx.code, 0) < 2
-        end)
-
-      assert byes == 9
-      assert walkovers == 9
-      assert length(bracket.fixtures) - byes - walkovers == 93
-    end
-
-    test "men's race lengths follow the official format sheet" do
-      # "Race to 6 all through · Losers side race to 5 · Final race to 7"
-      bracket = men()
-      assert round(bracket, "W1").race_to == 6
-      assert round(bracket, "W2").race_to == 6
-      assert round(bracket, "L1").race_to == 5
-      assert round(bracket, "L2").race_to == 5
-      assert round(bracket, "R64").race_to == 6
-      assert round(bracket, "R16").race_to == 6
-      assert round(bracket, "QF").race_to == 6
-      assert round(bracket, "SF").race_to == 6
-      assert round(bracket, "F").race_to == 7
-    end
-
-    test "ladies' race lengths follow the official format sheet" do
-      # "Race to 4 all through · Losers side race to 3 · Final race to 5"
-      bracket = DE.build(Enum.to_list(1..64), category: "female")
-      assert round(bracket, "W1").race_to == 4
-      assert round(bracket, "W2").race_to == 4
-      assert round(bracket, "L1").race_to == 3
-      assert round(bracket, "L2").race_to == 3
-      assert round(bracket, "R32").race_to == 4
-      assert round(bracket, "QF").race_to == 4
-      assert round(bracket, "SF").race_to == 4
-      assert round(bracket, "F").race_to == 5
+    test "a small field runs the deepest double elimination it has room for" do
+      # A demo draw cannot play three winners' rounds and still have a final,
+      # so it drops to two rather than refusing.
+      assert DE.build(Enum.to_list(1..8), category: "male").depth == 2
+      assert DE.build(Enum.to_list(1..16), category: "male").depth == 3
+      assert DE.build(Enum.to_list(1..128), category: "male").depth == 3
     end
 
     test "races can be overridden per draw without editing the module" do
-      flat = DE.build(Enum.to_list(1..128), races: %{losers: 6, final: 9})
-      assert round(flat, "L1").race_to == 6
-      assert round(flat, "F").race_to == 9
-      assert round(flat, "W1").race_to == 6
+      %{rounds: rounds} =
+        DE.build(Enum.to_list(1..16), category: "male", races: %{winners: 9})
+
+      assert rounds |> Enum.filter(&(&1.code == "W1")) |> hd() |> Map.fetch!(:race_to) == 9
     end
   end
 
   describe "routing" do
-    test "winners and losers from Winners R1 land in matching slots" do
-      f = by_code(men())
-
-      assert f["W1-1"].winner_to == {"W2-1", :a}
-      assert f["W1-2"].winner_to == {"W2-1", :b}
-      assert f["W1-1"].loser_to == {"L1-1", :a}
-      assert f["W1-2"].loser_to == {"L1-1", :b}
-      assert f["W1-63"].winner_to == {"W2-32", :a}
-      assert f["W1-64"].loser_to == {"L1-32", :b}
+    setup do
+      %{plan: DE.build(Enum.to_list(1..128), category: "male")}
     end
 
-    test "the crossover is mirrored, as in the sample draw" do
-      f = by_code(men())
+    test "Winners R1 sends winners up and losers across in matching slots", %{plan: plan} do
+      first = find(plan, "W1-1")
+      second = find(plan, "W1-2")
 
-      # Sample: "L2-1  L1-1 winner v W2-32 loser", "L2-17  L1-17 winner v W2-16 loser".
-      # The pairing is the sample's; the slots put whoever arrives from the
-      # winners' side on top, so a crossover card always reads the same way.
-      assert f["W2-32"].loser_to == {"L2-1", :a}
-      assert f["W2-16"].loser_to == {"L2-17", :a}
-      assert f["L1-1"].winner_to == {"L2-1", :b}
-      assert f["L1-17"].winner_to == {"L2-17", :b}
+      assert first.winner_to == {"W2-1", :a}
+      assert first.loser_to == {"L1-1", :a}
+      assert second.winner_to == {"W2-1", :b}
+      assert second.loser_to == {"L1-1", :b}
     end
 
-    test "the knockout is offset by half a round, as in the sample draw" do
-      f = by_code(men())
+    test "every crossover is mirrored, winners'-side dropper in slot A", %{plan: plan} do
+      # W2 droppers enter L2 from the far end; W3 droppers enter L4 the same way.
+      assert find(plan, "W2-1").loser_to == {"L2-32", :a}
+      assert find(plan, "W2-32").loser_to == {"L2-1", :a}
+      assert find(plan, "W3-1").loser_to == {"L4-16", :a}
+      assert find(plan, "W3-16").loser_to == {"L4-1", :a}
 
-      # Sample: "R64-1  W2-1 winner v L2-17 winner", "R64-17 W2-17 winner v L2-1 winner"
-      assert f["W2-1"].winner_to == {"R64-1", :a}
-      assert f["L2-17"].winner_to == {"R64-1", :b}
-      assert f["W2-17"].winner_to == {"R64-17", :a}
-      assert f["L2-1"].winner_to == {"R64-17", :b}
-      assert f["W2-16"].winner_to == {"R64-16", :a}
-      assert f["L2-32"].winner_to == {"R64-16", :b}
+      # And the losers'-side survivors take slot B at the same index.
+      assert find(plan, "L1-1").winner_to == {"L2-1", :b}
+      assert find(plan, "L3-1").winner_to == {"L4-1", :b}
     end
 
-    test "knockout rounds merge in pairs down to the final" do
-      f = by_code(men())
-
-      assert f["R64-1"].winner_to == {"R32-1", :a}
-      assert f["R64-2"].winner_to == {"R32-1", :b}
-      assert f["QF-1"].winner_to == {"SF-1", :a}
-      assert f["SF-2"].winner_to == {"F-1", :b}
-      assert f["F-1"].winner_to == nil
+    test "odd losers' rounds pair up, even ones feed the next pairing", %{plan: plan} do
+      # L2 winners pair into L3 two-to-one.
+      assert find(plan, "L2-1").winner_to == {"L3-1", :a}
+      assert find(plan, "L2-2").winner_to == {"L3-1", :b}
     end
 
-    test "losing twice ends the run — no onward route from either losers' round" do
-      f = by_code(men())
-
-      assert f["L1-5"].loser_to == nil
-      assert f["L2-5"].loser_to == nil
-      assert f["R64-5"].loser_to == nil
-      assert f["F-1"].loser_to == nil
+    test "the last 32 is offset by half a round", %{plan: plan} do
+      # W3 winners take slot A straight across; L4 winners are rotated into
+      # slot B so nobody replays the match that put them there.
+      assert find(plan, "W3-1").winner_to == {"R32-1", :a}
+      assert find(plan, "L4-1").winner_to == {"R32-9", :b}
+      assert find(plan, "L4-9").winner_to == {"R32-1", :b}
     end
 
-    test "every routed destination exists and every slot is filled exactly once" do
-      bracket = men()
-      codes = MapSet.new(bracket.fixtures, & &1.code)
+    test "single-elimination rounds merge in pairs down to the final", %{plan: plan} do
+      assert find(plan, "R32-1").winner_to == {"R16-1", :a}
+      assert find(plan, "R32-2").winner_to == {"R16-1", :b}
+      assert find(plan, "QF-1").winner_to == {"SF-1", :a}
+      assert find(plan, "SF-2").winner_to == {"F-1", :b}
+      assert find(plan, "F-1").winner_to == nil
+    end
 
-      routes =
-        Enum.flat_map(bracket.fixtures, fn fx ->
-          Enum.filter([fx.winner_to, fx.loser_to], & &1)
-        end)
-
-      for {code, _side} <- routes do
-        assert code in codes, "route points at missing fixture #{code}"
-      end
-
-      # Every slot other than the Winners R1 entry points is filled by exactly
-      # one incoming route — no orphan slots, no two players routed into one.
-      filled = Enum.frequencies(routes)
-      needs_filling = Enum.reject(bracket.fixtures, &(&1.round_code == "W1"))
-
-      for fx <- needs_filling, side <- [:a, :b] do
-        assert Map.get(filled, {fx.code, side}) == 1,
-               "#{fx.code} side #{side} has #{inspect(Map.get(filled, {fx.code, side}))} sources"
+    test "a losers'-round defeat ends the run", %{plan: plan} do
+      for code <- ~w(L1 L2 L3 L4), fixture <- round_fixtures(plan, code) do
+        assert fixture.loser_to == nil,
+               "#{fixture.code} should eliminate its loser"
       end
     end
 
-    test "nobody meets a player they already knocked out in the first knockout round" do
-      bracket = men()
-      f = by_code(bracket)
+    test "every routed destination exists and every slot is filled exactly once",
+         %{plan: plan} do
+      by_code = Map.new(plan.fixtures, &{&1.code, &1})
 
-      # Which Winners R1 matches could each side of a knockout match have come
-      # from? If those sets overlap, the draw has produced an immediate rematch.
-      w1_sources =
-        for fx <- bracket.fixtures, fx.round_code == "W1", reduce: %{} do
-          acc ->
-            acc
-            |> put_source(fx.winner_to, fx.slot)
-            |> put_source(fx.loser_to, fx.slot)
+      writes =
+        for f <- plan.fixtures,
+            {code, side} <- Enum.reject([f.winner_to, f.loser_to], &is_nil/1) do
+          assert Map.has_key?(by_code, code), "#{f.code} routes to a #{code} that does not exist"
+          {code, side}
         end
 
-      w2_l1_sources =
-        for fx <- bracket.fixtures, fx.round_code in ["W2", "L1"], reduce: %{} do
-          acc ->
-            from = Map.fetch!(w1_sources, fx.code)
+      assert writes == Enum.uniq(writes), "a slot is written by two different matches"
 
-            acc
-            |> merge_source(fx.winner_to, from)
-            |> merge_source(fx.loser_to, from)
-        end
-
-      for fx <- bracket.fixtures, fx.round_code == "L2", reduce: :ok do
-        _ ->
-          from = Map.fetch!(w2_l1_sources, fx.code)
-          merge_source(%{}, fx.winner_to, from)
-          :ok
+      for f <- plan.fixtures, f.round_code != "W1" do
+        assert Enum.count(writes, fn {code, _side} -> code == f.code end) == 2,
+               "#{f.code} is not fed by exactly two matches"
       end
+    end
 
-      l2_sources =
-        for fx <- bracket.fixtures, fx.round_code == "L2", reduce: %{} do
-          acc -> merge_source(acc, fx.winner_to, Map.fetch!(w2_l1_sources, fx.code))
-        end
+    test "nobody meets a player they already knocked out, in the last 32", %{plan: plan} do
+      {slots, met} = play_through(plan, stop_before: "R32")
 
-      for j <- 1..32 do
-        a_from = Map.fetch!(w2_l1_sources, "R64-#{j}") |> Map.get(:a, MapSet.new())
-        b_from = Map.fetch!(l2_sources, "R64-#{j}") |> Map.get(:b, MapSet.new())
+      for f <- round_fixtures(plan, "R32") do
+        a = Map.fetch!(slots, {f.code, :a})
+        b = Map.fetch!(slots, {f.code, :b})
 
-        assert MapSet.disjoint?(a_from, b_from),
-               "R64-#{j} is a rematch: both sides came from Winners R1 match(es) " <>
-                 "#{inspect(MapSet.intersection(a_from, b_from) |> MapSet.to_list())}"
-
-        assert f["R64-#{j}"].slot == j
+        refute MapSet.member?(met, MapSet.new([a, b])),
+               "#{f.code} is a rematch between #{a} and #{b}"
       end
     end
   end
+
+  # Plays the whole bracket with the lower seed number always winning,
+  # returning where everyone ended up and every pairing that happened.
+  defp play_through(plan, stop_before: stop) do
+    Enum.reduce(plan.rounds, {%{}, MapSet.new()}, fn round, acc ->
+      plan
+      |> round_fixtures(round.code)
+      |> Enum.reduce(acc, &play_fixture(&1, &2, round.code == stop))
+    end)
+  end
+
+  defp play_fixture(fixture, {slots, met}, stop?) do
+    a = Map.get(slots, {fixture.code, :a}, fixture[:a])
+    b = Map.get(slots, {fixture.code, :b}, fixture[:b])
+    met = if stop?, do: met, else: MapSet.put(met, MapSet.new([a, b]))
+    {win, lose} = if a <= b, do: {a, b}, else: {b, a}
+
+    {place(slots, [{fixture.winner_to, win}, {fixture.loser_to, lose}]), met}
+  end
+
+  defp place(slots, moves) do
+    moves
+    |> Enum.reject(fn {target, _player} -> is_nil(target) end)
+    |> Enum.reduce(slots, fn {{code, side}, player}, acc ->
+      Map.put(acc, {code, side}, player)
+    end)
+  end
+
+  defp round_fixtures(plan, code), do: Enum.filter(plan.fixtures, &(&1.round_code == code))
+
+  defp find(plan, code), do: Enum.find(plan.fixtures, &(&1.code == code))
 
   describe "byes" do
     test "a full field has none" do
@@ -340,23 +324,5 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
         DE.build([1, 2, 3])
       end
     end
-  end
-
-  defp put_source(acc, nil, _slot), do: acc
-
-  defp put_source(acc, {code, side}, slot) do
-    Map.update(acc, code, %{side => MapSet.new([slot])}, fn sides ->
-      Map.update(sides, side, MapSet.new([slot]), &MapSet.put(&1, slot))
-    end)
-  end
-
-  defp merge_source(acc, nil, _from), do: acc
-
-  defp merge_source(acc, {code, side}, from) do
-    slots = from |> Map.values() |> Enum.reduce(MapSet.new(), &MapSet.union/2)
-
-    Map.update(acc, code, %{side => slots}, fn sides ->
-      Map.update(sides, side, slots, &MapSet.union(&1, slots))
-    end)
   end
 end
