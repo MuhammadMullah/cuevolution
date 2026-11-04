@@ -1,0 +1,162 @@
+<div class="min-h-screen bg-ink-50">
+  <header class="border-b border-ink-200 bg-white">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
+      <div>
+        <p class="font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-red-500">
+          SportPesa National Pool Circuit
+        </p>
+        <h1 class="text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">Fixtures</h1>
+      </div>
+      <.link
+        navigate={~p"/live"}
+        class="ml-auto text-[13px] font-semibold text-ink-500 hover:text-ink-950"
+      >
+        Live scores
+      </.link>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-5">
+    <div class="mb-4 flex gap-5 overflow-x-auto border-b border-ink-200">
+      <button
+        :for={{slug, label} <- @tabs}
+        type="button"
+        phx-click="switch"
+        phx-value-category={slug}
+        class={[
+          "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+          @category == slug && "border-red-500 text-ink-950",
+          @category != slug && "border-transparent text-ink-500 hover:text-ink-950"
+        ]}
+      >
+        {label}
+      </button>
+    </div>
+
+    <div
+      :if={@total == 0}
+      class="rounded-2xl border border-ink-200 bg-white px-5 py-10 text-center"
+    >
+      <p class="font-semibold text-ink-900">No fixtures yet</p>
+      <p class="mt-1 text-[13.5px] text-ink-500">
+        They appear here as soon as the draw is made.
+      </p>
+    </div>
+
+    <div :if={@total > 0} class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-4 text-[12px] text-ink-500">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="h-2 w-2 rounded-full bg-red-500"></span>In play
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="h-2 w-2 rounded-full bg-green-600"></span>Decided
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="h-2 w-2 rounded-full border border-dashed border-ink-400"></span>Waiting for players
+          </span>
+        </div>
+        <span class="text-[12px] text-ink-400">
+          {@total} matches &middot; {@played} played &middot; {@live_now} live
+        </span>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          :for={
+            {label, slug} <- [
+              {"All #{@counts.all}", "all"},
+              {"Live #{@counts.live}", "live"},
+              {"Up next #{@counts.next}", "next"},
+              {"Finished #{@counts.finished}", "finished"}
+            ]
+          }
+          type="button"
+          phx-click="switch"
+          phx-value-filter={slug}
+          class={[
+            "whitespace-nowrap rounded-full border px-4 py-[7px] text-[13px] font-semibold",
+            @filter == slug && "border-ink-950 bg-ink-950 text-white",
+            @filter != slug && "border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
+          ]}
+        >
+          {label}
+        </button>
+      </div>
+
+      <p
+        :if={@rounds == []}
+        class="rounded-2xl border border-ink-200 bg-white px-5 py-8 text-center text-[13.5px] text-ink-400"
+      >
+        No matches in this filter.
+      </p>
+
+      <div :for={round <- @rounds}>
+        <div class="mb-2 flex items-baseline justify-between gap-3">
+          <h2 class="text-[13px] font-bold tracking-tight text-ink-950">{round.heading}</h2>
+          <span class="text-[11px] text-ink-400">
+            {round.played} of {round.total} played<span :if={round.race_to}>
+              &middot; race to {round.race_to}</span>
+          </span>
+        </div>
+
+        <div class="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <.link
+            :for={match <- round.fixtures}
+            navigate={~p"/m/#{match.match_id}"}
+            class={[
+              "rounded-xl border bg-white transition hover:ring-2 hover:ring-ink-300",
+              match.state == :live && "border-2 border-red-500",
+              match.state == :waiting && "border-dashed border-ink-300",
+              match.state not in [:live, :waiting] && "border-ink-200"
+            ]}
+          >
+            <span class="flex items-center justify-between gap-2 px-3.5 pt-2.5 text-[11px]">
+              <span class="font-mono text-ink-500">{match.number}</span>
+              <span class={[
+                "rounded-full px-2 py-0.5 font-semibold",
+                match.state == :live && "bg-red-500 text-white",
+                match.state == :final && "bg-green-100 text-green-700",
+                match.state in [:walkover, :bye] && "bg-gold-100 text-gold-700",
+                match.state in [:upcoming, :waiting] && "bg-ink-100 text-ink-500"
+              ]}>
+                {match.state_label}
+              </span>
+            </span>
+
+            <span
+              :for={
+                {name, score, won?} <- [
+                  {match.a, match.a_score, match.a_won},
+                  {match.b, match.b_score, match.b_won}
+                ]
+              }
+              class="flex items-center gap-2 px-3.5 py-1"
+            >
+              <span class={[
+                "flex-1 truncate text-[14px]",
+                won? && "font-bold text-ink-950",
+                !won? && match.state == :final && "text-ink-500",
+                !won? && match.state != :final && "text-ink-950"
+              ]}>
+                {name || "—"}
+              </span>
+              <span class={[
+                "shrink-0 font-mono text-[14px] tabular-nums",
+                won? && "font-bold text-ink-950",
+                !won? && "text-ink-400"
+              ]}>
+                {score || "–"}
+              </span>
+            </span>
+
+            <span class="flex items-center justify-between gap-2 border-t border-ink-100 px-3.5 py-1.5 text-[11px] text-ink-400">
+              <span class="truncate">{match.loser_to}</span>
+              <span :if={match.start} class="shrink-0">{match.start}</span>
+            </span>
+          </.link>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

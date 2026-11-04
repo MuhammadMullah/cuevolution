@@ -41,6 +41,7 @@ defmodule CuevolutionWeb.Router do
       # Shareable links. `/m/<match reference>` is one match; `/p/<username>`
       # is every match of one player. Both are read-only and carry no contact
       # details — they are sent to whoever wants to follow along.
+      live "/matches", PublicFixturesLive, :index
       live "/m/:match_id", PublicMatchLive, :show
       live "/p/:username", PublicPlayerMatchesLive, :show
       live "/register", RegistrationLive, :new
