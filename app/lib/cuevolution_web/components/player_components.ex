@@ -835,4 +835,74 @@ defmodule CuevolutionWeb.PlayerComponents do
     </div>
     """
   end
+
+  @doc """
+  A share button for a link to this app.
+
+  Uses the native share sheet where the browser has one — which is the phone
+  most players are holding — and falls back to copying the link, then to
+  showing it for manual copying if the clipboard is blocked.
+
+  `id` is required rather than defaulted: a `phx-hook` element without a
+  stable id silently never mounts.
+  """
+  attr :id, :string, required: true
+  attr :url, :string, required: true
+  attr :title, :string, default: "SportPesa National Pool Circuit"
+  attr :label, :string, default: "Share"
+  attr :class, :string, default: nil
+
+  def share_button(assigns) do
+    ~H"""
+    <div id={@id} phx-hook=".ShareLink" data-url={@url} data-title={@title} class="inline-flex">
+      <button
+        type="button"
+        class={[
+          "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1.5",
+          "text-[12.5px] font-semibold text-ink-600 hover:bg-ink-50",
+          @class
+        ]}
+      >
+        <.icon name="hero-share" class="size-4" />
+        <span class="share-link-label">{@label}</span>
+      </button>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ShareLink">
+        export default {
+          mounted() {
+            const button = this.el.querySelector("button")
+            const label = this.el.querySelector(".share-link-label")
+            const original = label.textContent
+
+            this.onClick = async () => {
+              const url = new URL(this.el.dataset.url, window.location.origin).toString()
+              const title = this.el.dataset.title
+
+              try {
+                if (navigator.share) {
+                  await navigator.share({title: title, url: url})
+                  return
+                }
+                await navigator.clipboard.writeText(url)
+                label.textContent = "Link copied"
+                clearTimeout(this.resetLabel)
+                this.resetLabel = setTimeout(() => { label.textContent = original }, 2000)
+              } catch (error) {
+                // Dismissing the share sheet is not a failure, so say nothing.
+                if (error && error.name === "AbortError") { return }
+                // A blocked clipboard is: show the link so it can be copied by hand.
+                window.prompt("Copy this link", url)
+              }
+            }
+
+            button.addEventListener("click", this.onClick)
+          },
+          destroyed() {
+            clearTimeout(this.resetLabel)
+            this.el.querySelector("button").removeEventListener("click", this.onClick)
+          }
+        }
+      </script>
+    </div>
+    """
+  end
 end

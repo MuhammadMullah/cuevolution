@@ -6,7 +6,28 @@
   identification_form={@identification_form}
 >
   <PlayerComponents.eyebrow>Draws &amp; Fixtures</PlayerComponents.eyebrow>
-  <h1 class="mb-5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">My fixtures</h1>
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">My fixtures</h1>
+    <PlayerComponents.share_button
+      id="share-all-my-matches"
+      url={~p"/p/#{@current_player.username}"}
+      title={"#{@current_player.first_name} #{@current_player.last_name} — SportPesa National Pool Circuit"}
+      label="Share all my matches"
+    />
+  </div>
+
+  <%!-- The link is worth showing, not just sharing: players read it out, and
+        it is the same link every time. --%>
+  <p class="mb-6 text-[12.5px] text-ink-400">
+    Anyone with
+    <.link
+      navigate={~p"/p/#{@current_player.username}"}
+      class="font-mono text-ink-600 underline"
+    >
+      /p/{@current_player.username}
+    </.link>
+    can follow all your matches — no account needed. Each match has its own link too.
+  </p>
 
   <div
     :if={@all_upcoming != [] || @venue_representative}
@@ -134,10 +155,20 @@
           <span class="w-[52px] shrink-0 text-ink-400">Play by</span>
           <span class="font-semibold text-ink-950">{fixture.deadline}</span>
         </div>
-        <div class="flex gap-2">
-          <span class="w-[52px] shrink-0 text-ink-400">Match</span>
-          <span class="font-mono text-xs text-ink-500">{fixture.match_id}</span>
-        </div>
+      </div>
+
+      <%!-- A fixture only has a shareable link once it has a match reference;
+            `fixtures.match_id` is nullable and its unique index is partial. --%>
+      <div
+        :if={fixture.match_id}
+        class="mt-3.5 flex items-center justify-between gap-2 border-t border-ink-100 pt-3"
+      >
+        <span class="truncate font-mono text-xs text-ink-400">{fixture.match_id}</span>
+        <PlayerComponents.share_button
+          id={"share-upcoming-#{fixture.match_id}"}
+          url={~p"/m/#{fixture.match_id}"}
+          title={"#{fixture.opponent} — SportPesa National Pool Circuit"}
+        />
       </div>
     </PlayerComponents.card>
   </div>
@@ -192,6 +223,14 @@
           {outcome_word(result.outcome)} {result.score}
         </span>
       </div>
+      <PlayerComponents.share_button
+        :if={result.match_id}
+        id={"share-result-#{result.match_id}"}
+        url={~p"/m/#{result.match_id}"}
+        title={"#{result.opponent} — SportPesa National Pool Circuit"}
+        label="Share"
+        class="shrink-0"
+      />
     </div>
   </div>
 

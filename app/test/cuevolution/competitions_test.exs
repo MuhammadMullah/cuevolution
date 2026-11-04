@@ -2436,8 +2436,12 @@ defmodule Cuevolution.CompetitionsTest do
           "points" => 4
         })
 
-      assert_receive {:points_updated, participant_id}
-      assert participant_id == fixture.participant_a_id
+      # "standings" is a shared topic that every bracket result also broadcasts
+      # on, so an async test running alongside can land a message here first.
+      # Assert on the participant this test is about rather than on whatever
+      # arrives first.
+      participant_id = fixture.participant_a_id
+      assert_receive {:points_updated, ^participant_id}
 
       Competitions.correct_points(entry, admin, %{"points" => 6})
       assert_receive {:points_updated, ^participant_id}

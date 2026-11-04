@@ -11,6 +11,7 @@ defmodule CuevolutionWeb.StandingsLive do
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
   alias CuevolutionWeb.PlayerComponents
+  alias CuevolutionWeb.StandingsRefresh
   alias Phoenix.LiveView.JS
 
   @tabs [{"male", "Individual Male"}, {"female", "Individual Female"}, {"team", "Teams"}]
@@ -29,6 +30,7 @@ defmodule CuevolutionWeb.StandingsLive do
        regions: Enum.map(Accounts.list_regions(), & &1.name),
        stages: ["Circuit", "Finals"]
      )
+     |> StandingsRefresh.init()
      |> load_standings()}
   end
 
@@ -60,8 +62,14 @@ defmodule CuevolutionWeb.StandingsLive do
      |> load_standings()}
   end
 
+  # Coalesced: a busy circuit broadcasts on every frame, and this page is one
+  # socket per signed-in player.
   def handle_info({:points_updated, _participant_id}, socket) do
-    {:noreply, load_standings(socket)}
+    {:noreply, StandingsRefresh.refresh(socket, &load_standings/1)}
+  end
+
+  def handle_info(:refresh_standings, socket) do
+    {:noreply, StandingsRefresh.refreshed(socket, &load_standings/1)}
   end
 
   defp load_standings(socket) do

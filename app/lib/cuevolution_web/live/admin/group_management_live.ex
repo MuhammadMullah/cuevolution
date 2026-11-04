@@ -44,9 +44,13 @@ defmodule CuevolutionWeb.GroupManagementLive do
     current_admin = Repo.preload(socket.assigns.current_admin, venue: :region)
     venue_rep? = current_admin.role == "venue_representative"
 
+    # Circuit is a knockout stage, not round-robin, but it belongs on the same
+    # screen: the tournament director already comes here to draw every other
+    # stage, and a separate page for one stage is a worse habit to learn than
+    # one extra tab.
     stages =
       Competitions.list_stages()
-      |> Enum.filter(&Stage.round_robin?/1)
+      |> Enum.filter(&(Stage.round_robin?(&1) or &1.name == "Circuit"))
 
     stages = if venue_rep?, do: Enum.filter(stages, &Stage.grassroots?/1), else: stages
 
@@ -67,6 +71,8 @@ defmodule CuevolutionWeb.GroupManagementLive do
        venue_rep?: venue_rep?,
        can_manage_groups?: Admin.can?(current_admin, :manage_groups),
        can_close_stage?: Admin.can?(current_admin, :advance_participants),
+       can_approve_results?: Admin.can?(current_admin, :approve_results),
+       circuit_editing: false,
        can_upload_result_sheets?: Admin.can?(current_admin, :record_results),
        result_sheets: [],
        venue_ready_early?: false,
@@ -104,8 +110,61 @@ defmodule CuevolutionWeb.GroupManagementLive do
        max_entries: 1,
        max_file_size: 15_000_000
      )
-     |> load_venues()
-     |> load_scope()}
+     |> assign(venues: [])}
+  end
+
+  @doc """
+  The selected stage, category, region and venue live in the query string, so
+  a refresh — or a shared link, or the browser's back button — lands back on
+  the tab you were looking at instead of resetting to Grassroots.
+
+  Anything missing or no longer valid falls back to the first option, which is
+  also what an unadorned `/admin/groups` gets.
+  """
+  def handle_params(params, _uri, socket) do
+    stage = find_stage(socket.assigns.stages, params["stage"]) || socket.assigns.stage
+    categories = categories_for_stage(stage)
+
+    category =
+      if params["category"] in categories,
+        do: params["category"],
+        else: List.first(categories)
+
+    region = find_by_id(socket.assigns.regions, params["region"]) || socket.assigns.region
+
+    socket =
+      socket
+      |> assign(stage: stage, categories: categories, category: category, region: region)
+      |> load_venues()
+
+    # The venue list depends on the region, so it can only be resolved once
+    # `load_venues/1` has run for the region we just settled on.
+    venue = find_by_id(socket.assigns.venues, params["venue"]) || socket.assigns.venue
+
+    {:noreply, socket |> assign(venue: venue) |> load_scope()}
+  end
+
+  defp find_stage(_stages, nil), do: nil
+  defp find_stage(stages, name), do: Enum.find(stages, &(&1.name == name))
+
+  defp find_by_id(_collection, nil), do: nil
+  defp find_by_id(collection, id), do: Enum.find(collection, &(&1.id == id))
+
+  # Every scope change goes through the URL rather than straight into assigns,
+  # which is what makes the selection survive a reload.
+  defp patch_scope(socket, overrides) do
+    params =
+      %{
+        "stage" => socket.assigns.stage.name,
+        "category" => socket.assigns.category,
+        "region" => socket.assigns.region && socket.assigns.region.id,
+        "venue" => socket.assigns.venue && socket.assigns.venue.id
+      }
+      |> Map.merge(overrides)
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Map.new()
+
+    push_patch(socket, to: ~p"/admin/groups?#{params}")
   end
 
   ## Shared stage/region/venue/category navigation (used by both experiences)
@@ -116,18 +175,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
         {:noreply, put_flash(socket, :error, "That stage is not available.")}
 
       stage ->
-        categories = categories_for_stage(stage)
-
-        category =
-          if socket.assigns.category in categories,
-            do: socket.assigns.category,
-            else: List.first(categories)
-
-        {:noreply,
-         socket
-         |> assign(stage: stage, categories: categories, category: category)
-         |> load_venues()
-         |> load_scope()}
+        # The category and venue are re-resolved in handle_params against the
+        # new stage, so a category that stage doesn't run falls back cleanly.
+        {:noreply, patch_scope(socket, %{"stage" => stage.name, "venue" => nil})}
     end
   end
 
@@ -137,24 +187,20 @@ defmodule CuevolutionWeb.GroupManagementLive do
         {:noreply, put_flash(socket, :error, "That region is not available.")}
 
       region ->
-        {:noreply,
-         socket
-         |> assign(:region, region)
-         |> load_venues()
-         |> load_scope()}
+        {:noreply, patch_scope(socket, %{"region" => region.id, "venue" => nil})}
     end
   end
 
   def handle_event("select_category", %{"category" => category}, socket) do
     if category in socket.assigns.categories,
-      do: {:noreply, socket |> assign(:category, category) |> load_scope()},
+      do: {:noreply, patch_scope(socket, %{"category" => category})},
       else: {:noreply, put_flash(socket, :error, "That category is not available.")}
   end
 
   def handle_event("select_venue", %{"id" => id}, socket) do
     case Enum.find(socket.assigns.venues, &(&1.id == id)) do
       nil -> {:noreply, put_flash(socket, :error, "That venue is not available.")}
-      venue -> {:noreply, socket |> assign(:venue, venue) |> load_scope()}
+      venue -> {:noreply, patch_scope(socket, %{"venue" => venue.id})}
     end
   end
 
@@ -649,12 +695,345 @@ defmodule CuevolutionWeb.GroupManagementLive do
     {:noreply, assign(socket, :selected_fixture_id, nil)}
   end
 
+  # ---------------------------------------------------------------- circuit
+  #
+  # The Circuit stage is a double-elimination bracket rather than groups, so
+  # it gets its own events and its own section of the template. Everything
+  # else on this screen — stage tabs, category tabs — is shared.
+
+  def handle_event("draw_circuit", _params, socket) do
+    %{stage: stage, category: category, current_admin: admin} = socket.assigns
+
+    case Competitions.draw_circuit_bracket(stage.id, category, admin) do
+      {:ok, %{entrants: entrants, seed: seed}} ->
+        {:noreply,
+         socket
+         |> load_scope()
+         |> assign(circuit_notice: "Draw made for #{entrants}. Draw reference #{seed}.")}
+
+      {:error, :too_few_entrants} ->
+        {:noreply, put_flash(socket, :error, "Not enough entrants to make a draw.")}
+
+      {:error, :bracket_exists} ->
+        {:noreply,
+         socket |> load_scope() |> put_flash(:error, "This draw has already been made.")}
+
+      {:error, :match_ids_taken} ->
+        {:noreply,
+         put_flash(socket, :error, "Another circuit has already used this match numbering.")}
+
+      {:error, :format_not_supported} ->
+        {:noreply,
+         put_flash(socket, :error, "The team event is played as groups, not a bracket.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "Only a tournament director can make the draw.")}
+    end
+  end
+
+  def handle_event("redeal_circuit_draw", _params, socket) do
+    %{stage: stage, category: category, current_admin: admin} = socket.assigns
+
+    case Competitions.reshuffle_circuit_draw(stage.id, category, admin) do
+      {:ok, %{entrants: entrants, seed: seed, redraw_count: count}} ->
+        {:noreply,
+         socket
+         |> load_scope()
+         |> assign(
+           circuit_notice:
+             "Re-dealt #{count} of 3 — #{entrants} drawn again. Draw reference #{seed}."
+         )}
+
+      {:error, :redraw_limit_reached} ->
+        {:noreply, put_flash(socket, :error, "This draw has already been re-dealt three times.")}
+
+      {:error, :results_recorded} ->
+        {:noreply,
+         socket
+         |> load_scope()
+         |> put_flash(
+           :error,
+           "Results have already been recorded — this draw cannot be re-dealt."
+         )}
+
+      {:error, :no_bracket} ->
+        {:noreply, load_scope(socket)}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "Only a tournament director can re-deal the draw.")}
+    end
+  end
+
+  def handle_event("circuit_view", %{"view" => view}, socket) when view in ~w(chart stage list) do
+    {:noreply, assign(socket, circuit_view: String.to_existing_atom(view))}
+  end
+
+  def handle_event("circuit_side", %{"side" => side}, socket)
+      when side in ~w(winners losers finals) do
+    {:noreply, assign(socket, circuit_side: String.to_existing_atom(side))}
+  end
+
+  def handle_event("circuit_zoom", %{"zoom" => zoom}, socket) when zoom in ~w(fit 80 100) do
+    {:noreply,
+     assign(socket, circuit_zoom: if(zoom == "fit", do: :fit, else: String.to_integer(zoom)))}
+  end
+
+  def handle_event("circuit_filter", %{"filter" => filter}, socket)
+      when filter in ~w(all live next finished) do
+    {:noreply, assign(socket, circuit_filter: String.to_existing_atom(filter))}
+  end
+
+  def handle_event("schedule_circuit_fixture", %{"slot" => params}, socket) do
+    fixture = circuit_fixture(socket.assigns, params["id"])
+
+    case Competitions.schedule_bracket_fixture(fixture, socket.assigns.current_admin, params) do
+      {:ok, _} ->
+        {:noreply, socket |> load_scope() |> put_flash(:info, "Match time saved.")}
+
+      {:error, :locked} ->
+        {:noreply,
+         put_flash(socket, :error, "This match has been played — its time can no longer change.")}
+
+      {:error, :invalid_datetime} ->
+        {:noreply, put_flash(socket, :error, "That start time is not valid.")}
+
+      {:error, :past_date} ->
+        {:noreply, put_flash(socket, :error, "A match cannot be scheduled before today.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You cannot schedule matches.")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not save that time.")}
+    end
+  end
+
+  # ------------------------------------------------- Circuit team event (014)
+
+  def handle_event("draw_circuit_teams", _params, socket) do
+    stage = socket.assigns.stage
+
+    case Competitions.draw_circuit_team_groups(stage.id, socket.assigns.current_admin) do
+      {:ok, %{groups: groups}} ->
+        {:noreply,
+         socket
+         |> load_scope()
+         |> assign(circuit_notice: "Drawn — #{length(groups)} groups.")}
+
+      {:error, :already_drawn} ->
+        {:noreply, put_flash(socket, :error, "The team draw has already been made.")}
+
+      {:error, :below_minimum} ->
+        {:noreply,
+         put_flash(socket, :error, "At least 10 teams are needed to make the team draw.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "Only a tournament director can make the draw.")}
+
+      {:error, _other} ->
+        {:noreply, put_flash(socket, :error, "Could not make the team draw.")}
+    end
+  end
+
+  def handle_event("redraw_circuit_teams", _params, socket) do
+    stage = socket.assigns.stage
+
+    case Competitions.redraw_circuit_team_groups(stage.id, socket.assigns.current_admin) do
+      {:ok, _} ->
+        {:noreply, socket |> load_scope() |> assign(circuit_notice: "Dealt again.")}
+
+      {:error, :redraw_limit} ->
+        {:noreply, put_flash(socket, :error, "The team draw has been dealt the maximum 3 times.")}
+
+      {:error, :results_exist} ->
+        {:noreply,
+         put_flash(socket, :error, "A result has been recorded — the draw can no longer change.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "Only a tournament director can re-deal the draw.")}
+
+      {:error, _other} ->
+        {:noreply, put_flash(socket, :error, "Could not deal the team draw again.")}
+    end
+  end
+
+  def handle_event("reset_circuit_teams", _params, socket) do
+    stage = socket.assigns.stage
+
+    case Competitions.reset_circuit_team_draw(stage.id, socket.assigns.current_admin) do
+      :ok ->
+        {:noreply, socket |> load_scope() |> assign(circuit_notice: "Team draw cleared.")}
+
+      {:error, :results_recorded} ->
+        {:noreply,
+         put_flash(socket, :error, "Results have been recorded — the draw cannot be cleared.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "Only a tournament director can clear the draw.")}
+
+      {:error, _other} ->
+        {:noreply, put_flash(socket, :error, "Could not clear the team draw.")}
+    end
+  end
+
+  def handle_event("circuit_team_view", %{"view" => view}, socket)
+      when view in ~w(table fixtures) do
+    {:noreply, assign(socket, circuit_team_view: String.to_existing_atom(view))}
+  end
+
+  def handle_event("circuit_team_round", %{"round" => round}, socket) do
+    {:noreply, assign(socket, circuit_team_round: String.to_integer(round))}
+  end
+
+  def handle_event("select_circuit_fixture", %{"id" => id}, socket) do
+    {:noreply,
+     assign(socket,
+       circuit_selected: id,
+       circuit_selected_fixture: circuit_fixture(socket.assigns, id),
+       circuit_editing: false
+     )}
+  end
+
+  def handle_event("edit_circuit_result", _params, socket) do
+    {:noreply, assign(socket, circuit_editing: true)}
+  end
+
+  def handle_event("cancel_circuit_edit", _params, socket) do
+    {:noreply, assign(socket, circuit_editing: false)}
+  end
+
+  def handle_event("correct_circuit_result", %{"correction" => params}, socket) do
+    fixture = circuit_fixture(socket.assigns, params["id"])
+
+    attrs = %{
+      "winner_participation_id" => params["winner"],
+      "score" => %{
+        "a" => to_frame_count(params["frames_a"]),
+        "b" => to_frame_count(params["frames_b"])
+      }
+    }
+
+    case Competitions.correct_fixture_result(fixture, socket.assigns.current_admin, attrs) do
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> assign(circuit_editing: false)
+         |> load_scope()
+         |> put_flash(:info, "Result corrected. The previous score is in the audit log.")}
+
+      {:error, :downstream_played} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "A later match has already been played, so the winner can no longer change. " <>
+             "Correct the later match first, or change only the score."
+         )}
+
+      {:error, :not_recorded} ->
+        {:noreply, put_flash(socket, :error, "That match has no result to correct.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "Only a tournament director can correct a result.")}
+
+      {:error, :results_recording_closed} ->
+        {:noreply, put_flash(socket, :error, "Result recording is closed.")}
+
+      {:error, _other} ->
+        {:noreply, put_flash(socket, :error, "Could not correct that result.")}
+    end
+  end
+
+  def handle_event("close_circuit_fixture", _params, socket) do
+    {:noreply,
+     assign(socket,
+       circuit_selected: nil,
+       circuit_selected_fixture: nil,
+       circuit_editing: false
+     )}
+  end
+
+  # The hot path while matches are being played: one tap per frame, no form.
+  def handle_event("circuit_frame", %{"id" => id, "side" => side, "delta" => delta}, socket) do
+    fixture = circuit_fixture(socket.assigns, id)
+    current = fixture.live_score || %{"a" => 0, "b" => 0}
+
+    score =
+      current
+      |> Map.update(side, 0, &(&1 + String.to_integer(delta)))
+      |> Map.put_new("a", 0)
+      |> Map.put_new("b", 0)
+
+    case Competitions.update_live_score(fixture, socket.assigns.current_admin, score) do
+      {:ok, _} ->
+        {:noreply, load_scope(socket)}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You cannot record results.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not save that frame.")}
+    end
+  end
+
+  def handle_event("finish_circuit_fixture", %{"id" => id, "winner" => winner_id}, socket) do
+    fixture = circuit_fixture(socket.assigns, id)
+
+    attrs = %{
+      "winner_participation_id" => winner_id,
+      "score" => fixture.live_score || %{"a" => 0, "b" => 0}
+    }
+
+    case Competitions.record_result(fixture, socket.assigns.current_admin, attrs) do
+      {:ok, _result} ->
+        {:noreply, socket |> load_scope() |> assign(circuit_selected: nil)}
+
+      {:error, :results_recording_closed} ->
+        {:noreply, put_flash(socket, :error, "Result recording is closed.")}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You cannot record results.")}
+
+      {:error, %Ecto.Changeset{errors: errors}} ->
+        message =
+          if Keyword.has_key?(errors, :fixture_id),
+            do: "This match has already been recorded.",
+            else: "Could not record that result."
+
+        {:noreply, socket |> load_scope() |> put_flash(:error, message)}
+
+      {:error, _other} ->
+        {:noreply, put_flash(socket, :error, "Could not record that result.")}
+    end
+  end
+
+  # Each fixture comes back with its round attached, because every scoring
+  # decision needs that round's race length.
+  defp circuit_fixture(%{circuit_bracket: %{rounds: rounds}}, id) do
+    team_fixture(rounds, id)
+  end
+
+  # The team event's fixtures live in groups rather than a bracket, which is
+  # the only difference the scoring handlers need to know about.
+  defp circuit_fixture(%{circuit_team_rounds: rounds}, id) when is_list(rounds) do
+    team_fixture(rounds, id)
+  end
+
+  defp circuit_fixture(_assigns, _id), do: nil
+
   # `MatchEntryComponent` sends this after any state-changing action
   # (record/verify/postpone/resume/walkover) — refresh the group cards'
   # fixture statuses and progress counts to match.
   def handle_info({:match_entry_updated, _fixture_id}, socket) do
     {:noreply, load_gr(socket)}
   end
+
+  # Any recorded result on the Circuit bracket, from here or another admin.
+  def handle_info({:bracket_updated, _bracket_id}, socket), do: {:noreply, load_scope(socket)}
+
+  # The same, for the Circuit team event: a draw, a re-deal or a frame.
+  def handle_info({:circuit_teams_updated, _stage_id}, socket),
+    do: {:noreply, load_scope(socket)}
 
   defp store_result_sheet_entry(stage, venue, admin, path, entry) do
     body = File.read!(path)
@@ -714,7 +1093,293 @@ defmodule CuevolutionWeb.GroupManagementLive do
   # function works both from `handle_event`/loaders (`grassroots?(socket.assigns)`)
   # and directly from the template (`auto_draw_eligible?(assigns)`), which
   # only ever sees `assigns`, never `socket`.
+  # ---- slot display ------------------------------------------------------
+
+  defp slot_time(fixture) do
+    case Competitions.slot_start_in_eat(fixture) do
+      nil -> nil
+      start -> Calendar.strftime(start, "%H:%M")
+    end
+  end
+
+  defp slot_date_value(fixture) do
+    case Competitions.slot_start_in_eat(fixture) do
+      nil -> Date.to_iso8601(Competitions.today_in_eat())
+      start -> start |> DateTime.to_date() |> Date.to_iso8601()
+    end
+  end
+
+  # The start time as it shows on a card, local time, e.g. "19:31".
+  defp slot_label(fixture), do: slot_time(fixture)
+
+  defp slot_day_label(fixture) do
+    case Competitions.slot_start_in_eat(fixture) do
+      nil -> nil
+      start -> Calendar.strftime(start, "%a %-d %b, %H:%M")
+    end
+  end
+
+  # ---- presentation ------------------------------------------------------
+  #
+  # Matches are numbered M1..Mn across the whole bracket in play order, the way
+  # a printed draw sheet numbers them, rather than by their internal
+  # round-and-slot code. Built once per render and handed to the template.
+
+  defp circuit_match_numbers(rounds) do
+    rounds
+    |> Enum.sort_by(& &1.sequence)
+    |> Enum.flat_map(fn round -> Enum.sort_by(round.fixtures, & &1.slot) end)
+    |> Enum.with_index(1)
+    |> Map.new(fn {fixture, n} -> {fixture.id, "M#{n}"} end)
+  end
+
+  defp match_number(numbers, %{id: id}), do: Map.get(numbers, id, "—")
+
+  # Where this match's loser goes — the thing that makes a double-elimination
+  # sheet readable, and the reason fixtures carry a loser route at all.
+  defp loser_destination(_numbers, %{loser_to_fixture_id: nil}), do: "Loser is out"
+
+  defp loser_destination(numbers, %{loser_to_fixture_id: id}) do
+    case Map.get(numbers, id) do
+      nil -> "Loser is out"
+      code -> "Loser to #{code}"
+    end
+  end
+
+  defp circuit_counts(rounds) do
+    fixtures = Enum.flat_map(rounds, & &1.fixtures)
+
+    %{
+      all: length(fixtures),
+      live: Enum.count(fixtures, &(fixture_state(&1) == :live)),
+      next: Enum.count(fixtures, &(fixture_state(&1) == :ready)),
+      finished: Enum.count(fixtures, &(fixture_state(&1) in [:done, :walkover]))
+    }
+  end
+
+  defp filter_fixtures(fixtures, :all), do: fixtures
+  defp filter_fixtures(fixtures, :live), do: Enum.filter(fixtures, &(fixture_state(&1) == :live))
+  defp filter_fixtures(fixtures, :next), do: Enum.filter(fixtures, &(fixture_state(&1) == :ready))
+
+  defp filter_fixtures(fixtures, :finished),
+    do: Enum.filter(fixtures, &(fixture_state(&1) in [:done, :walkover]))
+
+  defp zoom_style(:fit), do: nil
+  defp zoom_style(percent), do: "zoom:#{percent / 100}"
+
+  defp round_progress(round) do
+    played = Enum.count(round.fixtures, &(fixture_state(&1) in [:done, :walkover]))
+    live = Enum.count(round.fixtures, &(fixture_state(&1) == :live))
+    total = length(round.fixtures)
+
+    base = "#{played} of #{total} played"
+    if live > 0, do: base <> " · #{live} live", else: base
+  end
+
+  defp status_label(:done), do: "Final"
+  defp status_label(:walkover), do: "Walkover"
+  defp status_label(:live), do: "Live"
+  defp status_label(:ready), do: "Up next"
+  defp status_label(:waiting), do: "Waiting"
+
+  # Lanes with their geometry already worked out, so the template only reads.
+  defp circuit_lane_data(rounds) do
+    rounds
+    |> circuit_lanes()
+    |> Enum.reject(fn {_title, _side, lane_rounds} -> lane_rounds == [] end)
+    |> Enum.map(fn {title, side, lane_rounds} ->
+      %{
+        title: title,
+        side: side,
+        rounds: lane_rounds,
+        height: circuit_lane_height(lane_rounds),
+        links:
+          lane_rounds
+          |> Enum.chunk_every(2, 1, :discard)
+          |> Enum.map(fn [round, next] ->
+            circuit_links(round, next, circuit_lane_height(lane_rounds))
+          end)
+      }
+    end)
+  end
+
+  # The "Finals" tab is the knockout lane.
+  defp lane_side(:winners), do: "winners"
+  defp lane_side(:losers), do: "losers"
+  defp lane_side(:finals), do: "knockout"
+
+  defp circuit_lanes(rounds) do
+    [
+      {"Winners' side", "winners", Enum.filter(rounds, &(&1.bracket_side == "winners"))},
+      {"Losers' side", "losers", Enum.filter(rounds, &(&1.bracket_side == "losers"))},
+      {"Knockout", "knockout", Enum.filter(rounds, &(&1.bracket_side == "knockout"))}
+    ]
+  end
+
+  # Each card is ~92px tall; the extra room is the breathing space between
+  # them and what gives the connectors somewhere to run.
+  @circuit_slot_height 112
+
+  defp circuit_lane_height(rounds) do
+    matches = rounds |> Enum.map(&length(&1.fixtures)) |> Enum.max(fn -> 1 end)
+    max(matches * @circuit_slot_height, @circuit_slot_height)
+  end
+
+  @doc """
+  The connector run between one round and the next, as a list of
+  `%{height:, merge?:}`.
+
+  Two shapes only: a **merge**, where two cards feed one and the elbow brackets
+  them together, and a **carry**, where a round feeds the next one for one —
+  the losers' bracket and the drop into the knockout both do that. Geometry
+  follows the cards: with `justify-around` over a fixed lane height, a link of
+  height `H/n` centred in its own band lands exactly on the midpoint between
+  the two cards it joins.
+  """
+  def circuit_links(round, next_round, height) do
+    count = length(round.fixtures)
+    next_count = length(next_round.fixtures)
+
+    cond do
+      count == 0 or next_count == 0 ->
+        []
+
+      next_count * 2 == count ->
+        List.duplicate(%{height: div(height, count), merge?: true}, next_count)
+
+      true ->
+        List.duplicate(%{height: 2, merge?: false}, count)
+    end
+  end
+
+  @doc """
+  True when this side of the card holds whoever arrived from the winners'
+  bracket — slot A of a crossover card, and slot A of the first knockout
+  round, where the unbeaten player meets a survivor.
+
+  Shaded so the chart answers "who came down from the top half" without
+  anyone having to trace the lines back.
+  """
+  def from_winners_side?(round, side, first_knockout_sequence) do
+    side == "a" and
+      ((round.bracket_side == "losers" and crossover?(round)) or
+         (round.bracket_side == "knockout" and round.sequence == first_knockout_sequence))
+  end
+
+  # The crossover is the second losers' round — the only one fed from above.
+  defp crossover?(%{name: name}), do: String.ends_with?(name, "Round 2")
+
+  @doc "Sequence of the first knockout round, where the two halves meet."
+  def first_knockout_sequence(rounds) do
+    rounds
+    |> Enum.filter(&(&1.bracket_side == "knockout"))
+    |> Enum.map(& &1.sequence)
+    |> Enum.min(fn -> -1 end)
+  end
+
+  defp fixture_score(%{result: %{score: %{} = final}}, side), do: Map.get(final, side)
+  defp fixture_score(%{live_score: %{} = live}, side), do: Map.get(live, side)
+  defp fixture_score(_fixture, _side), do: nil
+
+  defp fixture_winner?(%{result: %{winner_participation_id: id}} = f, "a") when is_binary(id),
+    do: f.participant_a_id == id
+
+  defp fixture_winner?(%{result: %{winner_participation_id: id}} = f, "b") when is_binary(id),
+    do: f.participant_b_id == id
+
+  defp fixture_winner?(_fixture, _side), do: false
+
+  defp fixture_state(%{status: s}) when s in ["completed", "verified"], do: :done
+  defp fixture_state(%{status: "live"}), do: :live
+  defp fixture_state(%{status: "walkover"}), do: :walkover
+  defp fixture_state(%{participant_a_id: nil}), do: :waiting
+  defp fixture_state(%{participant_b_id: nil}), do: :waiting
+  defp fixture_state(_fixture), do: :ready
+
+  # The race is won the moment someone reaches it; until then, finishing a
+  # match means someone conceded or retired, which is a different, rarer act.
+  defp match_decided?(fixture) do
+    at_race?(fixture, "a") or at_race?(fixture, "b")
+  end
+
+  defp frames_needed(fixture, side) do
+    case {fixture.round.race_to, fixture_score(fixture, side)} do
+      {race_to, nil} when is_integer(race_to) -> race_to
+      {race_to, scored} when is_integer(race_to) -> max(race_to - scored, 0)
+      _ -> nil
+    end
+  end
+
+  defp at_race?(fixture, side), do: fixture_score(fixture, side) == fixture.round.race_to
+
+  # --------------------------------------------- Circuit team event display
+
+  # A blank or junk frame count is 0 rather than a crash: this is a correction
+  # form, and the TD is often clearing a field before retyping it.
+  defp to_frame_count(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {frames, _rest} when frames >= 0 -> frames
+      _other -> 0
+    end
+  end
+
+  defp to_frame_count(_value), do: 0
+
+  @doc false
+  def recorded_winner_id(%{result: %{winner_participation_id: id}}), do: id
+  def recorded_winner_id(_fixture), do: nil
+
+  @doc false
+  def team_table_columns do
+    [
+      {"#", "Position", "text-left"},
+      {"Team", "Team name", "text-left"},
+      {"P", "Matches played", "text-right"},
+      {"W", "Matches won", "text-right"},
+      {"L", "Matches lost", "text-right"},
+      {"FW", "Frames won", "text-right"},
+      {"FD", "Frame difference", "text-right"},
+      {"SP Points", "SportPesa Points", "text-right"}
+    ]
+  end
+
+  @doc false
+  def signed_number(value) when value > 0, do: "+#{value}"
+  def signed_number(value), do: to_string(value)
+
+  @doc false
+  def team_rounds_in(rounds, sequence) do
+    Enum.filter(rounds, &(&1.sequence == sequence))
+  end
+
+  @doc false
+  def team_fixture_label(fixture) do
+    case fixture_state(fixture) do
+      :done -> "Final"
+      :live -> "Live"
+      :walkover -> "Walkover"
+      _other -> "To play"
+    end
+  end
+
+  @doc false
+  def slot_time_label(fixture) do
+    case Competitions.slot_start_in_eat(fixture) do
+      nil -> nil
+      start -> Calendar.strftime(start, "%H:%M")
+    end
+  end
+
+  # A bracket result moves both players on to their next match; a round-robin
+  # result moves the group table instead.
+  defp result_recorded_note(%{category: "team"}),
+    do: "Result recorded. The group table has moved."
+
+  defp result_recorded_note(_assigns), do: "Result recorded. Both players have moved on."
+
   defp grassroots?(assigns), do: Stage.grassroots?(assigns.stage)
+
+  defp circuit?(assigns), do: assigns.stage.name == "Circuit"
 
   defp regional?(assigns), do: assigns.stage.name == "Regional"
 
@@ -723,6 +1388,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   # category (region-scoped) — see the moduledoc.
   defp auto_draw_eligible?(assigns) do
     cond do
+      circuit?(assigns) -> false
       grassroots?(assigns) -> assigns.category == "male" and !!assigns.venue
       regional?(assigns) -> assigns.category in ~w(male female team)
       true -> false
@@ -794,9 +1460,144 @@ defmodule CuevolutionWeb.GroupManagementLive do
       )
       |> load_result_sheets_and_readiness()
 
-    if auto_draw_eligible?(socket.assigns),
-      do: load_gr(socket),
-      else: socket |> load_groups() |> load_unassigned()
+    cond do
+      circuit?(socket.assigns) -> load_circuit(socket)
+      auto_draw_eligible?(socket.assigns) -> load_gr(socket)
+      true -> socket |> load_groups() |> load_unassigned()
+    end
+  end
+
+  defp load_circuit(%{assigns: %{category: "team"}} = socket), do: load_circuit_teams(socket)
+
+  defp load_circuit(socket) do
+    %{stage: stage, category: category} = socket.assigns
+
+    if connected?(socket), do: subscribe_to_circuit(stage.id, category)
+
+    bracket = Competitions.load_bracket(stage.id, category)
+    rounds = if bracket, do: bracket.rounds, else: []
+    selected = keep_selected_fixture(socket, bracket)
+
+    # Everything the chart needs is computed here rather than in the template.
+    # A `<% x = ... %>` assignment in HEEx defeats change tracking for its
+    # whole block, so LiveView re-sends it on every event — with a couple of
+    # hundred match cards that is the entire bracket over the socket each time
+    # a frame is tapped, which is what made the page feel broken.
+    assign(socket,
+      circuit_bracket: bracket,
+      circuit_lanes: circuit_lane_data(rounds),
+      circuit_numbers: circuit_match_numbers(rounds),
+      circuit_counts: circuit_counts(rounds),
+      circuit_first_knockout: first_knockout_sequence(rounds),
+      circuit_selected_fixture:
+        selected && circuit_fixture(%{circuit_bracket: bracket}, selected),
+      circuit_editing: keep_editing?(socket, selected),
+      # The entrant list is the pre-draw screen only — every use of it in the
+      # template is inside `is_nil(@circuit_bracket)`. Loading it once a draw
+      # exists fetched a few hundred players and their teams on every frame
+      # tapped, to render none of them.
+      circuit_entrants:
+        if(bracket, do: [], else: Competitions.circuit_entrants(stage.id, category)),
+      circuit_redraws_left: Competitions.circuit_redraws_remaining(stage.id, category),
+      circuit_selected: selected,
+      circuit_view: socket.assigns[:circuit_view] || :chart,
+      circuit_side: socket.assigns[:circuit_side] || :winners,
+      circuit_zoom: socket.assigns[:circuit_zoom] || :fit,
+      circuit_filter: socket.assigns[:circuit_filter] || :all,
+      circuit_notice: nil
+    )
+  end
+
+  # The Circuit team event is round-robin, not a bracket: two national groups
+  # of ten, one season-long round robin, top four in each to the Nationals
+  # (spec 014). It reuses the same scoring handlers as the brackets — the
+  # fixtures are ordinary fixtures — but its structure and table are its own.
+  defp load_circuit_teams(socket) do
+    %{stage: stage} = socket.assigns
+
+    if connected?(socket), do: Competitions.subscribe_to_circuit_teams(stage.id)
+
+    draw = Competitions.circuit_team_draw(stage.id)
+    rounds = if draw, do: Competitions.circuit_team_rounds(stage.id), else: []
+    selected = keep_selected_team_fixture(socket, rounds)
+
+    assign(socket,
+      circuit_team_draw: draw,
+      circuit_team_rounds: rounds,
+      circuit_team_standings:
+        if(draw, do: Competitions.circuit_team_standings(stage.id), else: []),
+      circuit_team_entrants: if(draw, do: [], else: Competitions.circuit_team_entrants(stage.id)),
+      circuit_team_redraws_left: Competitions.circuit_team_redraws_remaining(stage.id),
+      circuit_team_round: socket.assigns[:circuit_team_round] || 1,
+      circuit_team_played?: Competitions.circuit_team_has_results?(stage.id),
+      circuit_team_advancers:
+        Competitions.get_or_create_group_config(stage.id, "team").advancer_count,
+      circuit_team_view: socket.assigns[:circuit_team_view] || :table,
+      circuit_selected: selected,
+      circuit_selected_fixture: selected && team_fixture(rounds, selected),
+      circuit_editing: keep_editing?(socket, selected),
+      # The bracket assigns the shared template still reads.
+      circuit_bracket: nil,
+      circuit_lanes: [],
+      circuit_numbers: %{},
+      circuit_counts: %{},
+      circuit_first_knockout: nil,
+      circuit_entrants: [],
+      circuit_redraws_left: 0,
+      circuit_view: :chart,
+      circuit_side: :winners,
+      circuit_zoom: :fit,
+      circuit_filter: :all,
+      circuit_notice: nil
+    )
+  end
+
+  # Same reason the bracket keeps its open card across a reload: every frame
+  # tapped reloads, and a score panel that shut after each frame would send the
+  # TD hunting for the match again mid-rack.
+  defp keep_selected_team_fixture(socket, rounds) do
+    case socket.assigns[:circuit_selected] do
+      nil -> nil
+      id -> if team_fixture(rounds, id), do: id
+    end
+  end
+
+  # A correction in progress survives the reload that every frame triggers,
+  # but not a change of match.
+  defp keep_editing?(_socket, nil), do: false
+  defp keep_editing?(socket, _selected), do: !!socket.assigns[:circuit_editing]
+
+  defp team_fixture(rounds, id) do
+    rounds
+    |> Enum.flat_map(fn round -> Enum.map(round.fixtures, &%{&1 | round: round}) end)
+    |> Enum.find(&(&1.id == id))
+  end
+
+  # Every frame tapped reloads the bracket, so the open match must survive that
+  # reload — otherwise the score panel shuts after each frame and the TD has to
+  # find the match again mid-rack. The selection is dropped only when the
+  # fixture is no longer on screen, which is what happens on a category switch
+  # or after a re-deal.
+  defp keep_selected_fixture(socket, bracket) do
+    selected = socket.assigns[:circuit_selected]
+
+    cond do
+      is_nil(selected) -> nil
+      is_nil(bracket) -> nil
+      fixture_in_bracket?(bracket, selected) -> selected
+      true -> nil
+    end
+  end
+
+  defp fixture_in_bracket?(%{rounds: rounds}, fixture_id) do
+    Enum.any?(rounds, fn round -> Enum.any?(round.fixtures, &(&1.id == fixture_id)) end)
+  end
+
+  defp subscribe_to_circuit(stage_id, category) do
+    case Competitions.get_knockout_bracket(stage_id, category) do
+      nil -> :ok
+      bracket -> Competitions.subscribe_to_bracket(bracket.id)
+    end
   end
 
   # Both the "mark venue ready early" override and the result-sheet
@@ -1024,8 +1825,12 @@ defmodule CuevolutionWeb.GroupManagementLive do
 
   ## View helpers
 
+  # nil covers a bracket slot whose player is still to be decided.
+  defp participant_name(nil), do: nil
   defp participant_name(%{player_id: nil, team: team}), do: team.name
-  defp participant_name(%{player: player}), do: "#{player.first_name} #{player.last_name}"
+  defp participant_name(%{player: %{first_name: f, last_name: l}}), do: "#{f} #{l}"
+  defp participant_name(%{team: %{name: name}}), do: name
+  defp participant_name(_other), do: nil
 
   defp scope_label(assigns) do
     "#{assigns.stage.name} · #{scope_name(assigns)} · #{category_label(assigns.category)}"

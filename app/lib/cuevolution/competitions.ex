@@ -14,6 +14,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Accounts.Admin
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions.CuevoPointsEntry
+  alias Cuevolution.Competitions.DoubleElimination
   alias Cuevolution.Competitions.Draw
   alias Cuevolution.Competitions.Fixture
   alias Cuevolution.Competitions.Group
@@ -23,6 +24,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Competitions.MatchResult
   alias Cuevolution.Competitions.ResultSheet
   alias Cuevolution.Competitions.Round
+  alias Cuevolution.Competitions.SpPoints
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Competitions.StageCapacityConfig
   alias Cuevolution.Competitions.StageGroupConfig
@@ -201,28 +203,40 @@ defmodule Cuevolution.Competitions do
       select: p
   end
 
-  @doc "Recent verified and walkover fixtures for a player, including Grassroots deadline results."
+  @doc """
+  A player's recent finished matches — their own and their team's.
+
+  The round-robin stages at Grassroots and Regional have a verification step,
+  so a result there is only final once a TD has approved it. The Circuit has
+  no such step: its bracket and national-group results are final the moment
+  they are recorded. So "completed" counts at the Circuit and nowhere else,
+  which is why the status test is a condition on the round rather than a flat
+  list — a player should see their Circuit result as soon as it is entered,
+  without seeing a Grassroots result that is still awaiting approval.
+  """
   def recent_results_for_player(player_id) do
-    participant_ids =
-      from sp in StageParticipation,
-        where: sp.player_id == ^player_id,
-        select: sp.id
+    participant_ids = participation_ids_for_player_query(player_id)
 
     from(f in Fixture,
       join: r in Round,
       on: r.id == f.round_id,
       join: mr in MatchResult,
       on: mr.fixture_id == f.id,
+      left_join: g in Group,
+      on: g.id == r.group_id,
       where:
-        f.status in ["verified", "walkover"] and
-          (f.participant_a_id in subquery(participant_ids) or
-             f.participant_b_id in subquery(participant_ids)),
+        (f.participant_a_id in subquery(participant_ids) or
+           f.participant_b_id in subquery(participant_ids)) and
+          (f.status in ["verified", "walkover"] or
+             (f.status == "completed" and
+                (not is_nil(r.knockout_bracket_id) or
+                   (not is_nil(g.id) and is_nil(g.region_id) and is_nil(g.venue_id))))),
       order_by: [desc: f.updated_at],
       limit: 20,
       preload: [
         :result,
-        participant_a: :player,
-        participant_b: :player,
+        participant_a: [:player, :team],
+        participant_b: [:player, :team],
         round: :stage
       ]
     )
@@ -855,6 +869,185 @@ defmodule Cuevolution.Competitions do
   defp check_bulk_advance_region(%{region_id: region_id}, region_id), do: :ok
   defp check_bulk_advance_region(_participation, _region_id), do: {:error, :wrong_region}
 
+  @doc """
+  Generates the whole Circuit bracket for `category` in one transaction:
+  every round, every fixture, and the routing that says where each match's
+  winner and loser go (spec 014).
+
+  `entrants` is the draw order — strongest first when seeded, already shuffled
+  when random. `DoubleElimination.build/2` decides the shape; this function
+  only writes it down.
+
+  The bracket is generated complete, so most fixtures start with no
+  participants at all: Winners Round 1 is filled from the draw, and everything
+  downstream is populated as results come in. That's why fixtures carry
+  `winner_to_fixture_id`/`loser_to_fixture_id` — recording a result walks those
+  edges rather than recomputing the bracket.
+
+  Routing is written in a second pass because a fixture can only point at
+  another fixture that already exists, and the graph points forwards.
+
+  Returns `{:ok, %{bracket: bracket, rounds: n, fixtures: n}}`, or
+  `{:error, :bracket_exists}` if this stage/category already has rounds — a
+  Circuit draw is made once, and regenerating it would orphan recorded results.
+  """
+  def generate_circuit_bracket(stage_id, category, entrants, opts \\ []) do
+    bracket = ensure_knockout_bracket(stage_id, category)
+
+    cond do
+      Repo.exists?(from r in Round, where: r.knockout_bracket_id == ^bracket.id) ->
+        {:error, :bracket_exists}
+
+      match_id_prefix_taken?(category, opts) ->
+        {:error, :match_ids_taken}
+
+      true ->
+        do_generate_circuit_bracket(bracket, stage_id, category, entrants, opts)
+    end
+  end
+
+  defp do_generate_circuit_bracket(bracket, stage_id, category, entrants, opts) do
+    plan = DoubleElimination.build(entrants, Keyword.put_new(opts, :category, category))
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+    location = Keyword.get(opts, :location_code, "NAT")
+    prefix = "SP26-#{location}-#{category_code(category)}-"
+
+    Multi.new()
+    |> Multi.run(:rounds, fn repo, _ ->
+      rows =
+        plan.rounds
+        |> Enum.with_index(1)
+        |> Enum.map(fn {r, sequence} ->
+          %{
+            id: Ecto.UUID.generate(),
+            stage_id: stage_id,
+            knockout_bracket_id: bracket.id,
+            name: r.name,
+            bracket_side: r.side,
+            sequence: sequence,
+            race_to: r.race_to,
+            inserted_at: now,
+            updated_at: now
+          }
+        end)
+
+      {_n, inserted} = repo.insert_all(Round, rows, returning: [:id, :name])
+      {:ok, Map.new(inserted, &{&1.name, &1.id})}
+    end)
+    |> Multi.run(:fixtures, fn repo, %{rounds: round_ids} ->
+      names = Map.new(plan.rounds, &{&1.code, &1.name})
+
+      rows =
+        Enum.map(plan.fixtures, fn fx ->
+          %{
+            id: Ecto.UUID.generate(),
+            round_id: Map.fetch!(round_ids, Map.fetch!(names, fx.round_code)),
+            slot: fx.slot,
+            bye: fx.bye,
+            match_id: prefix <> fx.code,
+            participant_a_id: participant_id(fx[:a]),
+            participant_b_id: participant_id(fx[:b]),
+            status: if(fx.bye, do: "walkover", else: "scheduled"),
+            walkover_kind: if(fx.bye, do: "single"),
+            inserted_at: now,
+            updated_at: now
+          }
+        end)
+
+      {_n, inserted} = repo.insert_all(Fixture, rows, returning: [:id, :match_id])
+      {:ok, Map.new(inserted, &{&1.match_id, &1.id})}
+    end)
+    |> Multi.run(:routing, fn repo, %{fixtures: ids} ->
+      {:ok, write_routing(repo, plan.fixtures, &Map.fetch!(ids, prefix <> &1))}
+    end)
+    |> Multi.run(:byes, fn repo, _changes ->
+      # A bye is never played, so nothing would otherwise trigger its
+      # advancement — the player would sit in a walkover fixture forever and
+      # the Round 2 slot above them would stay empty. Push them through now,
+      # as part of generating the draw.
+      advance_byes(repo, bracket.id)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{rounds: rounds, fixtures: fixtures}} ->
+        broadcast_bracket_changed(bracket.id)
+        {:ok, %{bracket: bracket, rounds: map_size(rounds), fixtures: map_size(fixtures)}}
+
+      {:error, _step, reason, _changes} ->
+        {:error, reason}
+    end
+  end
+
+  # One UPDATE per fixture, inside the generation transaction. A fixture can
+  # only point at another fixture that already exists, so routing is a second
+  # pass over the rows inserted above rather than part of the insert.
+  defp write_routing(repo, fixtures, id_for) do
+    fixtures
+    |> Enum.map(fn fx ->
+      {fx.code,
+       route_fields(:winner, fx.winner_to, id_for) ++ route_fields(:loser, fx.loser_to, id_for)}
+    end)
+    |> Enum.reject(fn {_code, updates} -> updates == [] end)
+    |> Enum.reduce(0, fn {code, updates}, acc ->
+      {n, _} = repo.update_all(from(f in Fixture, where: f.id == ^id_for.(code)), set: updates)
+      acc + n
+    end)
+  end
+
+  defp advance_byes(repo, bracket_id) do
+    byes =
+      repo.all(
+        from f in Fixture,
+          join: r in Round,
+          on: r.id == f.round_id,
+          where: r.knockout_bracket_id == ^bracket_id and f.bye == true
+      )
+
+    Enum.reduce_while(byes, {:ok, 0}, fn fixture, {:ok, acc} ->
+      winner_id = fixture.participant_a_id || fixture.participant_b_id
+
+      case advance_bracket(repo, fixture, winner_id) do
+        {:ok, n} -> {:cont, {:ok, acc + n}}
+        other -> {:halt, other}
+      end
+    end)
+  end
+
+  # `fixtures.match_id` is unique across the whole competition, and a Circuit
+  # bracket's ids are built from the location code — so two circuits sharing a
+  # code (the default "NAT" twice, say) would collide on the very first insert.
+  # Caught here with a clear error rather than as a constraint violation from
+  # inside the transaction. Each circuit gets its own code: ELD, NAK, MOM.
+  defp match_id_prefix_taken?(category, opts) do
+    prefix = "SP26-#{Keyword.get(opts, :location_code, "NAT")}-#{category_code(category)}-"
+    Repo.exists?(from f in Fixture, where: like(f.match_id, ^(prefix <> "%")))
+  end
+
+  defp route_fields(_which, nil, _id_for), do: []
+
+  defp route_fields(:winner, {code, side}, id_for),
+    do: [winner_to_fixture_id: id_for.(code), winner_to_side: to_string(side)]
+
+  defp route_fields(:loser, {code, side}, id_for),
+    do: [loser_to_fixture_id: id_for.(code), loser_to_side: to_string(side)]
+
+  defp participant_id(%StageParticipation{id: id}), do: id
+  defp participant_id(id) when is_binary(id), do: id
+  defp participant_id(_), do: nil
+
+  # Same allowance the round-robin stages give a draw before approval.
+  @max_circuit_redraws 3
+
+  # Circuit team matches are race to 14 — the longest format in the
+  # competition, and the reason a team round robin is spread across the three
+  # circuit legs rather than played out in one weekend.
+  @circuit_team_race_to 14
+
+  # What the spectator page shows at once. Caps exist so a 223-match bracket
+  # can never put its whole self on one page, or in one socket's memory.
+  @live_match_limit 24
+  @next_match_limit 12
+
   @circuit_advancement_batch_size 200
 
   # Scopes the idempotency key to one announcement. `dispatch_many/2` dedupes
@@ -1203,6 +1396,9 @@ defmodule Cuevolution.Competitions do
     |> Repo.all()
   end
 
+  defp filter_by_group_scope(query, :national),
+    do: where(query, [g], is_nil(g.region_id) and is_nil(g.venue_id))
+
   defp filter_by_group_scope(query, {:region_id, region_id}),
     do: where(query, [g], g.region_id == ^region_id)
 
@@ -1362,16 +1558,11 @@ defmodule Cuevolution.Competitions do
         config
 
       nil ->
-        attrs = %{
-          stage_id: stage_id,
-          category: category,
-          group_size: 8,
-          advancer_count: 2,
-          target_group_size: 8,
-          minimum_group_size: 6,
-          minimum_entrants: 4,
-          extra_qualifier_count: 0
-        }
+        attrs =
+          Map.merge(default_group_config(stage_id, category), %{
+            stage_id: stage_id,
+            category: category
+          })
 
         case %StageGroupConfig{}
              |> StageGroupConfig.changeset(attrs)
@@ -1380,6 +1571,41 @@ defmodule Cuevolution.Competitions do
           {:error, _changeset} -> group_config(stage_id, category)
         end
     end
+  end
+
+  # The documented defaults for a group-based event. The Circuit team event is
+  # fixed by the format sheet rather than formula-driven — 20 teams, 2 groups
+  # of 10, top 4 in each to the Nationals — so its target and minimum sizes are
+  # both 10, which makes `propose_group_sizes/2` produce exactly two groups and
+  # refuse to quietly reshape them if a team withdraws.
+  defp default_group_config(stage_id, category) do
+    defaults = %{
+      group_size: 8,
+      advancer_count: 2,
+      target_group_size: 8,
+      minimum_group_size: 6,
+      minimum_entrants: 4,
+      extra_qualifier_count: 0
+    }
+
+    case {stage_name(stage_id), category} do
+      {"Circuit", "team"} ->
+        %{
+          defaults
+          | group_size: 10,
+            target_group_size: 10,
+            minimum_group_size: 10,
+            advancer_count: 4,
+            minimum_entrants: 10
+        }
+
+      _other ->
+        defaults
+    end
+  end
+
+  defp stage_name(stage_id) do
+    Repo.one(from s in Stage, where: s.id == ^stage_id, select: s.name)
   end
 
   @doc """
@@ -1422,7 +1648,7 @@ defmodule Cuevolution.Competitions do
 
     with true <- Admin.can?(admin, :advance_participants),
          %Stage{} = stage <- Repo.get(Stage, stage_id),
-         :ok <- if(Stage.round_robin?(stage), do: :ok, else: :not_round_robin),
+         :ok <- if(Stage.round_robin?(stage, category), do: :ok, else: :not_round_robin),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
          :ok <- if(entrants == [], do: :no_entrants, else: :ok),
          :ok <- if(length(entrants) <= config.advancer_count, do: :ok, else: :too_many_entrants) do
@@ -1438,7 +1664,14 @@ defmodule Cuevolution.Competitions do
     end
   end
 
-  @doc "The `{:venue_id, id} | {:region_id, id}` scope a persisted `Draw` belongs to."
+  @doc """
+  The `:national | {:venue_id, id} | {:region_id, id}` scope a persisted `Draw`
+  belongs to.
+
+  `:national` is the Circuit team event — one draw for the whole country,
+  belonging to neither a venue nor a region.
+  """
+  def draw_scope(%Draw{venue_id: nil, region_id: nil}), do: :national
   def draw_scope(%Draw{venue_id: nil, region_id: region_id}), do: {:region_id, region_id}
   def draw_scope(%Draw{venue_id: venue_id}), do: {:venue_id, venue_id}
 
@@ -1494,10 +1727,14 @@ defmodule Cuevolution.Competitions do
   defp scope_from_attrs(attrs) do
     case {Map.get(attrs, :venue_id), Map.get(attrs, :region_id)} do
       {venue_id, _} when not is_nil(venue_id) -> {:venue_id, venue_id}
-      {_, region_id} -> {:region_id, region_id}
+      {_, region_id} when not is_nil(region_id) -> {:region_id, region_id}
+      # Neither means national — the Circuit team event, drawn once for the
+      # whole country.
+      {_, _} -> :national
     end
   end
 
+  defp scope_attrs(:national), do: %{venue_id: nil, region_id: nil}
   defp scope_attrs({:venue_id, venue_id}), do: %{venue_id: venue_id}
   defp scope_attrs({:region_id, region_id}), do: %{region_id: region_id}
 
@@ -1697,6 +1934,9 @@ defmodule Cuevolution.Competitions do
     |> Repo.one()
   end
 
+  defp filter_by_draw_scope(query, :national),
+    do: where(query, [d], is_nil(d.region_id) and is_nil(d.venue_id))
+
   defp filter_by_draw_scope(query, {:venue_id, venue_id}),
     do: where(query, [d], d.venue_id == ^venue_id)
 
@@ -1840,6 +2080,8 @@ defmodule Cuevolution.Competitions do
       stage_id: draw.stage_id,
       group_id: group.id,
       name: "Round #{round_number}",
+      sequence: round_number,
+      race_to: group_race_to(draw),
       inserted_at: now,
       updated_at: now
     }
@@ -1876,6 +2118,15 @@ defmodule Cuevolution.Competitions do
     {{round_row, fixture_rows}, match_ids}
   end
 
+  # Circuit team matches are race to 14 (spec 014). The round-robin rounds at
+  # Grassroots and Regional carry no race length — those stages score frames
+  # without a fixed target — so they stay nil, as before.
+  defp group_race_to(%Draw{category: "team"} = draw) do
+    if stage_name(draw.stage_id) == "Circuit", do: @circuit_team_race_to
+  end
+
+  defp group_race_to(%Draw{}), do: nil
+
   defp enqueue_draw_notifications(draw_id) do
     %{"draw_id" => draw_id}
     |> DispatchDrawPublishedNotifications.new()
@@ -1885,6 +2136,29 @@ defmodule Cuevolution.Competitions do
   # Venue-scoped (Grassroots individual male): entrants are resolved off the
   # *player's* chosen venue, not the participation's region — "which venue
   # did this player choose" has no analog for region/team scoping below.
+  # The national pool: everyone entered at this stage and category, wherever
+  # they qualified from. Left-joined to both Player and Team because a team
+  # participation has no player, and the Circuit team event is the only
+  # national round robin there is.
+  defp draw_entrants(stage_id, :national, category) do
+    grouped_ids = grouped_draw_participation_ids(stage_id, :national, category)
+
+    from(sp in StageParticipation,
+      left_join: p in Player,
+      on: p.id == sp.player_id,
+      where:
+        sp.stage_id == ^stage_id and sp.category == ^category and
+          sp.id not in subquery(grouped_ids) and
+          (is_nil(sp.player_id) or
+             (is_nil(p.anonymized_at) and
+                (p.inserted_at < ^Accounts.tournament_registration_cutoff() or
+                   p.tournament_eligibility_override))),
+      order_by: [asc: sp.inserted_at],
+      preload: [:team, player: :team]
+    )
+    |> Repo.all()
+  end
+
   defp draw_entrants(stage_id, {:venue_id, venue_id}, category) do
     grouped_ids = grouped_draw_participation_ids(stage_id, {:venue_id, venue_id}, category)
 
@@ -1952,6 +2226,9 @@ defmodule Cuevolution.Competitions do
     )
     |> filter_by_group_draw_scope(scope)
   end
+
+  defp filter_by_group_draw_scope(query, :national),
+    do: where(query, [_gm, g], is_nil(g.region_id) and is_nil(g.venue_id))
 
   defp filter_by_group_draw_scope(query, {:venue_id, venue_id}),
     do: where(query, [_gm, g], g.venue_id == ^venue_id)
@@ -2040,7 +2317,9 @@ defmodule Cuevolution.Competitions do
   # inserting those one row at a time pins a DB connection for the whole
   # loop instead of two round trips.
   defp insert_draw_groups(repo, draw, buckets) do
-    region_id = draw.region_id || draw.venue.region_id
+    # A national draw (Circuit teams) has neither a region nor a venue, so its
+    # groups have no region either.
+    region_id = draw.region_id || (draw.venue && draw.venue.region_id)
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     group_rows =
@@ -2130,6 +2409,9 @@ defmodule Cuevolution.Competitions do
   # A region-scoped draw (no venue) falls back to a region-derived code —
   # same uppercase/strip/slice-5 shape, just keyed off whichever location
   # dimension this draw actually has.
+  # A national draw (Circuit teams) belongs to no venue and no region, so it
+  # takes the same "NAT" code the national brackets use in their match ids.
+  defp location_code(%Draw{venue: nil, region: nil}), do: "NAT"
   defp location_code(%Draw{venue: nil, region: region}), do: location_name_code(region)
   defp location_code(%Draw{venue: venue}), do: location_name_code(venue)
 
@@ -2856,13 +3138,1110 @@ defmodule Cuevolution.Competitions do
       fixture
       |> Fixture.result_changeset(result.id)
       |> Ecto.Changeset.put_change(:status, "completed")
+      |> Ecto.Changeset.put_change(:live_score, nil)
     end)
     |> Multi.run(:roster_lock, fn _repo, _changes -> lock_rosters_if_team(fixture) end)
+    |> Multi.run(:advance, fn repo, %{result: result} ->
+      advance_bracket(repo, fixture, result.winner_participation_id)
+    end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{result: result}} -> {:ok, result}
-      {:error, :result, changeset, _changes} -> {:error, changeset}
+      {:ok, %{result: result}} ->
+        broadcast_bracket_updated(fixture)
+        {:ok, result}
+
+      {:error, :result, changeset, _changes} ->
+        {:error, changeset}
     end
+  end
+
+  @doc """
+  Moves both players out of a finished bracket fixture and into their next
+  slots, following the `winner_to_*`/`loser_to_*` edges written when the
+  bracket was generated (spec 014).
+
+  This is what makes double elimination work at runtime: the loser of a
+  winners'-bracket match isn't finished, they drop to a specific slot on the
+  losers' side, and only a nil edge means elimination.
+
+  Target slots are written only while *every* onward fixture is still
+  unplayed, and then both are written together. That makes the step
+  idempotent, and it means correcting a result re-points the next round
+  automatically — but once any onward match has been played the whole
+  advancement is skipped and left for an admin, rather than rewriting a match
+  that has already happened or applying to one side only.
+
+  Returns `{:ok, slots_written}`; a fixture with no edges (every round-robin
+  fixture at Grassroots and Regional) writes nothing.
+  """
+  def advance_bracket(repo \\ Repo, fixture, winner_id)
+
+  def advance_bracket(_repo, %Fixture{winner_to_fixture_id: nil, loser_to_fixture_id: nil}, _id),
+    do: {:ok, 0}
+
+  def advance_bracket(repo, %Fixture{} = fixture, winner_id) do
+    loser_id = other_participant(fixture, winner_id)
+    targets = Enum.reject([fixture.winner_to_fixture_id, fixture.loser_to_fixture_id], &is_nil/1)
+
+    # All or nothing. Applying only the half that is still unplayed would
+    # leave the winner in one round and the loser re-pointed in another — a
+    # bracket that disagrees with itself, which is worse than a correction
+    # that visibly did not apply.
+    if downstream_played?(repo, targets) do
+      {:ok, 0}
+    else
+      with {:ok, a} <-
+             place_participant(
+               repo,
+               fixture.winner_to_fixture_id,
+               fixture.winner_to_side,
+               winner_id
+             ),
+           {:ok, b} <-
+             place_participant(
+               repo,
+               fixture.loser_to_fixture_id,
+               fixture.loser_to_side,
+               loser_id
+             ) do
+        {:ok, a + b}
+      end
+    end
+  end
+
+  @doc """
+  Loads a whole bracket for display: every round in play order, each with its
+  fixtures in slot order and both players preloaded.
+
+  Two queries total regardless of bracket size — a 128 draw is 223 fixtures
+  and 446 participant lookups, which is exactly the shape of N+1 that would
+  make the live bracket crawl under a room full of spectators.
+  """
+  def load_bracket(stage_id, category) do
+    case get_knockout_bracket(stage_id, category) do
+      nil ->
+        nil
+
+      bracket ->
+        fixtures_query =
+          from(f in Fixture,
+            order_by: [asc: f.slot],
+            preload: [:result, participant_a: [:player, :team], participant_b: [:player, :team]]
+          )
+
+        rounds =
+          Repo.all(
+            from r in Round,
+              where: r.knockout_bracket_id == ^bracket.id,
+              order_by: [asc: r.sequence],
+              preload: [fixtures: ^fixtures_query]
+          )
+
+        # A bracket row with no rounds is one whose draw has been cleared for a
+        # re-deal. The row survives because it carries `redraw_count`, but there
+        # is no draw to show, so callers see the same nil as before any draw.
+        if rounds == [], do: nil, else: %{bracket: bracket, rounds: rounds}
+    end
+  end
+
+  @doc """
+  Sets the running frame count on a match that is being played, and marks it
+  live. Broadcasts so every open bracket updates.
+
+  Scores are clamped to the round's race length: a race to 6 cannot be 7–2,
+  and a negative tap (the TD correcting a mis-tap) cannot go below zero. The
+  match is *not* auto-completed on reaching the race — `record_result/3`
+  stays the single place a match is finished, so a mis-tap at match point is
+  recoverable rather than instantly final.
+  """
+  def update_live_score(%Fixture{} = fixture, %Admin{} = admin, %{} = score) do
+    # Same scoping as `record_result/3`, not just the permission flag: a venue
+    # representative holds :record_results for their own venue's fixtures, and
+    # a Circuit bracket fixture belongs to no venue and no group, so it falls
+    # outside their scope. Checking only the flag would let any venue rep tap
+    # frames into the national final.
+    cond do
+      not (Admin.can?(admin, :record_results) and fixture_accessible_to_admin?(fixture.id, admin)) ->
+        {:error, :unauthorized}
+
+      # A decided match has no running score. Without this, a stray tap after
+      # the result is recorded flips the fixture back to "live" while its
+      # result row stays put — and every later attempt to record it then fails
+      # on the one-result-per-fixture constraint, with nothing on screen
+      # explaining why.
+      recorded?(fixture) ->
+        {:error, :already_recorded}
+
+      true ->
+        do_update_live_score(fixture, score)
+    end
+  end
+
+  defp recorded?(%Fixture{result_id: result_id}) when not is_nil(result_id), do: true
+
+  defp recorded?(%Fixture{id: id}),
+    do: Repo.exists?(from r in MatchResult, where: r.fixture_id == ^id)
+
+  defp do_update_live_score(%Fixture{} = fixture, score) do
+    race_to = race_to_for(fixture)
+
+    clamped = %{
+      "a" => clamp(score["a"] || score[:a] || 0, race_to),
+      "b" => clamp(score["b"] || score[:b] || 0, race_to)
+    }
+
+    fixture
+    |> Ecto.Changeset.change(live_score: clamped, status: "live")
+    |> stamp_start_time()
+    |> Repo.update()
+    |> case do
+      {:ok, updated} ->
+        broadcast_bracket_updated(updated)
+        {:ok, updated}
+
+      error ->
+        error
+    end
+  end
+
+  # The first frame of an unscheduled match is its start: a tournament
+  # director scoring a match that was never given a slot should not have to go
+  # back and type the time they already know.
+  defp stamp_start_time(%Ecto.Changeset{data: %Fixture{scheduled_at: nil}} = changeset) do
+    Ecto.Changeset.put_change(
+      changeset,
+      :scheduled_at,
+      DateTime.utc_now() |> DateTime.truncate(:second)
+    )
+  end
+
+  defp stamp_start_time(changeset), do: changeset
+
+  defp clamp(n, race_to) when is_integer(n), do: n |> max(0) |> min(race_to)
+  defp clamp(n, race_to) when is_binary(n), do: n |> String.to_integer() |> clamp(race_to)
+  defp clamp(_n, _race_to), do: 0
+
+  @doc "The race length for `fixture`'s round, or nil outside a bracket."
+  def race_to_for(%Fixture{round: %Round{race_to: race_to}}), do: race_to
+
+  def race_to_for(%Fixture{round_id: round_id}) do
+    Repo.one(from r in Round, where: r.id == ^round_id, select: r.race_to)
+  end
+
+  @doc """
+  Everyone entered at Circuit in `category`, as the draw pool.
+
+  Anonymized players are excluded — their account is a scrubbed placeholder,
+  so they cannot be drawn against anyone.
+  """
+  def circuit_entrants(stage_id, category) do
+    Repo.all(
+      from sp in StageParticipation,
+        left_join: p in Player,
+        on: p.id == sp.player_id,
+        left_join: t in Team,
+        on: t.id == sp.team_id,
+        where:
+          sp.stage_id == ^stage_id and sp.category == ^category and
+            (is_nil(sp.player_id) or is_nil(p.anonymized_at)),
+        order_by: [asc: coalesce(p.username, t.name)],
+        preload: [:region, player: p, team: t]
+    )
+  end
+
+  @doc "How many players are entered at Circuit in `category`."
+  def circuit_entrant_count(stage_id, category) do
+    Repo.one(
+      from sp in StageParticipation,
+        left_join: p in Player,
+        on: p.id == sp.player_id,
+        where:
+          sp.stage_id == ^stage_id and sp.category == ^category and
+            (is_nil(sp.player_id) or is_nil(p.anonymized_at)),
+        select: count(sp.id)
+    )
+  end
+
+  # ------------------------------------------------- Circuit team event (014)
+
+  @circuit_team_category "team"
+
+  @doc """
+  The current national team draw for `stage_id`, or `nil` before one is made.
+
+  The Circuit team event is the one national round robin in the competition:
+  20 teams dealt into 2 groups of 10, every team playing the other nine once
+  across the three circuit legs, and the top four in each group — eight teams —
+  going through to the Nationals.
+  """
+  def circuit_team_draw(stage_id) do
+    latest_draw(stage_id, :national, @circuit_team_category)
+  end
+
+  @doc "Teams entered at the Circuit, drawn or not — the pre-draw list."
+  def circuit_team_entrants(stage_id) do
+    circuit_entrants(stage_id, @circuit_team_category)
+  end
+
+  @doc """
+  Makes the team draw: deals the entrants into groups and generates the full
+  round robin in one step.
+
+  Deliberately one action rather than the four-state Draft → Previewed →
+  Approved → Published walk the venue and region draws use. Those exist so a
+  venue's draw can be checked before anyone sees it; here there is a single
+  national draw of twenty known teams, made once in front of the room, and the
+  bracket draws on this same screen already work this way.
+
+  Returns `{:ok, %{draw: draw, groups: groups}}`, or `{:error, :below_minimum}`
+  when there are fewer than ten teams, `{:error, :already_drawn}` when a draw
+  already exists.
+  """
+  def draw_circuit_team_groups(stage_id, %Admin{} = admin, opts \\ []) do
+    cond do
+      not Admin.can?(admin, :advance_participants) -> {:error, :unauthorized}
+      circuit_team_draw(stage_id) -> {:error, :already_drawn}
+      true -> deal_circuit_team_draw(stage_id, admin, opts)
+    end
+  end
+
+  defp deal_circuit_team_draw(stage_id, admin, opts) do
+    attrs =
+      %{stage_id: stage_id, category: @circuit_team_category}
+      |> maybe_put_seed(Keyword.get(opts, :random_seed))
+
+    with {:ok, draw} <- create_draw(attrs, admin),
+         {:ok, _groups} <- deal_draw(draw, admin, nil),
+         {:ok, published} <- approve_and_publish(draw, admin) do
+      broadcast_circuit_teams_changed(stage_id)
+      {:ok, %{draw: published, groups: circuit_team_groups(stage_id)}}
+    end
+  end
+
+  # Walks a dealt draw the rest of the way to published, reloading between
+  # steps: `deal_draw/3` moves the row to "previewed" without touching the
+  # struct in hand, and the state machine only allows one step at a time.
+  defp approve_and_publish(%Draw{} = draw, admin) do
+    with {:ok, approved} <- advance_draw_state(Repo.get!(Draw, draw.id), admin, "approved"),
+         {:ok, %{draw: published}} <- advance_draw_state(approved, admin, "published") do
+      {:ok, published}
+    end
+  end
+
+  defp maybe_put_seed(attrs, nil), do: attrs
+  defp maybe_put_seed(attrs, seed), do: Map.put(attrs, :random_seed, seed)
+
+  @doc """
+  Deals the team draw again — only while no result has been recorded, and at
+  most #{@max_circuit_redraws} times, the same allowance the bracket draws get.
+  """
+  def redraw_circuit_team_groups(stage_id, %Admin{} = admin, reason \\ "Re-deal") do
+    with :ok <- authorize_team_draw(admin),
+         %Draw{} = draw <- circuit_team_draw(stage_id),
+         :ok <- ensure_team_redraws_left(stage_id),
+         {:ok, fresh} <- redraw(draw, admin, reason),
+         # The superseded draw's groups have to go before the new one is
+         # dealt: a team already in a published group is not an entrant, so
+         # leaving them would deal the new draw from an empty pool — and the
+         # screen would show four groups.
+         :ok <- clear_team_draw_structure(stage_id),
+         {:ok, _groups} <- deal_draw(fresh, admin, nil),
+         {:ok, published} <- approve_and_publish(fresh, admin) do
+      broadcast_circuit_teams_changed(stage_id)
+      {:ok, %{draw: published, groups: circuit_team_groups(stage_id)}}
+    else
+      nil -> {:error, :not_drawn}
+      error -> error
+    end
+  end
+
+  defp authorize_team_draw(%Admin{} = admin) do
+    if Admin.can?(admin, :advance_participants), do: :ok, else: {:error, :unauthorized}
+  end
+
+  defp ensure_team_redraws_left(stage_id) do
+    if circuit_team_redraws_remaining(stage_id) > 0, do: :ok, else: {:error, :redraw_limit}
+  end
+
+  @doc "How many re-deals the team draw has left before approval."
+  def circuit_team_redraws_remaining(stage_id) do
+    superseded =
+      Repo.one(
+        from d in Draw,
+          where:
+            d.stage_id == ^stage_id and d.category == ^@circuit_team_category and
+              is_nil(d.region_id) and is_nil(d.venue_id),
+          select: count(d.id)
+      ) || 0
+
+    max(@max_circuit_redraws - max(superseded - 1, 0), 0)
+  end
+
+  @doc "The two national team groups, in order, with their members."
+  def circuit_team_groups(stage_id) do
+    stage_id
+    |> list_groups(@circuit_team_category, :national)
+    |> Repo.preload(group_memberships: [stage_participation: [:player, :team]])
+  end
+
+  @doc """
+  The group tables for the Circuit team event — one entry per group, ranked.
+
+  Ranked on SP Points, which for a round robin is `2 + 3 × wins`: a strictly
+  increasing function of wins, so ranking on points and ranking on matches won
+  are the same ordering. That lets this reuse the standard `:wins_first`
+  tiebreaker cascade unchanged — head-to-head among the still-tied teams, then
+  frame difference, then frames won — and the points column agrees with the
+  order by construction rather than by coincidence.
+
+  Each row carries `advancing: true` for the top four, the ones that go on to
+  the Nationals.
+  """
+  def circuit_team_standings(stage_id) do
+    groups = circuit_team_groups(stage_id)
+    group_ids = Enum.map(groups, & &1.id)
+    matches_by_group = circuit_team_matches_by_group(group_ids)
+    advancer_count = get_or_create_group_config(stage_id, @circuit_team_category).advancer_count
+
+    Enum.map(groups, fn group ->
+      participations = Enum.map(group.group_memberships, & &1.stage_participation)
+      by_id = Map.new(participations, &{&1.id, &1})
+
+      rows =
+        participations
+        |> Enum.map(& &1.id)
+        |> StandingsCalculator.rank(Map.get(matches_by_group, group.id, []),
+          cascade: :wins_first
+        )
+        |> Enum.map(fn row ->
+          participation = Map.fetch!(by_id, row.participant_id)
+
+          row
+          |> Map.put(:participation, participation)
+          |> Map.put(:name, participant_name(participation))
+          |> Map.put(:sp_points, SpPoints.group_points(row.wins))
+          |> Map.put(:advancing, row.rank <= advancer_count)
+        end)
+
+      %{group: group, rows: rows, advancer_count: advancer_count}
+    end)
+  end
+
+  # Unlike the group stages at Grassroots and Regional, a Circuit team result
+  # counts as soon as it is recorded. Those stages have a verification step
+  # before a result is final; the Circuit does not — its bracket matches are
+  # final when scored, and a team table that ignored a recorded result until
+  # someone verified it would disagree with the fixture list next to it.
+  defp circuit_team_matches_by_group(group_ids) do
+    from(mr in MatchResult,
+      join: f in Fixture,
+      on: f.id == mr.fixture_id,
+      join: r in Round,
+      on: r.id == f.round_id,
+      where: r.group_id in ^group_ids,
+      where: f.status in ["completed", "verified", "walkover"],
+      select: {r.group_id, mr},
+      preload: [fixture: [:participant_a, :participant_b]]
+    )
+    |> Repo.all()
+    |> Enum.group_by(fn {group_id, _mr} -> group_id end, fn {_group_id, mr} ->
+      to_calculator_match(mr)
+    end)
+  end
+
+  @doc """
+  Every round of the team round robin, in order, with its fixtures — what the
+  scoring screen lists.
+
+  Nine rounds per group for ten teams, five matches in each. The rounds are
+  numbered across the whole season; which circuit leg a round is played at is a
+  scheduling decision, made per fixture.
+  """
+  def circuit_team_rounds(stage_id) do
+    group_ids = stage_id |> list_groups(@circuit_team_category, :national) |> Enum.map(& &1.id)
+
+    Repo.all(
+      from r in Round,
+        where: r.group_id in ^group_ids,
+        order_by: [asc: r.sequence, asc: r.name],
+        preload: [
+          :group,
+          fixtures:
+            ^from(f in Fixture,
+              order_by: [asc: f.match_id],
+              preload: [
+                :result,
+                participant_a: [:player, :team],
+                participant_b: [:player, :team]
+              ]
+            )
+        ]
+    )
+  end
+
+  @doc """
+  The teams that qualify for the Nationals — the top `advancer_count` in each
+  group, eight in all. Returns their `StageParticipation`s.
+  """
+  def circuit_team_qualifiers(stage_id) do
+    stage_id
+    |> circuit_team_standings()
+    |> Enum.flat_map(fn %{rows: rows} ->
+      rows |> Enum.filter(& &1.advancing) |> Enum.map(& &1.participation)
+    end)
+  end
+
+  @doc """
+  Clears the team draw and everything generated from it, back to the pre-draw
+  entrant list. Refuses once any result has been recorded.
+  """
+  def reset_circuit_team_draw(stage_id, %Admin{} = admin) do
+    cond do
+      not Admin.can?(admin, :advance_participants) ->
+        {:error, :unauthorized}
+
+      circuit_team_has_results?(stage_id) ->
+        {:error, :results_recorded}
+
+      true ->
+        do_reset_circuit_team_draw(stage_id, admin)
+    end
+  end
+
+  defp do_reset_circuit_team_draw(stage_id, admin) do
+    with :ok <- clear_team_draw_structure(stage_id),
+         {:ok, _} <- delete_team_draws(stage_id) do
+      Accounts.log_admin_action("reset_circuit_team_draw", admin, %Stage{id: stage_id})
+      broadcast_circuit_teams_changed(stage_id)
+      :ok
+    end
+  end
+
+  # Deletes the groups, rounds and fixtures of the national team draw, leaving
+  # the `Draw` rows alone — they are the audit trail, and the re-deal counter
+  # is derived from how many of them there are.
+  defp clear_team_draw_structure(stage_id) do
+    group_ids = stage_id |> list_groups(@circuit_team_category, :national) |> Enum.map(& &1.id)
+    round_ids = Repo.all(from r in Round, where: r.group_id in ^group_ids, select: r.id)
+
+    result =
+      Multi.new()
+      |> Multi.delete_all(:fixtures, from(f in Fixture, where: f.round_id in ^round_ids))
+      |> Multi.delete_all(:rounds, from(r in Round, where: r.id in ^round_ids))
+      |> Multi.delete_all(
+        :memberships,
+        from(gm in GroupMembership, where: gm.group_id in ^group_ids)
+      )
+      |> Multi.delete_all(:groups, from(g in Group, where: g.id in ^group_ids))
+      |> Repo.transaction()
+
+    case result do
+      {:ok, _changes} -> :ok
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
+  defp delete_team_draws(stage_id) do
+    Repo.delete_all(
+      from d in Draw,
+        where:
+          d.stage_id == ^stage_id and d.category == ^@circuit_team_category and
+            is_nil(d.region_id) and is_nil(d.venue_id)
+    )
+    |> then(&{:ok, &1})
+  end
+
+  @doc "True once any team group fixture carries a result."
+  def circuit_team_has_results?(stage_id) do
+    group_ids = stage_id |> list_groups(@circuit_team_category, :national) |> Enum.map(& &1.id)
+
+    Repo.exists?(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        where:
+          r.group_id in ^group_ids and
+            (not is_nil(f.result_id) or f.status in ["completed", "verified", "walkover"])
+    )
+  end
+
+  @doc "PubSub topic for the Circuit team event at `stage_id`."
+  def circuit_teams_topic(stage_id), do: "circuit_teams:#{stage_id}"
+
+  @doc "Subscribes the caller to Circuit team draw and result changes."
+  def subscribe_to_circuit_teams(stage_id) do
+    Phoenix.PubSub.subscribe(Cuevolution.PubSub, circuit_teams_topic(stage_id))
+  end
+
+  @doc "Tells every other session watching the team event that it changed."
+  def broadcast_circuit_teams_changed(stage_id) do
+    Phoenix.PubSub.broadcast_from(
+      Cuevolution.PubSub,
+      self(),
+      circuit_teams_topic(stage_id),
+      {:circuit_teams_updated, stage_id}
+    )
+
+    Phoenix.PubSub.broadcast_from(Cuevolution.PubSub, self(), "standings", {
+      :points_updated,
+      :circuit_teams
+    })
+
+    :ok
+  end
+
+  @doc """
+  Clears a Circuit draw so it can be made again (spec 014).
+
+  Only while **nothing has been played**: if any fixture in the bracket carries
+  a result, the draw stands and `{:error, :results_recorded}` comes back. That
+  is the line between "the draw was wrong, do it again" and "rewriting a
+  tournament that is under way".
+
+  This exists because entries do not close when the draw is made. A player who
+  registers afterwards is otherwise entered but in no bracket at all, with no
+  way in — redrawing is the way back.
+
+  Deletes the bracket's fixtures, then its rounds, then the bracket itself, in
+  that order because each references the one before. Restricted to
+  `:advance_participants` and recorded in the admin action log.
+  """
+  def reset_circuit_draw(stage_id, category, %Admin{} = admin) do
+    if Admin.can?(admin, :advance_participants) do
+      stage_id
+      |> get_knockout_bracket(category)
+      |> reset_drawn_bracket(admin, category)
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  defp reset_drawn_bracket(nil, _admin, _category), do: {:error, :no_bracket}
+
+  defp reset_drawn_bracket(%KnockoutBracket{} = bracket, admin, category) do
+    if bracket_has_results?(bracket.id) do
+      {:error, :results_recorded}
+    else
+      do_reset_circuit_draw(bracket, admin, category)
+    end
+  end
+
+  defp bracket_has_results?(bracket_id) do
+    Repo.exists?(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        where: r.knockout_bracket_id == ^bracket_id and not is_nil(f.result_id)
+    )
+  end
+
+  defp do_reset_circuit_draw(%KnockoutBracket{} = bracket, admin, category) do
+    round_ids =
+      Repo.all(from r in Round, where: r.knockout_bracket_id == ^bracket.id, select: r.id)
+
+    Multi.new()
+    |> Multi.delete_all(:fixtures, from(f in Fixture, where: f.round_id in ^round_ids))
+    |> Multi.delete_all(:rounds, from(r in Round, where: r.id in ^round_ids))
+    |> Multi.run(:log, fn _repo, _changes ->
+      Accounts.log_admin_action("reset_circuit_draw", admin, bracket,
+        prior_value: %{"category" => category, "rounds" => length(round_ids)}
+      )
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, _changes} ->
+        broadcast_bracket_changed(bracket.id)
+        {:ok, %{rounds: length(round_ids)}}
+
+      {:error, _step, reason, _changes} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Re-deals the Circuit draw: throws the current one away and draws a fresh
+  random order from the same entrants.
+
+  Mirrors `reshuffle_draw/2` on the round-robin stages — **up to three times**,
+  and only before anything has been played. Past that,
+  `{:error, :redraw_limit_reached}`.
+
+  Entrants are re-read, so anyone who registered since the last deal is
+  included. That is the other reason this exists: entries do not close when a
+  draw is made.
+  """
+  def reshuffle_circuit_draw(stage_id, category, %Admin{} = admin, opts \\ []) do
+    bracket = get_knockout_bracket(stage_id, category)
+
+    cond do
+      not Admin.can?(admin, :advance_participants) ->
+        {:error, :unauthorized}
+
+      is_nil(bracket) ->
+        {:error, :no_bracket}
+
+      bracket.redraw_count >= @max_circuit_redraws ->
+        {:error, :redraw_limit_reached}
+
+      bracket_has_results?(bracket.id) ->
+        {:error, :results_recorded}
+
+      true ->
+        with {:ok, _} <- reset_circuit_draw(stage_id, category, admin),
+             {:ok, _} <- bump_redraw_count(bracket),
+             {:ok, result} <- draw_circuit_bracket(stage_id, category, admin, opts) do
+          {:ok, Map.put(result, :redraw_count, bracket.redraw_count + 1)}
+        end
+    end
+  end
+
+  defp bump_redraw_count(%KnockoutBracket{} = bracket) do
+    bracket
+    |> KnockoutBracket.changeset(%{redraw_count: bracket.redraw_count + 1})
+    |> Repo.update()
+  end
+
+  @doc """
+  How many re-deals this category's Circuit draw has left, out of
+  #{@max_circuit_redraws}. Zero once anything has been played.
+  """
+  def circuit_redraws_remaining(stage_id, category) do
+    case get_knockout_bracket(stage_id, category) do
+      nil ->
+        @max_circuit_redraws
+
+      bracket ->
+        if bracket_has_results?(bracket.id),
+          do: 0,
+          else: max(@max_circuit_redraws - bracket.redraw_count, 0)
+    end
+  end
+
+  @doc """
+  Whether `category`'s Circuit draw can still be cleared — true until the
+  first result is recorded.
+  """
+  def circuit_draw_resettable?(stage_id, category) do
+    case get_knockout_bracket(stage_id, category) do
+      nil -> false
+      bracket -> not bracket_has_results?(bracket.id)
+    end
+  end
+
+  @doc """
+  Makes the Circuit draw for `category`: shuffles everyone entered and builds
+  the bracket from that order (spec 014).
+
+  The draw is **random, with no seeding** — confirmed with the tournament
+  director. SP Points only start accumulating at the first circuit, so there
+  is no ranking to seed from, and the committee chose to keep it random for
+  the later circuits too. `DoubleElimination.build/2` therefore receives a
+  shuffled list and treats position 1 as seed 1; the bracket's shape is
+  unchanged, only the order of names going into it.
+
+  The RNG seed is recorded in the admin action log alongside the drawn order,
+  so a disputed draw can be reproduced exactly rather than taken on trust.
+
+  Restricted to `:advance_participants` — Tournament Director and Super Admin.
+  `manage_fixtures` deliberately isn't enough: it includes venue
+  representatives, and this is a national draw.
+
+  Returns `{:ok, %{bracket: _, rounds: n, fixtures: n, entrants: n, seed: n}}`,
+  or `{:error, :unauthorized | :too_few_entrants | :bracket_exists}`.
+  """
+  def draw_circuit_bracket(stage_id, category, %Admin{} = admin, opts \\ []) do
+    cond do
+      not Admin.can?(admin, :advance_participants) ->
+        {:error, :unauthorized}
+
+      # The team event is round-robin groups — 20 teams in 2 groups of 10 per
+      # the format sheet — not a double-elimination bracket. There is no race
+      # length defined for it here because this format does not apply to it.
+      category == "team" ->
+        {:error, :format_not_supported}
+
+      true ->
+        do_draw_circuit_bracket(stage_id, category, admin, opts)
+    end
+  end
+
+  defp do_draw_circuit_bracket(stage_id, category, admin, opts) do
+    entrants = circuit_entrants(stage_id, category)
+    seed = Keyword.get_lazy(opts, :rng, fn -> :rand.uniform(1_000_000_000) end)
+
+    if length(entrants) < 5 do
+      {:error, :too_few_entrants}
+    else
+      :rand.seed(:exsss, {seed, seed, seed})
+      drawn = Enum.shuffle(entrants)
+
+      generate_opts =
+        opts
+        |> Keyword.take([:location_code])
+        |> Keyword.merge(byes: :random, rng: seed)
+
+      case generate_circuit_bracket(stage_id, category, drawn, generate_opts) do
+        {:ok, result} ->
+          log_circuit_draw(admin, result, drawn, category, seed)
+          {:ok, Map.merge(result, %{entrants: length(drawn), seed: seed})}
+
+        error ->
+          error
+      end
+    end
+  end
+
+  defp log_circuit_draw(admin, %{bracket: bracket}, drawn, category, seed) do
+    Accounts.log_admin_action("draw_circuit_bracket", admin, bracket,
+      new_value: %{
+        "category" => category,
+        "entrants" => length(drawn),
+        "rng_seed" => seed,
+        "order" => Enum.map(drawn, & &1.player.username)
+      }
+    )
+  end
+
+  @doc """
+  SP Points standings for one circuit bracket, strongest first (spec 014).
+
+  Everything is derived from what actually happened in the bracket — who
+  entered, who won which match, who reached the final — so the table cannot
+  drift away from the results. Correct a match and the standings move with it.
+
+  Byes count as wins, per the rules. A bye has no `match_result` (nobody
+  played), so it is counted from the fixture itself rather than from results.
+
+  Returns a list of
+  `%{participation: p, wins: n, finish: atom, points: n}`.
+  """
+  def sp_points_standings(bracket_id) do
+    rounds = points_rounds(bracket_id, :with_participants)
+    scores = sp_points_by_id(rounds)
+
+    rounds
+    |> bracket_entrants()
+    |> Enum.map(fn participation ->
+      score = Map.get(scores, participation.id, %{wins: 0, finish: :none, points: 0})
+      Map.put(score, :participation, participation)
+    end)
+    |> Enum.sort_by(&{-&1.points, -&1.wins})
+  end
+
+  # The bracket as the points rules need to see it. `:ids_only` skips the
+  # player and team preloads, which is everything the ranking tables load and
+  # then throw away: they want `%{participation_id => points}`, not names.
+  defp points_rounds(bracket_id, participants) do
+    fixtures =
+      case participants do
+        :with_participants ->
+          from(f in Fixture,
+            order_by: [asc: f.slot],
+            preload: [:result, participant_a: [:player, :team], participant_b: [:player, :team]]
+          )
+
+        :ids_only ->
+          from(f in Fixture, order_by: [asc: f.slot], preload: [:result])
+      end
+
+    Repo.all(
+      from r in Round,
+        where: r.knockout_bracket_id == ^bracket_id,
+        order_by: [asc: r.sequence],
+        preload: [fixtures: ^fixtures]
+    )
+  end
+
+  # Wins, finishing position and points for every entrant, keyed by
+  # participation id. Shared by both callers so the lean path can never score
+  # differently from the one on screen.
+  defp sp_points_by_id(rounds) do
+    wins = rounds |> Enum.flat_map(& &1.fixtures) |> count_wins()
+    finishes = finishing_positions(rounds)
+
+    rounds
+    |> entrant_ids()
+    |> Map.new(fn id ->
+      won = Map.get(wins, id, 0)
+      finish = Map.get(finishes, id, :none)
+      {id, %{wins: won, finish: finish, points: SpPoints.circuit_points(won, finish)}}
+    end)
+  end
+
+  defp entrant_ids(rounds) do
+    rounds
+    |> Enum.take(1)
+    |> Enum.flat_map(& &1.fixtures)
+    |> Enum.flat_map(&[&1.participant_a_id, &1.participant_b_id])
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  # Whoever appears in the opening round entered the circuit, and so earns the
+  # showing-up points even if they lost that one match.
+  defp bracket_entrants(rounds) do
+    rounds
+    |> Enum.take(1)
+    |> Enum.flat_map(& &1.fixtures)
+    |> Enum.flat_map(&[&1.participant_a, &1.participant_b])
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(& &1.id)
+  end
+
+  defp count_wins(fixtures) do
+    Enum.reduce(fixtures, %{}, fn fixture, acc ->
+      case bracket_winner_id(fixture) do
+        nil -> acc
+        id -> Map.update(acc, id, 1, &(&1 + 1))
+      end
+    end)
+  end
+
+  defp bracket_winner_id(%Fixture{bye: true} = fixture),
+    do: fixture.participant_a_id || fixture.participant_b_id
+
+  defp bracket_winner_id(%Fixture{result: %{winner_participation_id: id}}), do: id
+  defp bracket_winner_id(%Fixture{}), do: nil
+
+  # Only the three bonus-bearing finishes are resolved here; everything else
+  # scores on wins alone, so there is nothing to look up.
+  defp finishing_positions(rounds) do
+    final = List.last(rounds)
+    semis = Enum.at(rounds, -2)
+
+    %{}
+    |> put_final_positions(final)
+    |> put_semi_finalists(semis)
+  end
+
+  defp put_final_positions(acc, nil), do: acc
+
+  defp put_final_positions(acc, %Round{fixtures: [fixture | _]}) do
+    case bracket_winner_id(fixture) do
+      nil ->
+        acc
+
+      champion_id ->
+        runner_up_id =
+          if champion_id == fixture.participant_a_id,
+            do: fixture.participant_b_id,
+            else: fixture.participant_a_id
+
+        acc
+        |> Map.put(champion_id, :champion)
+        |> Map.put_new(runner_up_id, :runner_up)
+    end
+  end
+
+  defp put_final_positions(acc, _round), do: acc
+
+  defp put_semi_finalists(acc, nil), do: acc
+
+  defp put_semi_finalists(acc, %Round{fixtures: fixtures}) do
+    fixtures
+    |> Enum.map(&beaten_participant_id/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce(acc, &Map.put_new(&2, &1, :semi_finalist))
+  end
+
+  defp put_semi_finalists(acc, _round), do: acc
+
+  # Whoever lost this fixture, or nil while it has no recorded winner.
+  defp beaten_participant_id(%Fixture{participant_a_id: a, participant_b_id: b} = fixture) do
+    case bracket_winner_id(fixture) do
+      nil -> nil
+      ^a -> b
+      _other -> a
+    end
+  end
+
+  defp downstream_played?(_repo, []), do: false
+
+  defp downstream_played?(repo, ids) do
+    repo.exists?(from f in Fixture, where: f.id in ^ids and not is_nil(f.result_id))
+  end
+
+  defp other_participant(%Fixture{participant_a_id: a, participant_b_id: b}, winner_id) do
+    if winner_id == a, do: b, else: a
+  end
+
+  defp place_participant(_repo, nil, _side, _participant_id), do: {:ok, 0}
+  defp place_participant(_repo, _target, _side, nil), do: {:ok, 0}
+
+  defp place_participant(repo, target_id, side, participant_id) do
+    column = if side == "a", do: :participant_a_id, else: :participant_b_id
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    {count, _} =
+      repo.update_all(
+        from(f in Fixture, where: f.id == ^target_id and is_nil(f.result_id)),
+        set: [{column, participant_id}, {:updated_at, now}]
+      )
+
+    {:ok, count}
+  end
+
+  @doc """
+  Sets when a bracket match starts (spec 014).
+
+  `date` and `time` are taken in **local time** (EAT, which is what every
+  venue and every tournament director is in) and stored as UTC — the same
+  conversion `enter_fixtures/3` does for the round-robin stages, so times are
+  comparable across the app.
+
+  A start time in the past is refused: these are allocations for play still to
+  come, and a mistyped year would otherwise bury a match at the top of a
+  chronological list. Today counts as valid, so a time can be corrected during
+  a session.
+
+  Locked once a result exists: a played match's slot is history, and
+  `{:error, :locked}` says so rather than quietly accepting the edit. Passing
+  a blank time clears the slot, which is how a mistakenly scheduled match is
+  put back into the unscheduled pile.
+
+  Scoped like scoring rather than like the draw: whoever is running the tables
+  sets the times.
+  """
+  def schedule_bracket_fixture(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    cond do
+      not (Admin.can?(admin, :record_results) and fixture_accessible_to_admin?(fixture.id, admin)) ->
+        {:error, :unauthorized}
+
+      not is_nil(fixture.result_id) ->
+        {:error, :locked}
+
+      true ->
+        do_schedule_bracket_fixture(fixture, attrs)
+    end
+  end
+
+  defp do_schedule_bracket_fixture(fixture, attrs) do
+    date = attrs["date"] || attrs[:date]
+    time = attrs["time"] || attrs[:time]
+
+    with {:ok, scheduled_at} <- parse_slot_start(date, time),
+         :ok <- reject_past_slot(scheduled_at) do
+      fixture
+      |> Fixture.schedule_changeset(%{scheduled_at: scheduled_at})
+      |> Repo.update()
+      |> case do
+        {:ok, updated} ->
+          broadcast_bracket_updated(updated)
+          {:ok, updated}
+
+        error ->
+          error
+      end
+    end
+  end
+
+  # The start time is what makes a slot, so a blank time clears it — the date
+  # field is pre-filled with today, and a date alone must not silently book
+  # the match for midnight. A time without a date means today, which is what a
+  # TD typing "20:30" mid-session means.
+  defp parse_slot_start(date, time) do
+    case {blank_to_nil(date), blank_to_nil(time)} do
+      {_date, nil} -> {:ok, nil}
+      {nil, time} -> combine_eat_datetime(Date.to_iso8601(today_in_eat()), time)
+      {date, time} -> combine_eat_datetime(date, time)
+    end
+  end
+
+  # The browser's date picker is given a min, but that only guards the picker:
+  # the check has to live here too.
+  defp reject_past_slot(nil), do: :ok
+
+  defp reject_past_slot(scheduled_at) do
+    slot_date = scheduled_at |> DateTime.add(@eat_offset_seconds, :second) |> DateTime.to_date()
+
+    if Date.compare(slot_date, today_in_eat()) == :lt,
+      do: {:error, :past_date},
+      else: :ok
+  end
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value) when is_binary(value), do: String.trim(value) |> nilify_blank()
+  defp blank_to_nil(value), do: value
+
+  defp nilify_blank(""), do: nil
+  defp nilify_blank(value), do: value
+
+  @doc "Today's date in EAT, which is the day a tournament director is working in."
+  def today_in_eat do
+    DateTime.utc_now() |> DateTime.add(@eat_offset_seconds, :second) |> DateTime.to_date()
+  end
+
+  @doc """
+  A fixture's start time in EAT, or nil when it has not been allocated a slot
+  yet. `fixture_time_in_eat/1` assumes a time exists; bracket fixtures start
+  without one.
+  """
+  def slot_start_in_eat(%Fixture{scheduled_at: nil}), do: nil
+  def slot_start_in_eat(%Fixture{} = fixture), do: fixture_time_in_eat(fixture)
+
+  @doc """
+  Subscribes the caller to live updates for one knockout bracket. Every
+  recorded result on that bracket broadcasts `{:bracket_updated, bracket_id}`,
+  which is the signal the bracket view redraws on while a circuit is running.
+  """
+  def subscribe_to_bracket(bracket_id) do
+    Phoenix.PubSub.subscribe(Cuevolution.PubSub, bracket_topic(bracket_id))
+  end
+
+  defp bracket_topic(bracket_id), do: "bracket:#{bracket_id}"
+
+  # Fire-and-forget, and deliberately outside the transaction: a subscriber
+  # must never see an update for a result that then rolls back.
+  defp broadcast_bracket_updated(%Fixture{} = fixture) do
+    Repo.one(
+      from r in Round,
+        left_join: g in Group,
+        on: g.id == r.group_id,
+        where: r.id == ^fixture.round_id,
+        select: {r.knockout_bracket_id, r.stage_id, g.id, g.region_id, g.venue_id}
+    )
+    |> broadcast_fixture_change()
+  end
+
+  defp broadcast_fixture_change({bracket_id, _stage_id, _group_id, _region_id, _venue_id})
+       when not is_nil(bracket_id),
+       do: broadcast_bracket_changed(bracket_id)
+
+  # A national group is the Circuit team event. The venue- and region-scoped
+  # groups at Grassroots and Regional have their own refresh path
+  # (`{:match_entry_updated, _}` from `MatchEntryComponent`), so they are left
+  # alone here.
+  defp broadcast_fixture_change({_bracket_id, stage_id, group_id, nil, nil})
+       when not is_nil(group_id),
+       do: broadcast_circuit_teams_changed(stage_id)
+
+  defp broadcast_fixture_change(_other), do: :ok
+
+  # Drawing, re-dealing and clearing a draw change the whole bracket rather
+  # than one fixture, but spectators need them just as much as a frame: a draw
+  # that only appears on reload is not a live page.
+  defp broadcast_bracket_changed(bracket_id) do
+    # broadcast_from, not broadcast: the session that recorded the change has
+    # already reloaded as part of handling the click. Sending it its own
+    # message made every frame tap reload and re-render the whole bracket
+    # twice.
+    Phoenix.PubSub.broadcast_from(
+      Cuevolution.PubSub,
+      self(),
+      bracket_topic(bracket_id),
+      {:bracket_updated, bracket_id}
+    )
+
+    # SP Points are derived from results, so every bracket change moves the
+    # public standings. Reusing the existing "standings" topic means the
+    # spectator page needs no knowledge of which brackets exist.
+    Phoenix.PubSub.broadcast_from(
+      Cuevolution.PubSub,
+      self(),
+      "standings",
+      {:points_updated, :bracket}
+    )
   end
 
   defp lock_rosters_if_team(%Fixture{participant_a: %{category: "team"} = pa, participant_b: pb}) do
@@ -2914,6 +4293,71 @@ defmodule Cuevolution.Competitions do
 
       true ->
         do_correct_result(result, admin, attrs)
+    end
+  end
+
+  @doc """
+  Edits a result that has already been recorded — the tournament director's
+  correction path for a finished match, including a Circuit bracket or team
+  round-robin match.
+
+  Scores get mistyped and frames get miscounted, and a bracket that cannot be
+  corrected is a bracket that stays wrong. So this is deliberately available
+  after completion, and after verification.
+
+  Two things make it safe rather than merely possible. The previous winner and
+  score are snapshotted into `prior_value` and the admin action log by
+  `correct_result/3`, so a correction is always reversible and always
+  attributable. And if the correction changes **who won**, it is refused once
+  any onward match has been played (`:downstream_played`) — by then the
+  bracket has moved on, and silently re-pointing it would either rewrite a
+  match that has already happened or leave the two halves disagreeing. A
+  score-only correction, which is the common case, is never blocked.
+
+  On success the bracket is re-pointed at the corrected winner in the same
+  transaction, which for a round-robin fixture writes nothing.
+
+  Requires `:approve_results` — a tournament director or super admin.
+  """
+  def correct_fixture_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    fixture = Repo.preload(fixture, [:result, :participant_a, :participant_b])
+
+    cond do
+      is_nil(fixture.result) -> {:error, :not_recorded}
+      not Admin.can?(admin, :approve_results) -> {:error, :unauthorized}
+      winner_change_blocked?(fixture, attrs) -> {:error, :downstream_played}
+      true -> do_correct_fixture_result(fixture, admin, attrs)
+    end
+  end
+
+  defp winner_change_blocked?(%Fixture{result: result} = fixture, attrs) do
+    new_winner = correction_winner_id(attrs, result.winner_participation_id)
+
+    targets =
+      Enum.reject([fixture.winner_to_fixture_id, fixture.loser_to_fixture_id], &is_nil/1)
+
+    new_winner != result.winner_participation_id and downstream_played?(Repo, targets)
+  end
+
+  defp do_correct_fixture_result(%Fixture{} = fixture, %Admin{} = admin, attrs) do
+    # One transaction so a correction can never land without the bracket
+    # moving with it. `correct_result/3` opens its own transaction, which joins
+    # this one rather than nesting, so a rollback here undoes both.
+    Repo.transaction(fn ->
+      with {:ok, result} <- correct_result(fixture.result, admin, attrs),
+           {:ok, _slots} <- advance_bracket(Repo, fixture, result.winner_participation_id) do
+        result
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, result} ->
+        broadcast_bracket_updated(fixture)
+        {:ok, result}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -3925,7 +5369,7 @@ defmodule Cuevolution.Competitions do
       when is_list(confirmed_ids) do
     with true <- Admin.can?(admin, :advance_participants),
          %Stage{} = stage <- Repo.get(Stage, stage_id),
-         :ok <- if(Stage.round_robin?(stage), do: :ok, else: :not_round_robin),
+         :ok <- if(Stage.round_robin?(stage, category), do: :ok, else: :not_round_robin),
          next_stage when not is_nil(next_stage) <- next_stage(stage),
          groups <- final_groups(stage_id, category, scope),
          member_ids <- Enum.flat_map(groups, &group_member_participant_ids(&1.id)),
@@ -4259,7 +5703,20 @@ defmodule Cuevolution.Competitions do
     }
   end
 
+  # A Regional team tie is played as individual frames between named squad
+  # members, so its frame count comes from the `MatchFrame` rows. A Circuit
+  # team match is a single aggregate race to 14 with no per-frame records, so
+  # when there are no frames to count the score itself is the tally.
   defp frame_tally(%MatchResult{} = result, %Fixture{participant_a: %{category: "team"}}) do
+    case tally_match_frames(result) do
+      {0, 0} -> frame_tally_from_score(result)
+      tally -> tally
+    end
+  end
+
+  defp frame_tally(%MatchResult{} = result, %Fixture{}), do: frame_tally_from_score(result)
+
+  defp tally_match_frames(%MatchResult{} = result) do
     MatchFrame
     |> where([f], f.match_result_id == ^result.id)
     |> Repo.all()
@@ -4268,10 +5725,23 @@ defmodule Cuevolution.Competitions do
     end)
   end
 
-  defp frame_tally(%MatchResult{score: nil}, %Fixture{}), do: {0, 0}
+  # The round-robin stages store `participant_a_frames`/`participant_b_frames`;
+  # the Circuit stores `a`/`b`, keyed by the side of the card. The former is
+  # checked first so an existing score is read exactly as it always was.
+  defp frame_tally_from_score(%MatchResult{score: nil}), do: {0, 0}
 
-  defp frame_tally(%MatchResult{score: score}, %Fixture{}) do
-    {Map.get(score, "participant_a_frames", 0), Map.get(score, "participant_b_frames", 0)}
+  defp frame_tally_from_score(%MatchResult{score: score}) do
+    cond do
+      Map.has_key?(score, "participant_a_frames") ->
+        {to_frames(Map.get(score, "participant_a_frames")),
+         to_frames(Map.get(score, "participant_b_frames"))}
+
+      Map.has_key?(score, "a") ->
+        {to_frames(Map.get(score, "a")), to_frames(Map.get(score, "b"))}
+
+      true ->
+        {0, 0}
+    end
   end
 
   @doc """
@@ -4702,7 +6172,253 @@ defmodule Cuevolution.Competitions do
     Repo.all(from e in CuevoPointsEntry, where: e.match_result_id == ^match_result_id)
   end
 
+  # ------------------------------------------------------- shareable matches
+
+  @doc """
+  One match by its `match_id` — the public, shareable view of a fixture.
+
+  `match_id` is the reference already printed on the draw sheet and shown on
+  every match card (`SP26-NAT-MS-W1-6`), it is uniquely indexed, and it is
+  meaningless to guess at, which makes it the natural thing to put in a URL.
+
+  Returns `nil` when no such match exists. Loads only what a scoreboard shows:
+  no contact details, since this is served to anyone with the link.
+  """
+  def fixture_by_match_id(match_id) when is_binary(match_id) do
+    Repo.one(
+      from f in Fixture,
+        where: f.match_id == ^match_id,
+        preload: [
+          :result,
+          :venue,
+          round: [:stage, :knockout_bracket, group: :stage],
+          participant_a: [:player, :team],
+          participant_b: [:player, :team]
+        ]
+    )
+  end
+
+  def fixture_by_match_id(_match_id), do: nil
+
+  @doc """
+  Every match a player is involved in, their own and their team's, newest
+  first — the "all my matches" view behind a player's shareable link.
+
+  Stage-agnostic on purpose: one link should cover a player's whole run
+  through the competition, not just the stage they happen to be at.
+  """
+  def public_matches_for_player(player_id) do
+    Repo.all(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        where: f.id in subquery(fixture_ids_for_player_query(player_id)),
+        order_by: [
+          asc: fragment("CASE WHEN ? IS NULL THEN 0 ELSE 1 END", f.result_id),
+          asc_nulls_last: f.scheduled_at,
+          desc: f.updated_at
+        ],
+        preload: [
+          :result,
+          :venue,
+          round: [:stage, :knockout_bracket, group: :stage],
+          participant_a: [:player, :team],
+          participant_b: [:player, :team]
+        ]
+    )
+  end
+
+  @doc """
+  The round a shareable match belongs to, as a person would name it:
+  "Winners Round 1", "Group A · Round 3", or just the stage for a fixture
+  whose round has no name of its own.
+  """
+  def match_round_label(%Fixture{round: %Round{} = round}) do
+    case round.group do
+      %Group{name: group_name} -> "#{group_name} · #{round.name}"
+      _other -> round.name || round.stage.name
+    end
+  end
+
+  def match_round_label(_fixture), do: nil
+
   @standings_stages ["Circuit", "Finals"]
+
+  @doc """
+  The bracket matches a spectator would want on screen right now for
+  `category`: everything in play, then what is up next, then what has just
+  been decided.
+
+  Covers the ranked stages only (#{inspect(@standings_stages)}) — these are
+  the national events people follow, and the earlier stages are venue-level.
+  """
+  def live_matches_for_category(category, finished_limit \\ 10) do
+    stage_ids = ranked_stage_ids()
+
+    %{
+      live: ranked_fixtures(stage_ids, category, ["live"], :sequence, @live_match_limit),
+      next: ranked_fixtures(stage_ids, category, ["scheduled"], :scheduled, @next_match_limit),
+      recent:
+        ranked_fixtures(
+          stage_ids,
+          category,
+          ["completed", "verified"],
+          :recent,
+          finished_limit
+        )
+    }
+  end
+
+  defp ranked_stage_ids do
+    Repo.all(from s in Stage, where: s.name in ^@standings_stages, select: s.id)
+  end
+
+  # Three bounded queries rather than loading both brackets into memory and
+  # filtering in Elixir. A spectator page recomputes this on every frame
+  # scored, once per connected viewer, so the whole point is that it never
+  # loads more rows than it shows.
+  defp ranked_fixtures(stage_ids, category, statuses, order, limit) do
+    stage_ids
+    |> ranked_fixture_query(category, statuses)
+    |> limit(^limit)
+    |> preload([f, r], [
+      :result,
+      {:round, r},
+      {:participant_a, [:player, :team]},
+      {:participant_b, [:player, :team]}
+    ])
+    |> order_ranked_fixtures(order)
+    |> Repo.all()
+  end
+
+  # The team event is a round robin, so its fixtures hang off a Group rather
+  # than a bracket. Dispatching rather than unioning is exact: a team has no
+  # bracket at these stages and a singles player has no national group.
+  defp ranked_fixture_query(stage_ids, "team", statuses) do
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: g in Group,
+      on: g.id == r.group_id,
+      where:
+        g.stage_id in ^stage_ids and g.category == "team" and is_nil(g.region_id) and
+          is_nil(g.venue_id) and f.status in ^statuses and
+          not is_nil(f.participant_a_id) and not is_nil(f.participant_b_id)
+    )
+  end
+
+  defp ranked_fixture_query(stage_ids, category, statuses) do
+    from(f in Fixture,
+      join: r in Round,
+      on: r.id == f.round_id,
+      join: kb in KnockoutBracket,
+      on: kb.id == r.knockout_bracket_id,
+      where:
+        kb.stage_id in ^stage_ids and kb.category == ^category and f.status in ^statuses and
+          not is_nil(f.participant_a_id) and not is_nil(f.participant_b_id)
+    )
+  end
+
+  @doc """
+  How many `category` matches are in play across the ranked stages.
+
+  Counted rather than measured off `live_matches_for_category/2`, whose lists
+  are capped for display — the header on a spectator page should say how many
+  matches are actually running, not how many fit on the screen.
+  """
+  def live_match_count(category) do
+    ranked_stage_ids()
+    |> ranked_fixture_query(category, ["live"])
+    |> Repo.aggregate(:count)
+  end
+
+  defp order_ranked_fixtures(query, :recent),
+    do: order_by(query, [f], desc: f.updated_at)
+
+  defp order_ranked_fixtures(query, :scheduled),
+    do: order_by(query, [f, r], asc_nulls_last: f.scheduled_at, asc: r.sequence, asc: f.slot)
+
+  defp order_ranked_fixtures(query, :sequence),
+    do: order_by(query, [f, r], asc: r.sequence, asc: f.slot)
+
+  @doc """
+  SP Points for every participant in `category`, across the stages the public
+  ranking covers (#{inspect(@standings_stages)}).
+
+  Derived from results rather than stored, the same as
+  `sp_points_standings/1` — one bracket per stage and category, so this is a
+  handful of queries regardless of field size.
+
+  Returns `%{participation_id => points}`.
+  """
+  def sp_points_by_participant(category) do
+    bracket_points =
+      ranked_bracket_ids(category)
+      |> Enum.flat_map(fn bracket_id ->
+        bracket_id
+        |> points_rounds(:ids_only)
+        |> sp_points_by_id()
+        |> Enum.map(fn {id, score} -> {id, score.points} end)
+      end)
+      |> Map.new()
+
+    Map.merge(bracket_points, team_group_points(category))
+  end
+
+  # The team event has no bracket at the Circuit — it is a round robin — so its
+  # points come from group wins instead. Same rates as the singles events:
+  # 2 for entering plus 3 a win.
+  defp team_group_points("team") do
+    group_ids = ranked_team_group_ids()
+
+    wins =
+      Repo.all(
+        from mr in MatchResult,
+          join: f in Fixture,
+          on: f.id == mr.fixture_id,
+          join: r in Round,
+          on: r.id == f.round_id,
+          where:
+            r.group_id in ^group_ids and f.status in ["completed", "verified", "walkover"] and
+              not is_nil(mr.winner_participation_id),
+          group_by: mr.winner_participation_id,
+          select: {mr.winner_participation_id, count(mr.id)}
+      )
+      |> Map.new()
+
+    # Everyone drawn into a group has entered, so everyone scores the 2 —
+    # including a team still waiting for its first win.
+    from(gm in GroupMembership,
+      where: gm.group_id in ^group_ids,
+      select: gm.stage_participation_id
+    )
+    |> Repo.all()
+    |> Map.new(&{&1, SpPoints.group_points(Map.get(wins, &1, 0))})
+  end
+
+  defp team_group_points(_category), do: %{}
+
+  defp ranked_team_group_ids do
+    Repo.all(
+      from g in Group,
+        join: s in Stage,
+        on: s.id == g.stage_id,
+        where:
+          s.name in ^@standings_stages and g.category == "team" and is_nil(g.region_id) and
+            is_nil(g.venue_id),
+        select: g.id
+    )
+  end
+
+  defp ranked_bracket_ids(category) do
+    Repo.all(
+      from kb in KnockoutBracket,
+        join: s in Stage,
+        on: s.id == kb.stage_id,
+        where: s.name in ^@standings_stages and kb.category == ^category,
+        select: kb.id
+    )
+  end
 
   @doc """
   Ranked public standings for `category` — participants currently at
@@ -4732,11 +6448,18 @@ defmodule Cuevolution.Competitions do
 
     participant_ids = Enum.map(participations, & &1.id)
     points = points_by_participant(participant_ids)
+    sp_points = sp_points_by_participant(category)
     win_loss = win_loss_by_participant(participant_ids)
 
     participations
     |> Enum.map(fn participation ->
-      stats = Map.get(win_loss, participation.id, %{played: 0, won: 0})
+      stats =
+        Map.get(win_loss, participation.id, %{
+          played: 0,
+          won: 0,
+          frames_won: 0,
+          frames_lost: 0
+        })
 
       %{
         id: participation.id,
@@ -4748,13 +6471,26 @@ defmodule Cuevolution.Competitions do
         played: stats.played,
         won: stats.won,
         lost: stats.played - stats.won,
-        points: Map.get(points, participation.id, 0)
+        match_difference: stats.won - (stats.played - stats.won),
+        frames_won: stats.frames_won,
+        frames_lost: stats.frames_lost,
+        frame_difference: stats.frames_won - stats.frames_lost,
+        points: Map.get(points, participation.id, 0),
+        sp_points: Map.get(sp_points, participation.id, 0)
       }
     end)
     |> mark_advancing(category)
-    |> Enum.sort_by(&{-&1.points, &1.name})
+    |> Enum.sort_by(&ranking_key/1)
     |> Enum.with_index(1)
     |> Enum.map(fn {row, rank} -> row |> Map.put(:rank, rank) |> Map.delete(:stage_id) end)
+  end
+
+  # The published ranking order: SP Points first and always, then match
+  # difference, then frame difference, then frames won. Name only ever settles
+  # a row that is identical on all four, so the table does not reshuffle
+  # between renders.
+  defp ranking_key(row) do
+    {-row.sp_points, -row.match_difference, -row.frame_difference, -row.frames_won, row.name}
   end
 
   defp mark_advancing(rows, category) do
@@ -4812,21 +6548,61 @@ defmodule Cuevolution.Competitions do
       [mr, f],
       f.participant_a_id in ^participant_ids or f.participant_b_id in ^participant_ids
     )
-    |> select([mr, f], {f.participant_a_id, f.participant_b_id, mr.winner_participation_id})
+    |> select(
+      [mr, f],
+      {f.participant_a_id, f.participant_b_id, mr.winner_participation_id, mr.score}
+    )
     |> Repo.all()
-    |> Enum.reduce(%{}, fn {a_id, b_id, winner_id}, acc ->
+    |> Enum.reduce(%{}, fn {a_id, b_id, winner_id, score}, acc ->
+      {a_frames, b_frames} = frames_from_score(score)
+
       acc
-      |> tally_result(a_id, winner_id == a_id)
-      |> tally_result(b_id, winner_id == b_id)
+      |> tally_result(a_id, winner_id == a_id, a_frames, b_frames)
+      |> tally_result(b_id, winner_id == b_id, b_frames, a_frames)
     end)
   end
 
-  defp tally_result(acc, participant_id, won?) do
+  # Two score shapes are in circulation: bracket matches store `%{"a", "b"}`
+  # keyed by the side of the card, the round-robin stages store
+  # `%{"participant_a_frames", "participant_b_frames"}`. A walkover has a
+  # winner and no frames at all, so an unreadable score counts as 0–0 rather
+  # than breaking the table.
+  defp frames_from_score(%{"a" => a, "b" => b}), do: {to_frames(a), to_frames(b)}
+
+  defp frames_from_score(%{"participant_a_frames" => a, "participant_b_frames" => b}),
+    do: {to_frames(a), to_frames(b)}
+
+  defp frames_from_score(_score), do: {0, 0}
+
+  defp to_frames(value) when is_integer(value) and value >= 0, do: value
+
+  defp to_frames(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {frames, _rest} when frames >= 0 -> frames
+      _other -> 0
+    end
+  end
+
+  defp to_frames(_value), do: 0
+
+  defp tally_result(acc, participant_id, won?, frames_for, frames_against) do
     Map.update(
       acc,
       participant_id,
-      %{played: 1, won: if(won?, do: 1, else: 0)},
-      fn stat -> %{played: stat.played + 1, won: stat.won + if(won?, do: 1, else: 0)} end
+      %{
+        played: 1,
+        won: if(won?, do: 1, else: 0),
+        frames_won: frames_for,
+        frames_lost: frames_against
+      },
+      fn stat ->
+        %{
+          played: stat.played + 1,
+          won: stat.won + if(won?, do: 1, else: 0),
+          frames_won: stat.frames_won + frames_for,
+          frames_lost: stat.frames_lost + frames_against
+        }
+      end
     )
   end
 

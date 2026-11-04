@@ -31,7 +31,10 @@ defmodule Cuevolution.Competitions.Group do
   def changeset(group, attrs) do
     group
     |> cast(attrs, [:stage_id, :region_id, :venue_id, :category, :name])
-    |> validate_required([:stage_id, :region_id, :category, :name])
+    # `region_id` is required for a venue- or region-scoped group but absent
+    # for a national one (the Circuit team groups), so the context decides;
+    # see `Competitions.draw_scope/1`.
+    |> validate_required([:stage_id, :category, :name])
     |> validate_inclusion(:category, @categories)
     |> foreign_key_constraint(:stage_id)
     |> foreign_key_constraint(:draw_id)

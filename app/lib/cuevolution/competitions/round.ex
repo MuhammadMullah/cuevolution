@@ -7,6 +7,11 @@ defmodule Cuevolution.Competitions.Round do
 
   schema "rounds" do
     field :name, :string
+    # Set only for Circuit double-elimination rounds (spec 014); nil for the
+    # round-robin rounds at Grassroots/Regional.
+    field :bracket_side, :string
+    field :sequence, :integer
+    field :race_to, :integer
 
     belongs_to :stage, Cuevolution.Competitions.Stage
     belongs_to :group, Cuevolution.Competitions.Group
@@ -24,7 +29,17 @@ defmodule Cuevolution.Competitions.Round do
   """
   def changeset(round, attrs) do
     round
-    |> cast(attrs, [:stage_id, :group_id, :knockout_bracket_id, :name])
+    |> cast(attrs, [
+      :stage_id,
+      :group_id,
+      :knockout_bracket_id,
+      :name,
+      :bracket_side,
+      :sequence,
+      :race_to
+    ])
+    |> validate_inclusion(:bracket_side, ~w(winners losers knockout))
+    |> validate_number(:race_to, greater_than: 0)
     |> validate_required([:stage_id, :name])
     |> foreign_key_constraint(:stage_id)
     |> foreign_key_constraint(:group_id)

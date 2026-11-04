@@ -11,6 +11,7 @@ defmodule CuevolutionWeb.FixturesLive do
 
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.Stage
   alias Cuevolution.Repo
   alias CuevolutionWeb.PlayerComponents
 
@@ -79,48 +80,57 @@ defmodule CuevolutionWeb.FixturesLive do
     |> Enum.map(&present_venue_fixture/1)
   end
 
-  # Grassroots auto-generated fixtures carry no `scheduled_at`/`venue_id` at
-  # all (spec 012 FR-008a — players self-organize, subject only to the
-  # stage-wide completion deadline). Branch here rather than assume every
-  # fixture has a schedule: `fixture_time_in_eat/1` and `fixture.venue.name`
-  # both raise on the nil case.
-  defp present_fixture(%{scheduled_at: nil} = fixture, player) do
-    {mine, opponent} = participant_sides(fixture, player)
-
-    %{
-      scheduled?: false,
-      type: if(mine.category == "team", do: "Team", else: "Individual"),
-      stage: String.downcase(fixture.round.stage.name),
-      opponent: Competitions.participant_name(opponent),
-      opponent_phone: participant_phone(opponent),
-      match_id: fixture.match_id,
-      deadline: grassroots_deadline_label(fixture)
-    }
-  end
-
+  # Three shapes of fixture reach this page and they disagree about what they
+  # have. A Grassroots fixture has neither a time nor a venue — players
+  # self-organize against a stage deadline (spec 012 FR-008a). A Circuit
+  # fixture has a time once the TD sets one, but never a venue, and belongs to
+  # a bracket rather than a group, so it has no deadline to show either. One
+  # function, with every absence handled, rather than a clause per shape that
+  # raises the first time a new shape turns up.
   defp present_fixture(fixture, player) do
     {mine, opponent} = participant_sides(fixture, player)
-    eat = Competitions.fixture_time_in_eat(fixture)
+    eat = fixture.scheduled_at && Competitions.fixture_time_in_eat(fixture)
 
     %{
-      scheduled?: true,
+      scheduled?: not is_nil(eat),
       type: if(mine.category == "team", do: "Team", else: "Individual"),
       stage: String.downcase(fixture.round.stage.name),
-      opponent: Competitions.participant_name(opponent),
+      opponent: opponent_name(opponent),
       opponent_phone: participant_phone(opponent),
-      date: Calendar.strftime(eat, "%b %-d, %Y"),
-      time: Calendar.strftime(eat, "%H:%M"),
-      venue: fixture.venue.name
+      match_id: fixture.match_id,
+      date: eat && Calendar.strftime(eat, "%b %-d, %Y"),
+      time: eat && Calendar.strftime(eat, "%H:%M"),
+      venue: venue_label(fixture),
+      deadline: deadline_label(fixture)
     }
   end
 
-  defp grassroots_deadline_label(%{round: %{group: %{stage: %{completion_deadline: nil}}}}),
+  # Only the round-robin stages run to a self-organized deadline. A Circuit
+  # match is scheduled by the tournament director, so until they set a time
+  # there is nothing to count down to.
+  defp deadline_label(fixture) do
+    if Stage.round_robin?(fixture.round.stage),
+      do: group_deadline_label(fixture),
+      else: "To be scheduled"
+  end
+
+  defp group_deadline_label(%{round: %{group: %{stage: %{completion_deadline: nil}}}}),
     do: "Not set yet"
 
-  defp grassroots_deadline_label(%{
-         round: %{group: %{stage: %{completion_deadline: deadline}}}
-       }),
-       do: Calendar.strftime(deadline, "%b %-d, %Y")
+  defp group_deadline_label(%{round: %{group: %{stage: %{completion_deadline: deadline}}}}),
+    do: Calendar.strftime(deadline, "%b %-d, %Y")
+
+  defp group_deadline_label(_fixture), do: "Not set yet"
+
+  defp venue_label(%{venue: %{name: name}}), do: name
+  defp venue_label(_fixture), do: "Venue to be confirmed"
+
+  # A knockout fixture has an empty slot until the match that feeds it is
+  # played, so the player can be looking at a real upcoming match whose
+  # opponent does not exist yet. `Competitions.participant_name/1` takes a
+  # participation and is right to stay strict about it.
+  defp opponent_name(nil), do: "To be decided"
+  defp opponent_name(participant), do: Competitions.participant_name(participant)
 
   defp participant_sides(fixture, player) do
     if mine?(fixture.participant_a, player) do
@@ -130,11 +140,13 @@ defmodule CuevolutionWeb.FixturesLive do
     end
   end
 
+  defp mine?(nil, _player), do: false
   defp mine?(%{player_id: nil, team_id: team_id}, player), do: team_id == player.team_id
   defp mine?(%{player_id: player_id}, player), do: player_id == player.id
 
   defp participant_phone(%{player: %{mobile_number: mobile_number}}), do: mobile_number
   defp participant_phone(%{team: %{captain: %{mobile_number: mobile_number}}}), do: mobile_number
+  defp participant_phone(_participant), do: nil
 
   defp present_venue_fixture(fixture) do
     group = fixture.round.group
@@ -180,13 +192,22 @@ defmodule CuevolutionWeb.FixturesLive do
     double_walkover? = fixture.walkover_kind == "double"
 
     %{
-      opponent: Competitions.participant_name(opponent),
-      date: if(double_walkover?, do: "Deadline closed", else: "Result verified"),
+      opponent: opponent_name(opponent),
+      date: result_label(fixture, double_walkover?),
+      match_id: fixture.match_id,
       stage: stage,
       outcome: result_outcome(fixture, player, double_walkover?),
       score: if(double_walkover?, do: "No result", else: result_score(fixture.result))
     }
   end
+
+  # "Verified" is the round-robin stages' wording — it means a TD approved the
+  # result. A Circuit result is final when recorded, so saying it was verified
+  # would describe a step that never happened.
+  defp result_label(_fixture, true), do: "Deadline closed"
+  defp result_label(%{status: "verified"}, false), do: "Result verified"
+  defp result_label(%{status: "walkover"}, false), do: "Walkover"
+  defp result_label(_fixture, false), do: "Result recorded"
 
   # Neither a win nor a loss for either side: a deadline double walkover, or
   # (Regional's 4-frame format only) a genuine 2-2 draw.
@@ -214,7 +235,14 @@ defmodule CuevolutionWeb.FixturesLive do
       else: fixture.participant_b_id
   end
 
+  # The round-robin stages store `participant_a_frames`/`participant_b_frames`;
+  # the Circuit stores `a`/`b`, keyed by the side of the card.
   defp result_score(%{score: score}) do
-    "#{Map.get(score, "participant_a_frames", 0)}–#{Map.get(score, "participant_b_frames", 0)}"
+    {a, b} = score_frames(score)
+    "#{a}–#{b}"
   end
+
+  defp score_frames(%{"participant_a_frames" => a, "participant_b_frames" => b}), do: {a, b}
+  defp score_frames(%{"a" => a, "b" => b}), do: {a, b}
+  defp score_frames(_score), do: {0, 0}
 end
