@@ -127,6 +127,77 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     end
   end
 
+  describe "match times" do
+    test "a match with no time yet says TBD rather than showing nothing", %{conn: conn} do
+      drawn()
+
+      {:ok, _view, html} = live(conn, ~p"/matches")
+
+      assert html =~ "TBD"
+    end
+
+    test "a scheduled match shows its date and time in local time", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn()
+      [fixture | _] = opening_fixtures(bracket)
+      date = Date.add(Competitions.today_in_eat(), 2)
+
+      {:ok, _} =
+        Competitions.schedule_bracket_fixture(fixture, admin, %{
+          "date" => Date.to_iso8601(date),
+          "time" => "14:30"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/matches")
+
+      assert html =~ "14:30"
+      assert html =~ Calendar.strftime(date, "%a %-d %b")
+    end
+
+    test "scheduling one match leaves the rest reading TBD", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn()
+      [fixture | _] = opening_fixtures(bracket)
+
+      {:ok, _} =
+        Competitions.schedule_bracket_fixture(fixture, admin, %{
+          "date" => Date.to_iso8601(Competitions.today_in_eat()),
+          "time" => "09:00"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/matches")
+
+      assert html =~ "09:00"
+      assert html =~ "TBD"
+    end
+
+    test "a bye carries no time at all, since nobody plays it", %{conn: conn} do
+      # 14 in a 16 bracket leaves two byes.
+      stage = circuit()
+      admin = insert(:admin, role: "tournament_director")
+
+      for _ <- 1..14 do
+        insert(:stage_participation, stage_id: stage.id, category: "male")
+      end
+
+      {:ok, %{bracket: bracket}} = Competitions.draw_circuit_bracket(stage.id, "male", admin)
+
+      bye =
+        Repo.one!(
+          from f in Fixture,
+            join: r in Round,
+            on: r.id == f.round_id,
+            where: r.knockout_bracket_id == ^bracket.id and f.bye == true,
+            limit: 1
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/matches")
+
+      card = view |> element(~s(a[href="/m/#{bye.match_id}"])) |> render()
+
+      assert card =~ "Bye"
+      refute card =~ "TBD"
+    end
+  end
+
   describe "filters" do
     test "the status pills carry their counts", %{conn: conn} do
       %{bracket: bracket, admin: admin} = drawn()

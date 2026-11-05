@@ -139,7 +139,7 @@ defmodule CuevolutionWeb.PublicFixturesLive do
       b_score: score(row, "b"),
       a_won: won?(row, :a),
       b_won: won?(row, :b),
-      start: start_label(row),
+      start: start_label(row, state),
       loser_to: loser_destination(row, numbers)
     }
   end
@@ -179,9 +179,16 @@ defmodule CuevolutionWeb.PublicFixturesLive do
   defp state_label(:waiting), do: "Waiting"
   defp state_label(:upcoming), do: "Up next"
 
-  defp start_label(%{scheduled_at: nil}), do: nil
+  # A match with no time yet says so, rather than showing nothing at all —
+  # "when do I play" is the question this page exists to answer, and a blank
+  # reads as an oversight rather than as "not decided yet".
+  #
+  # A bye is the exception: nobody plays it, so there is no time to set and
+  # "TBD" would be a promise that never arrives.
+  defp start_label(_row, :bye), do: nil
+  defp start_label(%{scheduled_at: nil}, _state), do: "TBD"
 
-  defp start_label(row) do
+  defp start_label(row, _state) do
     row.scheduled_at |> Competitions.to_eat() |> Calendar.strftime("%a %-d %b, %H:%M")
   end
 
