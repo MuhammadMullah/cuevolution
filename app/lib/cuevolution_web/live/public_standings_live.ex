@@ -134,8 +134,8 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   @doc false
   def standings_columns(:team) do
     [
-      {"#", "Rank", "text-left"},
-      {"Player", "Team", "text-left"},
+      {"Pos", "Position", "text-left"},
+      {"Team", "Team", "text-left"},
       {"P", "Matches played", "text-right"},
       {"W", "Matches won", "text-right"},
       {"L", "Matches lost", "text-right"},
@@ -170,6 +170,7 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   def standings_cell(row, "Pos", :team), do: row.rank
   def standings_cell(row, "Pos", state), do: Competitions.position_label(row, state)
   def standings_cell(row, "Player", _state), do: row.name
+  def standings_cell(row, "Team", _state), do: row.name
   def standings_cell(row, "Region", _state), do: row.region
   def standings_cell(row, "Status", _state), do: Competitions.status_label(row)
   def standings_cell(row, "Finish", _state), do: row.finish_label

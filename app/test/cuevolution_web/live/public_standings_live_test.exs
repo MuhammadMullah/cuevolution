@@ -230,5 +230,47 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
       assert html =~ "SP Points"
       assert html =~ "Ladies"
     end
+
+    # The team event is a round robin with no bracket, so its rows come from
+    # standings_for_category/1 and carry neither :finish nor a finish label.
+    # Rendering them used to raise KeyError and take the LiveView down.
+    test "the team table renders even though team rows have no bracket finish", %{conn: conn} do
+      stage = circuit()
+
+      for _ <- 1..3 do
+        insert(:stage_participation,
+          stage_id: stage.id,
+          category: "team",
+          player_id: nil,
+          team_id: insert(:team).id
+        )
+      end
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table")
+
+      assert html =~ "SP Points"
+      assert html =~ "Team"
+    end
+
+    test "switching to the team tab from the table view does not crash", %{conn: conn} do
+      stage = circuit()
+
+      insert(:stage_participation,
+        stage_id: stage.id,
+        category: "team",
+        player_id: nil,
+        team_id: insert(:team).id
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/live")
+
+      view |> element("button[phx-value-view='table']") |> render_click()
+      assert_patch(view) =~ "view=table"
+
+      view |> element("button[phx-value-tab='team']") |> render_click()
+      assert_patch(view) =~ "category=team"
+
+      assert render(view) =~ "SP Points"
+    end
   end
 end

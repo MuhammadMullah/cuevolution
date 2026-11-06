@@ -184,7 +184,10 @@
           <tbody>
             <tr
               :for={row <- @rows}
-              class={["border-t border-ink-100", row.finish == :champion && "bg-gold-50/50"]}
+              class={[
+                "border-t border-ink-100",
+                Map.get(row, :finish) == :champion && "bg-gold-50/50"
+              ]}
             >
               <td
                 :for={{label, _title, align} <- standings_columns(@standings_state)}
@@ -192,9 +195,9 @@
                 class={[
                   "whitespace-nowrap px-3 py-2.5 text-[13px]",
                   align,
-                  label == "Player" && "text-[14px] font-medium text-ink-950",
+                  label in ["Player", "Team"] && "text-[14px] font-medium text-ink-950",
                   label == "SP Points" && "font-bold tabular-nums text-ink-950",
-                  label not in ["Player", "SP Points", "Region", "Status", "Finish"] &&
+                  label not in ["Player", "Team", "SP Points", "Region", "Status", "Finish"] &&
                     "tabular-nums text-ink-600",
                   label in ["Region", "Status", "Finish"] && "text-ink-600"
                 ]}
