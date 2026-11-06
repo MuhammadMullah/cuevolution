@@ -198,14 +198,19 @@
             @selected_played && @selected_played.id == fixture.id && "bg-red-50"
           ]}
         >
-          <input
-            id={"select-result-#{fixture.id}"}
-            type="checkbox"
-            phx-click="toggle_result_selection"
-            phx-value-id={fixture.id}
-            checked={MapSet.member?(@selected_result_ids, fixture.id)}
-            class="mt-1 size-4 rounded border-ink-300 text-ink-950 focus:ring-red-500 sm:mt-0"
-          />
+          <label
+            for={"select-result-#{fixture.id}"}
+            class="-m-1 flex shrink-0 cursor-pointer items-center p-3 sm:m-0 sm:p-0"
+          >
+            <input
+              id={"select-result-#{fixture.id}"}
+              type="checkbox"
+              phx-click="toggle_result_selection"
+              phx-value-id={fixture.id}
+              checked={MapSet.member?(@selected_result_ids, fixture.id)}
+              class="size-5 rounded border-ink-300 text-ink-950 focus:ring-red-500 sm:size-4"
+            />
+          </label>
           <button
             type="button"
             phx-click="select_played"

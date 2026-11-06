@@ -101,7 +101,7 @@ defmodule CuevolutionWeb.AdminComponents do
           <button
             type="button"
             phx-click={JS.toggle(to: "#admin-drawer-backdrop") |> JS.toggle(to: "#admin-sidebar")}
-            class="flex size-[34px] cursor-pointer items-center justify-center rounded-[9px] bg-white/10 text-white"
+            class="flex size-11 cursor-pointer items-center justify-center rounded-[9px] bg-white/10 text-white"
           >
             ☰
           </button>
@@ -153,7 +153,7 @@ defmodule CuevolutionWeb.AdminComponents do
           <.link
             href={~p"/admin/logout"}
             method="delete"
-            class="flex items-center gap-2 rounded-[9px] px-2.5 py-2.5 text-[13.5px] font-semibold text-red-300 hover:bg-red-500/15"
+            class="flex min-h-11 items-center gap-2 rounded-[9px] px-2.5 py-2.5 text-[13.5px] font-semibold text-red-300 hover:bg-red-500/15"
           >
             <span>⏻</span>Log out
           </.link>
@@ -229,7 +229,7 @@ defmodule CuevolutionWeb.AdminComponents do
   def grassroots_standings_table(assigns) do
     ~H"""
     <div class="overflow-x-auto rounded-xl border border-ink-200 bg-white">
-      <table class="min-w-full text-left text-sm">
+      <table class="table-stack min-w-full text-left text-sm">
         <thead class="bg-ink-25 font-mono text-[10px] uppercase tracking-wider text-ink-500">
           <tr>
             <th class="px-3 py-3">POS</th>
@@ -240,7 +240,9 @@ defmodule CuevolutionWeb.AdminComponents do
         </thead>
         <tbody class="divide-y divide-ink-100">
           <tr :for={row <- @rows} class={row.rank == 1 && "bg-[#FCEFCB]/40"}>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.rank}{if row.tied, do: "="}</td>
+            <td data-label="Position" class="px-3 py-3 font-mono text-ink-700">
+              {row.rank}{if row.tied, do: "="}
+            </td>
             <td class="whitespace-nowrap px-3 py-3 font-semibold text-ink-950">
               {Map.get(row, :name, row.participant_id)}
               <span
@@ -256,18 +258,26 @@ defmodule CuevolutionWeb.AdminComponents do
                 TIED
               </span>
             </td>
-            <td :if={@show_group} class="whitespace-nowrap px-3 py-3 text-ink-500">
+            <td :if={@show_group} data-label="Group" class="whitespace-nowrap px-3 py-3 text-ink-500">
               {Map.get(row, :group_name, "—")}
             </td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.wins + row.losses + row.draws}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.wins}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.losses}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.draws}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.frames_won}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.frames_won - row.frame_diff}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.frame_diff}</td>
-            <td class="px-3 py-3 font-mono text-ink-700">{row.bonus}</td>
-            <td class="px-3 py-3 font-mono font-bold text-ink-950">{row.points}</td>
+            <td data-label="Played" class="px-3 py-3 font-mono text-ink-700">
+              {row.wins + row.losses + row.draws}
+            </td>
+            <td data-label="Won" class="px-3 py-3 font-mono text-ink-700">{row.wins}</td>
+            <td data-label="Lost" class="px-3 py-3 font-mono text-ink-700">{row.losses}</td>
+            <td data-label="Drawn" class="px-3 py-3 font-mono text-ink-700">{row.draws}</td>
+            <td data-label="Frames won" class="px-3 py-3 font-mono text-ink-700">{row.frames_won}</td>
+            <td data-label="Frames lost" class="px-3 py-3 font-mono text-ink-700">
+              {row.frames_won - row.frame_diff}
+            </td>
+            <td data-label="Frame difference" class="px-3 py-3 font-mono text-ink-700">
+              {row.frame_diff}
+            </td>
+            <td data-label="Bonus" class="px-3 py-3 font-mono text-ink-700">{row.bonus}</td>
+            <td data-label="Points" class="px-3 py-3 font-mono font-bold text-ink-950">
+              {row.points}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -285,7 +295,7 @@ defmodule CuevolutionWeb.AdminComponents do
     <.link
       navigate={@path}
       class={[
-        "flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-sm font-semibold",
+        "flex min-h-11 items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-sm font-semibold",
         @active && "bg-red-500/15 text-red-300",
         !@active && "text-ink-400 hover:bg-white/5 hover:text-ink-25"
       ]}
@@ -590,7 +600,7 @@ defmodule CuevolutionWeb.AdminComponents do
     <div
       id={@id}
       aria-live="polite"
-      class="fixed inset-x-0 top-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end"
+      class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:bottom-auto sm:top-0 sm:items-end"
     >
       <.admin_flash kind={:info} flash={@flash} />
       <.admin_flash kind={:error} flash={@flash} />
@@ -613,7 +623,7 @@ defmodule CuevolutionWeb.AdminComponents do
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> fade_out("##{@id}")}
       role="alert"
       class={[
-        "w-full max-w-sm rounded-2xl border px-4 py-3 text-sm font-medium shadow-md sm:w-96",
+        "pointer-events-auto w-full max-w-sm rounded-2xl border px-4 py-3 text-sm font-medium shadow-md sm:w-96",
         @kind == :info && "border-green-100 bg-green-50 text-green-700",
         @kind == :error && "border-red-100 bg-red-50 text-red-700"
       ]}

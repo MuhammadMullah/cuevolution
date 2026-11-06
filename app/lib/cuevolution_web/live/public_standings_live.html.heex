@@ -41,7 +41,7 @@
         </button>
       </div>
 
-      <div class="flex gap-5 overflow-x-auto border-b border-ink-200">
+      <div class="flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
         <button
           :for={{slug, label} <- @tabs}
           type="button"
@@ -165,7 +165,7 @@
       </p>
 
       <div :if={@rows != []} class="overflow-x-auto rounded-2xl border border-ink-200 bg-white">
-        <table class="w-full min-w-[760px] border-collapse">
+        <table class="table-stack w-full border-collapse sm:min-w-[760px]">
           <thead>
             <tr>
               <th
@@ -188,6 +188,7 @@
             >
               <td
                 :for={{label, _title, align} <- standings_columns(@standings_state)}
+                data-label={label}
                 class={[
                   "whitespace-nowrap px-3 py-2.5 text-[13px]",
                   align,

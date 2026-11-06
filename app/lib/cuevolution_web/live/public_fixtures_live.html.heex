@@ -17,14 +17,14 @@
   </header>
 
   <main class="mx-auto max-w-6xl px-4 py-5">
-    <div class="mb-4 flex gap-5 overflow-x-auto border-b border-ink-200">
+    <div class="mb-4 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
       <button
         :for={{slug, label} <- @tabs}
         type="button"
         phx-click="switch"
         phx-value-category={slug}
         class={[
-          "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+          "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
           @category == slug && "border-red-500 text-ink-950",
           @category != slug && "border-transparent text-ink-500 hover:text-ink-950"
         ]}

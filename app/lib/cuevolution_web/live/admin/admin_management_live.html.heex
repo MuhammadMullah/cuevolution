@@ -4,8 +4,12 @@
     <h1 class="text-[clamp(24px,4vw,30px)] font-bold tracking-tight text-ink-950">
       Admins
     </h1>
-    <div class="flex items-center gap-2.5">
-      <form id="admin-search-form" phx-change="search" class="relative">
+    <div class="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
+      <form
+        id="admin-search-form"
+        phx-change="search"
+        class="relative min-w-0 flex-1 sm:flex-none"
+      >
         <.icon
           name="hero-magnifying-glass"
           class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400"
@@ -16,7 +20,7 @@
           value={@search_form[:term].value}
           phx-debounce="300"
           placeholder="Search mobile, venue, or email"
-          class="w-56 rounded-full border border-ink-300 bg-white py-2 pl-9 pr-8 text-sm text-ink-950 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
+          class="w-full rounded-full border border-ink-300 bg-white py-2 pl-9 pr-8 text-sm text-ink-950 sm:w-56 placeholder:text-ink-400 focus:border-red-500 focus:outline-none focus:ring-[3px] focus:ring-red-500/15"
         />
         <button
           :if={@search_filter}
@@ -106,7 +110,7 @@
     class="mb-4 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
     <div class="overflow-x-auto">
-      <table class="w-full min-w-[820px] table-fixed border-collapse">
+      <table class="table-stack w-full border-collapse sm:min-w-[820px] sm:table-fixed">
         <colgroup>
           <col class="w-[26%]" />
           <col class="w-[20%]" />
@@ -136,10 +140,10 @@
         <tbody>
           <%= for admin <- @admins do %>
             <tr class="border-b border-ink-100 last:border-0 hover:bg-ink-50">
-              <td class="px-3.5 py-3 align-top">
+              <td data-label="Admin" class="px-3.5 py-3 align-top">
                 <div class="text-[14.5px] font-semibold text-ink-950">{admin.email}</div>
               </td>
-              <td class="px-3.5 py-3 align-top">
+              <td data-label="Role" class="px-3.5 py-3 align-top">
                 <div class="text-sm text-ink-700">{Admin.role_label(admin.role)}</div>
                 <div :if={admin.role == "venue_representative"} class="text-[12.5px] text-ink-500">
                   {if admin.venue, do: admin.venue.name, else: "No venue assigned"}
@@ -156,10 +160,10 @@
                   Protected — Super Admin accounts cannot be managed by Tournament Directors.
                 </div>
               </td>
-              <td class="px-3.5 py-3 align-top text-sm text-ink-700">
+              <td data-label="Mobile number" class="px-3.5 py-3 align-top text-sm text-ink-700">
                 {admin.mobile_number || "Mobile number not provided"}
               </td>
-              <td class="px-3.5 py-3 align-top">
+              <td data-label="Status" class="px-3.5 py-3 align-top">
                 <span class={[
                   "rounded-full px-2.5 py-1 text-xs font-semibold",
                   status_badge_class(admin)
@@ -408,7 +412,7 @@
       Permissions are enforced on the server for every admin action.
     </p>
     <div class="overflow-x-auto">
-      <table class="min-w-[700px] w-full text-left text-sm">
+      <table class="table-stack w-full text-left text-sm sm:min-w-[700px]">
         <thead class="border-b border-ink-200 text-xs uppercase tracking-wide text-ink-500">
           <tr>
             <th class="px-3 py-3 font-semibold">Permission</th>
@@ -429,7 +433,11 @@
             ]
           }>
             <td class="px-3 py-3 font-medium text-ink-700">{label}</td>
-            <td :for={role <- Admin.roles()} class="px-3 py-3 font-mono text-base">
+            <td
+              :for={role <- Admin.roles()}
+              data-label={Admin.role_label(role)}
+              class="px-3 py-3 font-mono text-base"
+            >
               <span class={
                 if role in Map.get(Admin.permissions(), permission),
                   do: "text-green-600",

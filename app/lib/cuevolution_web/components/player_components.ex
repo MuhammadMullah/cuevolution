@@ -564,18 +564,30 @@ defmodule CuevolutionWeb.PlayerComponents do
     <div class="flex min-h-screen flex-col bg-ink-25 font-sans text-ink-700 antialiased">
       <header class="sticky top-0 z-20 border-b border-ink-200 bg-ink-25/90 backdrop-blur">
         <div class="mx-auto flex h-[62px] max-w-5xl items-center gap-3 px-4 sm:gap-5 sm:px-7">
+          <button
+            type="button"
+            aria-label="Open menu"
+            aria-controls="player-nav-drawer"
+            phx-click={JS.toggle(to: "#player-nav-backdrop") |> JS.toggle(to: "#player-nav-drawer")}
+            class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-ink-200 bg-white text-ink-700 sm:hidden"
+          >
+            <.icon name="hero-bars-3" class="size-5" />
+          </button>
+
           <img
             src={~p"/images/SP-pool-blue-logo.png"}
             class="h-10 w-auto shrink-0"
             alt="Cuevolution"
           />
 
-          <nav class="ml-0 flex min-w-0 flex-1 items-stretch gap-4 overflow-x-auto sm:ml-2 sm:gap-7">
+          <nav class="ml-2 hidden min-w-0 flex-1 items-stretch gap-4 sm:flex sm:gap-7">
             <.nav_link navigate={~p"/fixtures"} active={@active == :fixtures}>Fixtures</.nav_link>
             <.nav_link navigate={~p"/my-group"} active={@active == :my_group}>My Group</.nav_link>
             <.nav_link navigate={~p"/standings"} active={@active == :standings}>Standings</.nav_link>
             <.nav_link navigate={~p"/team"} active={@active == :team}>My Team</.nav_link>
           </nav>
+
+          <div class="flex-1 sm:hidden"></div>
 
           <div
             class="relative shrink-0"
@@ -622,6 +634,49 @@ defmodule CuevolutionWeb.PlayerComponents do
           </div>
         </div>
       </header>
+
+      <div
+        id="player-nav-backdrop"
+        phx-click={JS.hide(to: "#player-nav-backdrop") |> JS.hide(to: "#player-nav-drawer")}
+        class="fixed inset-0 z-30 hidden bg-ink-950/50 sm:hidden"
+      >
+      </div>
+
+      <nav
+        id="player-nav-drawer"
+        aria-label="Main"
+        class="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col bg-white shadow-xl sm:hidden"
+      >
+        <div class="flex items-center justify-between border-b border-ink-200 px-5 py-4">
+          <img src={~p"/images/SP-pool-blue-logo.png"} class="h-9 w-auto" alt="Cuevolution" />
+          <button
+            type="button"
+            aria-label="Close menu"
+            phx-click={JS.hide(to: "#player-nav-backdrop") |> JS.hide(to: "#player-nav-drawer")}
+            class="flex size-10 cursor-pointer items-center justify-center rounded-xl text-ink-400"
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+        </div>
+        <div class="flex flex-col gap-1 p-3.5">
+          <.drawer_link navigate={~p"/fixtures"} active={@active == :fixtures}>Fixtures</.drawer_link>
+          <.drawer_link navigate={~p"/my-group"} active={@active == :my_group}>My Group</.drawer_link>
+          <.drawer_link navigate={~p"/standings"} active={@active == :standings}>
+            Standings
+          </.drawer_link>
+          <.drawer_link navigate={~p"/team"} active={@active == :team}>My Team</.drawer_link>
+        </div>
+        <div class="mt-auto border-t border-ink-200 p-3.5">
+          <.drawer_link navigate={~p"/profile"} active={@active == :profile}>Profile</.drawer_link>
+          <.link
+            href={~p"/logout"}
+            method="delete"
+            class="flex min-h-11 items-center rounded-xl px-3.5 text-[15px] font-semibold text-red-600 hover:bg-red-50"
+          >
+            Log out
+          </.link>
+        </div>
+      </nav>
 
       <.flash_group flash={@flash} />
 
@@ -740,6 +795,25 @@ defmodule CuevolutionWeb.PlayerComponents do
   attr :rest, :global, include: ~w(href navigate patch)
   slot :inner_block, required: true
 
+  defp drawer_link(assigns) do
+    ~H"""
+    <.link
+      class={[
+        "flex min-h-11 items-center rounded-xl px-3.5 text-[15px] font-semibold",
+        @active && "bg-ink-100 text-ink-950",
+        !@active && "text-ink-700 hover:bg-ink-50"
+      ]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
+  attr :active, :boolean, default: false
+  attr :rest, :global, include: ~w(href navigate patch)
+  slot :inner_block, required: true
+
   defp nav_link(assigns) do
     ~H"""
     <.link
@@ -784,7 +858,7 @@ defmodule CuevolutionWeb.PlayerComponents do
     <div
       id={@id}
       aria-live="polite"
-      class="fixed inset-x-0 top-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end"
+      class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:bottom-auto sm:top-0 sm:items-end"
     >
       <.player_flash kind={:info} flash={@flash} />
       <.player_flash kind={:error} flash={@flash} />
@@ -816,7 +890,7 @@ defmodule CuevolutionWeb.PlayerComponents do
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> fade_out("##{@id}")}
       role="alert"
       class={[
-        "w-full max-w-sm rounded-2xl border px-4 py-3 text-sm font-medium shadow-md sm:w-96",
+        "pointer-events-auto w-full max-w-sm rounded-2xl border px-4 py-3 text-sm font-medium shadow-md sm:w-96",
         @kind == :info && "border-green-100 bg-green-50 text-green-700",
         @kind == :error && "border-red-100 bg-red-50 text-red-700"
       ]}

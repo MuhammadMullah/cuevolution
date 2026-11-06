@@ -921,7 +921,7 @@ defmodule CuevolutionWeb.AdminResultsLive do
                 />
                 <button
                   type="submit"
-                  class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+                  class="min-h-11 rounded-full border border-ink-300 px-3.5 py-[7px] sm:min-h-0 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
                 >
                   Correct
                 </button>

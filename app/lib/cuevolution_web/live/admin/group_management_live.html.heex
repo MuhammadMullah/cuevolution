@@ -11,7 +11,7 @@
     You can view groups for your venue and open fixtures to submit results. Draw and group-management actions are restricted to coordinators.
   </div>
 
-  <div class="mb-3.5 flex gap-2 overflow-x-auto">
+  <div class="mb-3.5 flex flex-wrap gap-2 sm:flex-nowrap sm:overflow-x-auto">
     <button
       :for={stage <- @stages}
       type="button"
@@ -29,7 +29,7 @@
 
   <div
     :if={!circuit?(assigns)}
-    class="mb-2.5 flex gap-5 overflow-x-auto border-b border-ink-200"
+    class="mb-2.5 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto"
   >
     <button
       :for={region <- @regions}
@@ -37,7 +37,7 @@
       phx-click="select_region"
       phx-value-id={region.id}
       class={[
-        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
         @region.id == region.id && "border-red-500 text-ink-950",
         @region.id != region.id && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
@@ -48,7 +48,7 @@
 
   <div
     :if={grassroots?(assigns)}
-    class="mb-2.5 flex gap-5 overflow-x-auto border-b border-ink-200"
+    class="mb-2.5 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto"
   >
     <button
       :for={venue <- @venues}
@@ -56,7 +56,7 @@
       phx-click="select_venue"
       phx-value-id={venue.id}
       class={[
-        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
         @venue && @venue.id == venue.id && "border-red-500 text-ink-950",
         !(@venue && @venue.id == venue.id) && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
@@ -68,14 +68,14 @@
     </span>
   </div>
 
-  <div class="mb-5 flex gap-5 overflow-x-auto border-b border-ink-200">
+  <div class="mb-5 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
     <button
       :for={category <- @categories}
       type="button"
       phx-click="select_category"
       phx-value-category={category}
       class={[
-        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold capitalize",
+        "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold capitalize",
         @category == category && "border-red-500 text-ink-950",
         @category != category && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
@@ -92,7 +92,7 @@
           phx-click="select_gr_view"
           phx-value-view="groups"
           class={[
-            "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+            "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
             @gr_view == :groups && "border-red-500 text-ink-950",
             @gr_view != :groups && "border-transparent text-ink-500 hover:text-ink-950"
           ]}
@@ -104,7 +104,7 @@
           phx-click="select_gr_view"
           phx-value-view="standings"
           class={[
-            "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+            "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
             @gr_view == :standings && "border-red-500 text-ink-950",
             @gr_view != :standings && "border-transparent text-ink-500 hover:text-ink-950"
           ]}
@@ -132,7 +132,7 @@
           type="button"
           phx-click="toggle_venue_ready_early"
           class={[
-            "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
+            "min-h-11 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold sm:min-h-0",
             @venue_ready_early? &&
               "border border-amber-400 bg-white text-amber-900 hover:bg-amber-100",
             !@venue_ready_early? && "bg-amber-600 text-white hover:bg-amber-700"
@@ -175,7 +175,7 @@
           <button
             type="submit"
             disabled={@uploads.result_sheet.entries == []}
-            class="rounded-full bg-ink-950 px-4 py-1.5 text-[12.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            class="min-h-11 rounded-full bg-ink-950 px-4 py-1.5 text-[12.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0"
           >
             Upload
           </button>
@@ -194,7 +194,7 @@
           phx-click="select_standings_view"
           phx-value-view="per_group"
           class={[
-            "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
+            "min-h-11 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold sm:min-h-0",
             @standings_view == :per_group && "bg-ink-950 text-white",
             @standings_view != :per_group &&
               "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
@@ -207,7 +207,7 @@
           phx-click="select_standings_view"
           phx-value-view="overall"
           class={[
-            "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold",
+            "min-h-11 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold sm:min-h-0",
             @standings_view == :overall && "bg-ink-950 text-white",
             @standings_view != :overall &&
               "border border-ink-300 bg-white text-ink-700 hover:bg-ink-50"
@@ -1483,7 +1483,7 @@
           </div>
 
           <div class="overflow-x-auto">
-            <table class="w-full min-w-[520px] border-collapse">
+            <table class="table-stack w-full border-collapse sm:min-w-[520px]">
               <thead>
                 <tr>
                   <th
@@ -1507,10 +1507,13 @@
                     row.advancing && "bg-green-50/60"
                   ]}
                 >
-                  <td class="whitespace-nowrap px-3 py-2 text-[13px] tabular-nums text-ink-400">
+                  <td
+                    data-label="Position"
+                    class="whitespace-nowrap px-3 py-2 text-[13px] tabular-nums text-ink-400"
+                  >
                     {row.rank}
                   </td>
-                  <td class="px-3 py-2 text-[13.5px] font-medium text-ink-950">
+                  <td data-label="Team" class="px-3 py-2 text-[13.5px] font-medium text-ink-950">
                     <span class="truncate">{row.name}</span>
                     <span
                       :if={row.tied}
@@ -1520,22 +1523,40 @@
                       tied
                     </span>
                   </td>
-                  <td class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600">
+                  <td
+                    data-label="Matches played"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
                     {row.wins + row.losses}
                   </td>
-                  <td class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600">
+                  <td
+                    data-label="Matches won"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
                     {row.wins}
                   </td>
-                  <td class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600">
+                  <td
+                    data-label="Matches lost"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
                     {row.losses}
                   </td>
-                  <td class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600">
+                  <td
+                    data-label="Frames won"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
                     {row.frames_won}
                   </td>
-                  <td class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600">
+                  <td
+                    data-label="Frame difference"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
                     {signed_number(row.frame_diff)}
                   </td>
-                  <td class="px-3 py-2 text-right text-[13px] font-bold tabular-nums text-ink-950">
+                  <td
+                    data-label="SP Points"
+                    class="px-3 py-2 text-right text-[13px] font-bold tabular-nums text-ink-950"
+                  >
                     {row.sp_points}
                   </td>
                 </tr>

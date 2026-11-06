@@ -207,4 +207,111 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27180%27 height=%27180%27%3E%3Cg fill=%27none%27 stroke=%27%230D0C22%27 stroke-width=%272%27 opacity=%270.07%27%3E%3Ccircle cx=%2728%27 cy=%2728%27 r=%2715%27/%3E%3Ccircle cx=%2728%27 cy=%2728%27 r=%275%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3Cpath d=%27M95 12 L138 55%27/%3E%3Ccircle cx=%27140%27 cy=%2757%27 r=%274%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3Cpath d=%27M35 100 L58 138 L12 138 Z%27/%3E%3Ccircle cx=%27125%27 cy=%27115%27 r=%2712%27/%3E%3Cpath d=%27M118 108 L132 122 M132 108 L118 122%27/%3E%3Cpath d=%27M60 165 h28%27 stroke-width=%273%27/%3E%3Ccircle cx=%2765%27 cy=%2765%27 r=%273%27 fill=%27%230D0C22%27 stroke=%27none%27/%3E%3C/g%3E%3C/svg%3E");
 }
 
+/*
+  Mobile card layout for data tables. Most of this app's traffic is phones,
+  and the admin/standings tables carry 5-9 columns — far more than fits at
+  360px. Below Tailwind's `sm` breakpoint `.table-stack` turns every row into
+  a stacked card and labels each cell from its `data-label`, so no column is
+  hidden behind a horizontal swipe. At >= 640px these rules don't apply and
+  the table renders as a normal table.
+
+  Cells are labelled via `data-label` on the <td>; a cell with no label (an
+  actions column, say) spans the card instead of being right-aligned.
+*/
+@media (max-width: 639.98px) {
+  .table-stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .table-stack,
+  .table-stack tbody,
+  .table-stack tr,
+  .table-stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .table-stack tr {
+    padding: 0.625rem 0;
+  }
+
+  .table-stack tr + tr {
+    border-top: 1px solid var(--color-ink-200);
+  }
+
+  .table-stack td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    width: auto;
+    padding: 0.3125rem 1rem;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+    /* Module names and UUIDs in the audit log have no break opportunity. */
+    overflow-wrap: anywhere;
+  }
+
+  .table-stack td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--color-ink-500);
+    text-align: left;
+  }
+
+  .table-stack td:not([data-label])::before,
+  .table-stack td[data-label=""]::before {
+    content: none;
+  }
+
+  .table-stack td:not([data-label]),
+  .table-stack td[data-label=""] {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* Empty-state / "no results" rows span the card with no label gutter. */
+  .table-stack td[colspan] {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .table-stack td[colspan]::before {
+    content: none;
+  }
+
+  /*
+    `--form` variant: for tables whose cells hold inputs rather than text.
+    The label sits above a full-width control instead of beside a value, so
+    selects and search fields get the whole card width on a phone.
+  */
+  .table-stack--form td {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 0.4375rem 0.75rem;
+    text-align: left;
+  }
+
+  .table-stack--form td::before {
+    text-align: left;
+  }
+
+  .table-stack--form tr {
+    padding: 0.5rem 0;
+  }
+}
+
 /* This file is for your main application CSS */

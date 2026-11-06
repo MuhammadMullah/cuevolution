@@ -14,14 +14,14 @@
     </span>
   </div>
 
-  <div class="mb-5 flex gap-5 overflow-x-auto border-b border-ink-200">
+  <div class="mb-5 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
     <button
       :for={{slug, label} <- @categories}
       type="button"
       phx-click="category"
       phx-value-category={slug}
       class={[
-        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
         @category == slug && "border-red-500 text-ink-950",
         @category != slug && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
@@ -41,7 +41,7 @@
     :if={@rows != []}
     class="overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <table class="w-full min-w-[900px] border-collapse">
+    <table class="table-stack w-full border-collapse sm:min-w-[900px]">
       <thead>
         <tr>
           <th
@@ -68,6 +68,7 @@
         >
           <td
             :for={{short, _full, align} <- columns(@state)}
+            data-label={short}
             class={[
               "whitespace-nowrap px-4 py-2.5 text-[14px]",
               align,

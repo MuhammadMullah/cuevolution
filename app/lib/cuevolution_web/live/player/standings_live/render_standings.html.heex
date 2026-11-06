@@ -27,14 +27,14 @@
   </div>
 
   <div class="mb-4 flex items-end justify-between gap-3 border-b border-ink-200">
-    <div class="flex gap-5 overflow-x-auto">
+    <div class="flex flex-wrap gap-x-5 gap-y-1 sm:flex-nowrap sm:overflow-x-auto">
       <button
         :for={{value, label} <- @tabs}
         type="button"
         phx-click="switch_tab"
         phx-value-tab={value}
         class={[
-          "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[15px] font-semibold",
+          "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[15px] font-semibold",
           @tab == value && "border-red-500 text-ink-950",
           @tab != value && "border-transparent text-ink-500 hover:text-ink-950"
         ]}
@@ -115,7 +115,7 @@
       @rows_empty? && "hidden"
     ]}
   >
-    <table class="w-full min-w-[680px] border-collapse">
+    <table class="table-stack w-full border-collapse sm:min-w-[680px]">
       <thead>
         <tr class="border-b border-ink-200 bg-ink-50">
           <th class="sticky top-0 w-14 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
@@ -147,12 +147,15 @@
           id={dom_id}
           class="border-b border-ink-100 last:border-b-0"
         >
-          <td class={[
-            "border-l-4 px-4 py-3 font-mono text-[15px] font-semibold",
-            row.rank == 1 && "border-red-500 text-gold-700",
-            row.rank != 1 && row.advancing && "border-green-500 text-ink-950",
-            row.rank != 1 && !row.advancing && "border-transparent text-ink-950"
-          ]}>
+          <td
+            data-label="Position"
+            class={[
+              "border-l-4 px-4 py-3 font-mono text-[15px] font-semibold",
+              row.rank == 1 && "border-red-500 text-gold-700",
+              row.rank != 1 && row.advancing && "border-green-500 text-ink-950",
+              row.rank != 1 && !row.advancing && "border-transparent text-ink-950"
+            ]}
+          >
             {row.rank}
           </td>
           <td class="px-4 py-3">
@@ -172,15 +175,23 @@
               <span class="text-[15px] font-semibold text-ink-950">{row.name}</span>
             </div>
           </td>
-          <td class="px-4 py-3 text-sm text-ink-600">{row.region}</td>
-          <td class="px-4 py-3 text-right font-mono text-sm text-ink-500">{row.played}</td>
-          <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-ink-950">
+          <td data-label="Region" class="px-4 py-3 text-sm text-ink-600">{row.region}</td>
+          <td data-label="Played" class="px-4 py-3 text-right font-mono text-sm text-ink-500">
+            {row.played}
+          </td>
+          <td
+            data-label="W–L"
+            class="px-4 py-3 text-right font-mono text-sm font-semibold text-ink-950"
+          >
             {row.won}–{row.lost}
           </td>
-          <td class="px-4 py-3">
+          <td data-label="Stage" class="px-4 py-3">
             <PlayerComponents.stage_badge stage={row.stage} />
           </td>
-          <td class="px-4 py-3 text-right font-mono text-[15px] font-semibold text-gold-700">
+          <td
+            data-label="SP Points"
+            class="px-4 py-3 text-right font-mono text-[15px] font-semibold text-gold-700"
+          >
             {row.sp_points}
           </td>
         </tr>

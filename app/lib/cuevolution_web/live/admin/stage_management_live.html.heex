@@ -4,7 +4,7 @@
     Stages
   </h1>
 
-  <div class="mb-3.5 flex gap-2 overflow-x-auto">
+  <div class="mb-3.5 flex flex-wrap gap-2 sm:flex-nowrap sm:overflow-x-auto">
     <button
       :for={stage <- @stages}
       type="button"
@@ -26,7 +26,7 @@
       phx-click="switch_panel"
       phx-value-panel="participants"
       class={[
-        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
         @panel == :participants && "border-red-500 text-ink-950",
         @panel != :participants && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
@@ -38,7 +38,7 @@
       phx-click="switch_panel"
       phx-value-panel="capacity"
       class={[
-        "whitespace-nowrap border-b-2 px-0.5 pb-2.5 text-[14px] font-semibold",
+        "min-h-11 whitespace-nowrap border-b-2 px-0.5 pb-2.5 sm:min-h-0 text-[14px] font-semibold",
         @panel == :capacity && "border-red-500 text-ink-950",
         @panel != :capacity && "border-transparent text-ink-500 hover:text-ink-950"
       ]}
@@ -195,7 +195,7 @@
           phx-click="move_back"
           phx-value-id={p.id}
           data-confirm={"Move #{participant_name(p)} back to #{@previous_stage.name}? Their group placement and unplayed fixtures in #{@stage.name} will be removed."}
-          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+          class="min-h-11 rounded-full border border-ink-300 px-3.5 py-[7px] sm:min-h-0 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
         >
           ← Move back to {@previous_stage.name}
         </button>
@@ -204,7 +204,7 @@
           type="button"
           phx-click="advance"
           phx-value-id={p.id}
-          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+          class="min-h-11 rounded-full border border-ink-300 px-3.5 py-[7px] sm:min-h-0 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
         >
           Advance → {@next_stage.name}
         </button>
@@ -277,7 +277,7 @@
                 type="button"
                 phx-click="edit_config"
                 phx-value-id={config.id}
-                class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+                class="min-h-11 rounded-full border border-ink-300 px-3.5 py-[7px] sm:min-h-0 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
               >
                 Edit limit
               </button>
@@ -301,7 +301,7 @@
         Target/min size and minimum entrants drive the automatic draw formula; overriding the group count on a specific draw doesn't change these defaults.
       </p>
       <div class="mb-3.5 overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]">
-        <table class="w-full min-w-[560px] border-collapse">
+        <table class="table-stack table-stack--form w-full border-collapse sm:min-w-[560px]">
           <thead>
             <tr class="border-b border-ink-200 bg-ink-25">
               <th class="px-4 py-2.5 text-left font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
@@ -328,17 +328,17 @@
           </thead>
           <tbody>
             <tr :for={config <- @group_configs} class="border-b border-ink-100 last:border-0">
-              <td class="px-4 py-2.5 text-[14px] font-semibold text-ink-950">
+              <td data-label="Category" class="px-4 py-2.5 text-[14px] font-semibold text-ink-950">
                 {group_category_label(config.category)}
               </td>
-              <td class="px-4 py-2.5">
+              <td data-label="Group size" class="px-4 py-2.5">
                 <.editable_field
                   config={config}
                   field="group_size"
                   editing_field={@editing_field}
                 />
               </td>
-              <td class="px-4 py-2.5">
+              <td data-label="Top N advance" class="px-4 py-2.5">
                 <.editable_field
                   config={config}
                   field="advancer_count"
@@ -347,25 +347,31 @@
               </td>
               <%= if grassroots_stage?(@stage) do %>
                 <%= if config.category == "team" do %>
-                  <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
-                  <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
-                  <td class="px-4 py-2.5 font-mono text-sm text-ink-400">—</td>
+                  <td data-label="Target size" class="px-4 py-2.5 font-mono text-sm text-ink-400">
+                    —
+                  </td>
+                  <td data-label="Min size" class="px-4 py-2.5 font-mono text-sm text-ink-400">
+                    —
+                  </td>
+                  <td data-label="Min entrants" class="px-4 py-2.5 font-mono text-sm text-ink-400">
+                    —
+                  </td>
                 <% else %>
-                  <td class="px-4 py-2.5">
+                  <td data-label="Target size" class="px-4 py-2.5">
                     <.editable_field
                       config={config}
                       field="target_group_size"
                       editing_field={@editing_field}
                     />
                   </td>
-                  <td class="px-4 py-2.5">
+                  <td data-label="Min size" class="px-4 py-2.5">
                     <.editable_field
                       config={config}
                       field="minimum_group_size"
                       editing_field={@editing_field}
                     />
                   </td>
-                  <td class="px-4 py-2.5">
+                  <td data-label="Min entrants" class="px-4 py-2.5">
                     <.editable_field
                       config={config}
                       field="minimum_entrants"

@@ -207,7 +207,7 @@ defmodule CuevolutionWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="fieldset mb-2 max-w-full">
       <label for={@id}>
         <input
           type="hidden"
@@ -235,7 +235,7 @@ defmodule CuevolutionWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="fieldset mb-2 max-w-full">
       <label for={@id}>
         <span :if={@label} class="label mb-1">{@label}</span>
         <select
@@ -256,7 +256,7 @@ defmodule CuevolutionWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="fieldset mb-2 max-w-full">
       <label for={@id}>
         <span :if={@label} class="label mb-1">{@label}</span>
         <textarea
@@ -277,7 +277,7 @@ defmodule CuevolutionWeb.CoreComponents do
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="fieldset mb-2 max-w-full">
       <label for={@id}>
         <span :if={@label} class="label mb-1">{@label}</span>
         <input

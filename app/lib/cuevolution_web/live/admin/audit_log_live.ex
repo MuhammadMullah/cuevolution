@@ -38,7 +38,7 @@ defmodule CuevolutionWeb.Admin.AuditLogLive do
         </button>
       </div>
       <div class="overflow-x-auto rounded-2xl border border-ink-200 bg-white">
-        <table class="min-w-full text-left text-sm">
+        <table class="table-stack min-w-full text-left text-sm">
           <thead class="bg-ink-50 font-mono text-[10px] uppercase tracking-wider text-ink-500">
             <tr>
               <th class="px-4 py-3">Actor</th>
@@ -50,13 +50,19 @@ defmodule CuevolutionWeb.Admin.AuditLogLive do
           </thead>
           <tbody id="audit-logs" phx-update="stream" class="divide-y divide-ink-100">
             <tr :for={{id, entry} <- @streams.audit_logs} id={id}>
-              <td class="px-4 py-3 font-semibold text-ink-950">{actor_label(entry)}</td>
-              <td class="px-4 py-3 text-ink-800">{action_label(entry.action_type)}</td>
-              <td class="px-4 py-3 font-mono text-xs text-ink-500">
+              <td data-label="Actor" class="px-4 py-3 font-semibold text-ink-950">
+                {actor_label(entry)}
+              </td>
+              <td data-label="Action" class="px-4 py-3 text-ink-800">
+                {action_label(entry.action_type)}
+              </td>
+              <td data-label="Entity" class="px-4 py-3 font-mono text-xs text-ink-500">
                 {entry.entity_type} · {entry.entity_id}
               </td>
-              <td class="max-w-sm px-4 py-3 text-xs text-ink-600">{details(entry)}</td>
-              <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-ink-500">
+              <td data-label="Details" class="max-w-sm px-4 py-3 text-xs text-ink-600">
+                {details(entry)}
+              </td>
+              <td data-label="When" class="whitespace-nowrap px-4 py-3 font-mono text-xs text-ink-500">
                 {entry.inserted_at}
               </td>
             </tr>
@@ -87,7 +93,7 @@ defmodule CuevolutionWeb.Admin.AuditLogLive do
 
   defp filter_class(selected, value) do
     [
-      "rounded-full border px-3 py-1.5 text-xs font-semibold capitalize",
+      "min-h-10 rounded-full border px-3 py-1.5 text-xs font-semibold capitalize sm:min-h-0",
       if(selected == value,
         do: "border-red-500 text-ink-950",
         else: "border-transparent text-ink-500 hover:text-ink-950"

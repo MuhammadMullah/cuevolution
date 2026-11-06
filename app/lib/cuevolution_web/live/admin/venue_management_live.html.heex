@@ -4,7 +4,7 @@
     Venue management
   </h1>
 
-  <div class="mb-[18px] flex gap-2 overflow-x-auto border-b border-ink-200">
+  <div class="mb-[18px] flex flex-wrap gap-2 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
     <button
       :for={region <- @regions}
       type="button"
@@ -107,7 +107,7 @@
           type="button"
           phx-click="edit"
           phx-value-id={venue.id}
-          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+          class="min-h-11 rounded-full border border-ink-300 px-3.5 py-[7px] sm:min-h-0 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
         >
           Rename
         </button>
@@ -116,7 +116,7 @@
           type="button"
           phx-click="request_deactivate"
           phx-value-id={venue.id}
-          class="rounded-full border border-red-100 bg-red-50 px-3.5 py-[7px] text-[13px] font-semibold text-red-700 hover:bg-red-100"
+          class="min-h-11 rounded-full border border-red-100 bg-red-50 px-3.5 py-[7px] sm:min-h-0 text-[13px] font-semibold text-red-700 hover:bg-red-100"
         >
           Deactivate
         </button>
@@ -171,7 +171,7 @@
               phx-click="toggle_suggestion"
               phx-value-id={option.id}
               class={[
-                "rounded-full border px-3 py-1.5 text-[12.5px] font-semibold",
+                "min-h-10 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold sm:min-h-0",
                 option.id in @selected_suggestion_ids &&
                   "border-amber-400 bg-amber-200 text-amber-900",
                 option.id not in @selected_suggestion_ids &&
@@ -281,7 +281,7 @@
           type="button"
           phx-click="promote"
           phx-value-name={player.other_venue_name}
-          class="rounded-full border border-ink-300 px-3.5 py-[7px] text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50"
+          class="min-h-11 rounded-full border border-ink-300 px-3.5 py-[7px] sm:min-h-0 text-[12.5px] font-semibold text-ink-700 hover:bg-ink-50"
         >
           Add to list
         </button>

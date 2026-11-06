@@ -49,28 +49,28 @@
       field={@filter_form[:kind]}
       type="select"
       options={@kinds}
-      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      class="w-full max-w-full cursor-pointer truncate rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
     />
     <.input
       field={@filter_form[:region_id]}
       type="select"
       prompt="All regions"
       options={Enum.map(@regions, &{&1.name, &1.id})}
-      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      class="w-full max-w-full cursor-pointer truncate rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
     />
     <.input
       field={@filter_form[:venue_id]}
       type="select"
       prompt="All venues"
       options={Enum.map(@venues, &{venue_option_label(&1, @filters[:region_id]), &1.id})}
-      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      class="w-full max-w-full cursor-pointer truncate rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
     />
     <.input
       field={@filter_form[:stage_id]}
       type="select"
       prompt="All stages"
       options={Enum.map(@stages, &{&1.name, &1.id})}
-      class="cursor-pointer rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
+      class="w-full max-w-full cursor-pointer truncate rounded-full border border-ink-300 bg-white px-[15px] py-2.5 font-sans text-sm text-ink-950"
     />
   </.form>
 
