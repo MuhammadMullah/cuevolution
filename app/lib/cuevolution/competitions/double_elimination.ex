@@ -6,22 +6,26 @@ defmodule Cuevolution.Competitions.DoubleElimination do
   the still-unbeaten half of the winners' side plus the one-loss half of the
   losers' side — play straight single elimination to a champion.
 
-  **Men (SP Points & Standings brief, Nov 2026): `depth: 3`.** A 128 draw runs
-  WB R1-R3 and LB R1-R4, leaving 32 players (16 a side) for the single
-  elimination:
+  **Both events run `depth: 2`** — the Circuit format as agreed with the
+  tournament director (Nov 1 2026). A 128 men's draw runs WB R1-R2 and
+  LB R1-R2, then the 32 unbeaten meet the 32 losers'-side survivors in a
+  round of 64, and it is single elimination from there:
 
       WB R1  128 -> 64   losers to LB R1
-      WB R2   64 -> 32   losers to LB R2
-      WB R3   32 -> 16   losers to LB R4, winners to the last 32
+      WB R2   64 -> 32   losers to LB R2, winners to the round of 64
       LB R1   64 -> 32   losers out, 97-128
       LB R2   64 -> 32   losers out,  65-96   (LB R1 winners + WB R2 losers)
-      LB R3   32 -> 16   losers out,  49-64
-      LB R4   32 -> 16   losers out,  33-48   (LB R3 winners + WB R3 losers)
+      Round of 64        32 unbeaten v 32 one-loss, losers out 33-64
       Last 32 onwards    single elimination
 
-  **Ladies: `depth: 2`,** the shallower bracket that was in use before the
-  brief. The brief leaves the 48-player ladies format open, so this is
-  deliberately unchanged until it is decided — see `@formats`.
+  The ladies' 64 draw is the same shape one size down, so their single
+  elimination starts at the last 32.
+
+  The SP Points & Standings brief (Nov 4 2026) changed how points are earned,
+  **not** the format. A `depth: 3` men's bracket was briefly built from the
+  brief's example table and run at Circuit 1 in Eldoret;
+  `Competitions.reshape_circuit_bracket/2` converts such a bracket back in
+  place without touching any result.
 
   Three pairing rules, in each case chosen so a player does not immediately
   meet somebody they have just played:
@@ -37,9 +41,9 @@ defmodule Cuevolution.Competitions.DoubleElimination do
       WB R1. `double_elimination_test.exs` asserts no first-round rematch for
       a full 128 draw.
 
-  The brief lists the last-32 draw as an open item ("are winners'-side
-  qualifiers paired against losers'-side qualifiers?"), so the rotation here is
-  a defensible default rather than a confirmed rule.
+  Whether the first single-elimination round should pair the two sides off
+  this way is not confirmed by the tournament director, so the rotation here
+  is a defensible default rather than a confirmed rule.
 
   `build/2` returns `%{rounds: [...], fixtures: [...]}` where each fixture
   carries where its winner goes and where its loser goes, as
@@ -55,7 +59,7 @@ defmodule Cuevolution.Competitions.DoubleElimination do
   # other exception, so the semifinal runs at the knockout length.
   @formats %{
     "male" => %{
-      depth: 3,
+      depth: 2,
       races: %{winners: 6, losers: 5, knockout: 6, semifinal: 6, final: 7}
     },
     "female" => %{

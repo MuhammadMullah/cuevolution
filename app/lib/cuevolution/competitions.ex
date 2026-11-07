@@ -980,6 +980,321 @@ defmodule Cuevolution.Competitions do
     end
   end
 
+  @doc """
+  Converts an already-drawn Circuit bracket to the category's current format
+  (`DoubleElimination.format_for/1`) **in place**, keeping every round the old
+  and new shapes share — and with it every result, live score, start time and
+  match link in those rounds.
+
+  This exists because Circuit 1's men's bracket was drawn three winners' rounds
+  deep (WB R3, LB R3, LB R4, knockout from the last 32) when the agreed format
+  is two (a round of 64 from the 32 unbeaten v the 32 losers'-side survivors).
+  The two shapes are identical through WB R2 and LB R2, so the fix is to swap
+  out everything after them:
+
+    1. refuse unless every fixture being removed is unplayed — no result, no
+       live score, still `scheduled` — so no frame can be lost;
+    2. check the kept rounds' routing between themselves matches the new plan,
+       so the old graph and the new one agree on everything that stays;
+    3. delete the removed rounds, insert the new ones, renumber the sequence;
+    4. route the kept rounds into the new ones (WB R2 and LB R2 winners into
+       the round of 64) and the new rounds into each other;
+    5. re-place every winner already decided in a kept round into the new
+       match their result now leads to.
+
+  All in one transaction, with the bracket's fixtures locked, so a result
+  recorded at the same moment either lands before (and is carried over) or
+  waits until the new routing is in place.
+
+  `dry_run: true` does all of it and rolls back, returning the same summary.
+  Returns `{:ok, summary}` or `{:error, reason}` — `:already_in_format` when
+  there is nothing to do.
+  """
+  def reshape_circuit_bracket(bracket_id, opts \\ []) do
+    dry_run? = Keyword.get(opts, :dry_run, false)
+
+    Repo.transaction(fn ->
+      case do_reshape_circuit_bracket(Repo.get!(KnockoutBracket, bracket_id)) do
+        {:ok, summary} when dry_run? -> Repo.rollback({:dry_run, summary})
+        {:ok, summary} -> summary
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, summary} ->
+        broadcast_bracket_changed(bracket_id)
+        {:ok, summary}
+
+      {:error, {:dry_run, summary}} ->
+        {:ok, Map.put(summary, :dry_run, true)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp do_reshape_circuit_bracket(%KnockoutBracket{} = bracket) do
+    Repo.all(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        where: r.knockout_bracket_id == ^bracket.id,
+        select: f.id,
+        lock: "FOR UPDATE OF f0"
+    )
+
+    rounds =
+      Repo.all(
+        from r in Round,
+          where: r.knockout_bracket_id == ^bracket.id,
+          order_by: [asc: r.sequence],
+          preload: [fixtures: ^from(f in Fixture, order_by: [asc: f.slot], preload: [:result])]
+      )
+
+    with {:ok, w1} <- fetch_round(rounds, "W1"),
+         size = 2 * length(w1.fixtures),
+         plan = DoubleElimination.build(Enum.to_list(1..size), category: bracket.category),
+         :ok <- check_not_in_format(rounds, plan),
+         {keep, drop} = split_kept_rounds(rounds, plan),
+         :ok <- check_unplayed(drop),
+         code_of = fixture_codes(rounds),
+         :ok <- check_kept_routing(keep, plan, code_of),
+         {:ok, prefix} <- match_id_prefix(w1) do
+      apply_reshape(bracket, rounds, keep, drop, plan, code_of, prefix)
+    end
+  end
+
+  defp fetch_round(rounds, code) do
+    case Enum.find(rounds, &(&1.code == code)) do
+      nil -> {:error, {:missing_round, code}}
+      round -> {:ok, round}
+    end
+  end
+
+  defp check_not_in_format(rounds, plan) do
+    current = Enum.map(rounds, &{&1.code, length(&1.fixtures)})
+    wanted = Enum.map(plan.rounds, &{&1.code, &1.matches})
+    if current == wanted, do: {:error, :already_in_format}, else: :ok
+  end
+
+  # A round survives when the new plan has a double-elimination round with the
+  # same code, side and size. Single-elimination rounds are always rebuilt:
+  # even where a code repeats (the last 32), what feeds it has changed.
+  defp split_kept_rounds(rounds, plan) do
+    wanted = Map.new(plan.rounds, &{&1.code, &1})
+
+    Enum.split_with(rounds, fn round ->
+      case Map.get(wanted, round.code) do
+        %{side: side, matches: matches} when side != "knockout" ->
+          side == round.bracket_side and matches == length(round.fixtures)
+
+        _other ->
+          false
+      end
+    end)
+  end
+
+  defp check_unplayed(drop) do
+    played =
+      for round <- drop,
+          fixture <- round.fixtures,
+          not unplayed?(fixture),
+          do: "#{round.code}-#{fixture.slot}"
+
+    if played == [], do: :ok, else: {:error, {:played_fixtures_would_be_removed, played}}
+  end
+
+  defp unplayed?(%Fixture{} = f) do
+    is_nil(f.result_id) and f.status == "scheduled" and
+      Enum.all?(Map.values(f.live_score || %{}), &(&1 in [0, nil]))
+  end
+
+  defp fixture_codes(rounds) do
+    for round <- rounds, fixture <- round.fixtures, into: %{} do
+      {fixture.id, "#{round.code}-#{fixture.slot}"}
+    end
+  end
+
+  # Every edge from a kept fixture into another kept fixture must already be
+  # the edge the new plan wants. A bye has no loser, so its empty loser route
+  # is expected to differ from a plan drawn without byes.
+  defp check_kept_routing(keep, plan, code_of) do
+    kept_codes = MapSet.new(keep, & &1.code)
+    plan_by_code = Map.new(plan.fixtures, &{&1.code, &1})
+
+    mismatches =
+      for round <- keep,
+          fixture <- round.fixtures,
+          code = Map.fetch!(code_of, fixture.id),
+          planned = Map.fetch!(plan_by_code, code),
+          {which, route} <- [winner: planned.winner_to, loser: planned.loser_to],
+          not (which == :loser and fixture.bye),
+          kept_target?(route, kept_codes),
+          current_route(fixture, which, code_of) != normalise_route(route),
+          do: {code, which}
+
+    if mismatches == [], do: :ok, else: {:error, {:kept_routing_differs, mismatches}}
+  end
+
+  defp kept_target?(nil, _kept_codes), do: false
+
+  defp kept_target?({code, _side}, kept_codes),
+    do: MapSet.member?(kept_codes, round_code_of(code))
+
+  defp round_code_of(fixture_code), do: fixture_code |> String.split("-") |> hd()
+
+  defp normalise_route({code, side}), do: {code, to_string(side)}
+
+  defp current_route(fixture, :winner, code_of),
+    do: {Map.get(code_of, fixture.winner_to_fixture_id), fixture.winner_to_side}
+
+  defp current_route(fixture, :loser, code_of),
+    do: {Map.get(code_of, fixture.loser_to_fixture_id), fixture.loser_to_side}
+
+  defp match_id_prefix(%Round{fixtures: [first | _]}) do
+    suffix = "W1-#{first.slot}"
+
+    if is_binary(first.match_id) and String.ends_with?(first.match_id, suffix),
+      do: {:ok, String.replace_suffix(first.match_id, suffix, "")},
+      else: {:error, :unrecognised_match_ids}
+  end
+
+  defp apply_reshape(bracket, rounds, keep, drop, plan, code_of, prefix) do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+    stage_id = hd(rounds).stage_id
+    kept_codes = MapSet.new(keep, & &1.code)
+    drop_round_ids = Enum.map(drop, & &1.id)
+    drop_fixture_ids = for round <- drop, fixture <- round.fixtures, do: fixture.id
+
+    Repo.update_all(from(f in Fixture, where: f.winner_to_fixture_id in ^drop_fixture_ids),
+      set: [winner_to_fixture_id: nil, winner_to_side: nil]
+    )
+
+    Repo.update_all(from(f in Fixture, where: f.loser_to_fixture_id in ^drop_fixture_ids),
+      set: [loser_to_fixture_id: nil, loser_to_side: nil]
+    )
+
+    Repo.delete_all(from f in Fixture, where: f.id in ^drop_fixture_ids)
+    Repo.delete_all(from r in Round, where: r.id in ^drop_round_ids)
+
+    # Sequences are unique per bracket, so move the survivors out of the way
+    # before the new rounds take their numbers.
+    kept_ids = Enum.map(keep, & &1.id)
+    Repo.update_all(from(r in Round, where: r.id in ^kept_ids), inc: [sequence: 1000])
+
+    kept_by_code = Map.new(keep, &{&1.code, &1})
+
+    round_ids =
+      plan.rounds
+      |> Enum.with_index(1)
+      |> Map.new(fn {r, sequence} ->
+        case Map.get(kept_by_code, r.code) do
+          %Round{id: id} ->
+            Repo.update_all(from(x in Round, where: x.id == ^id), set: [sequence: sequence])
+            {r.code, id}
+
+          nil ->
+            {1, [%{id: id}]} =
+              Repo.insert_all(
+                Round,
+                [
+                  %{
+                    id: Ecto.UUID.generate(),
+                    stage_id: stage_id,
+                    knockout_bracket_id: bracket.id,
+                    name: r.name,
+                    code: r.code,
+                    bracket_side: r.side,
+                    sequence: sequence,
+                    race_to: r.race_to,
+                    inserted_at: now,
+                    updated_at: now
+                  }
+                ],
+                returning: [:id]
+              )
+
+            {r.code, id}
+        end
+      end)
+
+    new_fixtures = Enum.reject(plan.fixtures, &MapSet.member?(kept_codes, &1.round_code))
+
+    rows =
+      Enum.map(new_fixtures, fn fx ->
+        %{
+          id: Ecto.UUID.generate(),
+          round_id: Map.fetch!(round_ids, fx.round_code),
+          slot: fx.slot,
+          bye: false,
+          match_id: prefix <> fx.code,
+          status: "scheduled",
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    Repo.insert_all(Fixture, rows)
+
+    ids =
+      Map.merge(
+        Map.new(code_of, fn {id, code} -> {code, id} end),
+        Map.new(Enum.zip(new_fixtures, rows), fn {fx, row} -> {fx.code, row.id} end)
+      )
+
+    id_for = &Map.fetch!(ids, &1)
+    new_target? = fn route -> route != nil and not kept_target?(route, kept_codes) end
+
+    # New fixtures take both routes; kept ones only the routes that now lead
+    # into a new round — everything between kept rounds was checked unchanged.
+    routing =
+      Enum.map(plan.fixtures, fn fx ->
+        if MapSet.member?(kept_codes, fx.round_code) do
+          %{
+            fx
+            | winner_to: if(new_target?.(fx.winner_to), do: fx.winner_to),
+              loser_to: if(new_target?.(fx.loser_to), do: fx.loser_to)
+          }
+        else
+          fx
+        end
+      end)
+
+    write_routing(Repo, routing, id_for)
+
+    advanced = readvance_kept_winners(keep, plan, kept_codes, code_of, id_for)
+
+    {:ok,
+     %{
+       bracket_id: bracket.id,
+       category: bracket.category,
+       removed_rounds: Enum.map(drop, & &1.code),
+       added_rounds:
+         plan.rounds |> Enum.map(& &1.code) |> Enum.reject(&MapSet.member?(kept_codes, &1)),
+       removed_fixtures: length(drop_fixture_ids),
+       added_fixtures: length(rows),
+       advanced: advanced
+     }}
+  end
+
+  # A kept match that is already decided has nowhere to send its winner once
+  # its old target is gone, so place them in the new one now — exactly what
+  # recording the result would have done had the new routing been there.
+  defp readvance_kept_winners(keep, plan, kept_codes, code_of, id_for) do
+    plan_by_code = Map.new(plan.fixtures, &{&1.code, &1})
+
+    for round <- keep,
+        fixture <- round.fixtures,
+        winner = bracket_winner_id(fixture),
+        not is_nil(winner),
+        code = Map.fetch!(code_of, fixture.id),
+        {target, side} <- [Map.fetch!(plan_by_code, code).winner_to],
+        not kept_target?({target, side}, kept_codes) do
+      {:ok, _} = place_participant(Repo, id_for.(target), to_string(side), winner)
+      {code, target}
+    end
+  end
+
   # One UPDATE per fixture, inside the generation transaction. A fixture can
   # only point at another fixture that already exists, so routing is a second
   # pass over the rows inserted above rather than part of the insert.
@@ -4196,19 +4511,23 @@ defmodule Cuevolution.Competitions do
         round.bracket_side in ["losers", "knockout"] and bracket_winner_id(fixture) != id
       end)
 
-    qualified? = Enum.any?(played, fn {round, _f} -> round.bracket_side == "knockout" end)
+    # "Qualified" is reaching the last 32, where the 3-a-win regime starts. A
+    # 128 men's draw plays a round of 64 before that, which is scored like a
+    # losers' round — by the stage reached — so it neither qualifies a player
+    # nor earns per-win points.
+    qualified? = Enum.any?(played, fn {round, _f} -> last_stage_round?(round) end)
 
     se_wins =
       Enum.count(decided, fn {round, fixture} ->
-        round.bracket_side == "knockout" and bracket_winner_id(fixture) == id
+        last_stage_round?(round) and bracket_winner_id(fixture) == id
       end)
 
     finish = finish_for(decided, id)
     exit_round = lost && elem(lost, 0).code
     # While a player is still in, their points are the ones the stage they have
     # reached already guarantees them — the brief's "SP Points so far". A
-    # player unbeaten in WB R3 cannot now finish below 33rd, so they show 9,
-    # not the bare 2 for turning up.
+    # player through to the round of 64 cannot now finish below 33rd, so they
+    # show 9, not the bare 2 for turning up.
     reached = exit_round || guaranteed_exit(played)
 
     %{
@@ -4249,7 +4568,9 @@ defmodule Cuevolution.Competitions do
     |> floor_round()
   end
 
-  defp floor_round(%Round{bracket_side: "knockout"}), do: nil
+  defp floor_round(%Round{bracket_side: "knockout"} = round),
+    do: if(last_stage_round?(round), do: nil, else: round.code)
+
   defp floor_round(%Round{bracket_side: "losers", code: code}), do: code
   defp floor_round(%Round{code: "W1"}), do: "L1"
 
@@ -4261,6 +4582,18 @@ defmodule Cuevolution.Competitions do
   end
 
   defp floor_round(%Round{}), do: nil
+
+  # The last 32 and every round after it. "R64" (and any larger opening
+  # single-elimination round) comes before the last 32 and is not one.
+  defp last_stage_round?(%Round{bracket_side: "knockout", code: "R" <> n}) do
+    case Integer.parse(n) do
+      {size, ""} -> size <= SpPoints.last_stage_size()
+      _other -> true
+    end
+  end
+
+  defp last_stage_round?(%Round{bracket_side: "knockout"}), do: true
+  defp last_stage_round?(%Round{}), do: false
 
   defp status_for(nil, decided, id) do
     if Enum.any?(decided, fn {_round, f} -> bracket_winner_id(f) != id end),

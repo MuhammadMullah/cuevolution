@@ -31,12 +31,13 @@ defmodule Cuevolution.Competitions.CircuitBracketTest do
       stage = circuit()
       players = entrants(16, "male")
 
-      assert {:ok, %{bracket: bracket, rounds: 9, fixtures: 29}} =
+      # W1, W2, L1, L2, then QF-SF-F: the agreed two-winners'-round shape.
+      assert {:ok, %{bracket: bracket, rounds: 7, fixtures: 27}} =
                Competitions.generate_circuit_bracket(stage.id, "male", players)
 
       rounds = Repo.all(from r in Round, where: r.knockout_bracket_id == ^bracket.id)
 
-      assert Enum.map(rounds, & &1.sequence) |> Enum.sort() == Enum.to_list(1..9)
+      assert Enum.map(rounds, & &1.sequence) |> Enum.sort() == Enum.to_list(1..7)
 
       assert Enum.map(rounds, & &1.bracket_side) |> Enum.uniq() |> Enum.sort() ==
                ["knockout", "losers", "winners"]
@@ -89,11 +90,12 @@ defmodule Cuevolution.Competitions.CircuitBracketTest do
 
       # The crossover is mirrored and the knockout offset by half a round.
       assert by_match["SP26-NAT-MS-W2-4"].loser_to_fixture_id == by_match["SP26-NAT-MS-L2-1"].id
-      # Depth 3: the winners' side runs to W3, which feeds the single
-      # elimination, and the losers' side runs to L4.
-      assert by_match["SP26-NAT-MS-W2-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-W3-1"].id
-      assert by_match["SP26-NAT-MS-W3-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-SF-1"].id
-      assert by_match["SP26-NAT-MS-L4-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-SF-2"].id
+      # Two winners' rounds: W2 and L2 both feed the single elimination, the
+      # losers' side rotated by half a round.
+      assert by_match["SP26-NAT-MS-W2-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-QF-1"].id
+      assert by_match["SP26-NAT-MS-L2-1"].winner_to_fixture_id == by_match["SP26-NAT-MS-QF-3"].id
+      assert by_match["SP26-NAT-MS-L2-1"].winner_to_side == "b"
+      refute Map.has_key?(by_match, "SP26-NAT-MS-W3-1")
 
       # Losing on the losers' side ends the run.
       assert by_match["SP26-NAT-MS-L1-1"].loser_to_fixture_id == nil

@@ -12,14 +12,18 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
 
   # Plays an entire bracket through, always giving the win to whoever sits in
   # slot A, so the finishing order is deterministic.
-  defp play_out(bracket, admin) do
+  defp play_out(bracket, admin, opts \\ []) do
+    stop = Keyword.get(opts, :stop_before)
+
     rounds =
       Repo.all(
         from r in Round,
           where: r.knockout_bracket_id == ^bracket.id,
           order_by: [asc: r.sequence],
-          select: r.id
+          select: {r.id, r.code}
       )
+      |> Enum.take_while(fn {_id, code} -> code != stop end)
+      |> Enum.map(&elem(&1, 0))
 
     for round_id <- rounds do
       fixtures =
@@ -38,9 +42,9 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
     end
   end
 
-  # A 16 draw still produces every band — champion, runner-up, semis, and all
-  # four losers' rounds — at half the matches of a 32.
-  defp standings(count \\ 16) do
+  # A 16 draw still produces every band — champion, runner-up, semis, and both
+  # losers' rounds — at half the matches of a 32.
+  defp standings(count \\ 16, opts \\ []) do
     stage = circuit()
     admin = insert(:admin, role: "super_admin")
 
@@ -50,7 +54,7 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
     {:ok, %{bracket: bracket}} =
       Competitions.generate_circuit_bracket(stage.id, "male", players)
 
-    play_out(bracket, admin)
+    play_out(bracket, admin, opts)
     {Competitions.sp_points_standings(bracket.id), players}
   end
 
@@ -76,25 +80,25 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
       assert champion.position == {1, 1}
       assert champion.exit_round == nil
 
-      # A 32 draw qualifies 8, so its single elimination is QF-SF-F: three wins
-      # rather than the five a 128 draw takes. The 46 in the brief is the 128
-      # figure, which `SpPointsTest` checks against `totals_by_finish/2`.
+      # A 32 draw qualifies 16, so its single elimination is R16-QF-SF-F: four
+      # wins rather than the five a 128 draw takes. The 46 in the brief is the
+      # 128 figure, checked in the 128 test below.
       assert champion.points ==
-               SpPoints.circuit_points(%{qualified?: true, se_wins: 3, finish: :champion})
+               SpPoints.circuit_points(%{qualified?: true, se_wins: 4, finish: :champion})
 
-      assert champion.points == 40
+      assert champion.points == 43
     end
 
     test "the runner-up and semi-finalists get their bonuses, quarter-finalists do not" do
-      # 32 so there is a quarter-final round at all: a 16 draw qualifies 4, and
-      # its first single-elimination round is the semi.
+      # 32 so there is a quarter-final round at all: a 16 draw qualifies 8, and
+      # its first single-elimination round is the quarter.
       {table, _players} = standings(32)
 
       runner_up = Enum.find(table, &(&1.finish == :runner_up))
       semis = Enum.filter(table, &(&1.finish == :semi_finalist))
 
       assert runner_up.points ==
-               SpPoints.circuit_points(%{qualified?: true, se_wins: 2, finish: :runner_up})
+               SpPoints.circuit_points(%{qualified?: true, se_wins: 3, finish: :runner_up})
 
       assert runner_up.position == {2, 2}
 
@@ -106,16 +110,21 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
                &(&1.points ==
                    SpPoints.circuit_points(%{
                      qualified?: true,
-                     se_wins: 1,
+                     se_wins: 2,
                      finish: :semi_finalist
                    }))
              )
 
-      # The quarter-final is this draw's first single-elimination round, so
-      # losing it is the bare 11 for qualifying — no bonus, no wins.
+      # The last 16 is this draw's first single-elimination round, so losing it
+      # is the bare 11 for qualifying; a quarter-finalist has one win on top —
+      # and neither gets a bonus.
+      last_16 = Enum.filter(table, &(&1.exit_round == "R16"))
+      assert last_16 != []
+      assert Enum.all?(last_16, &(&1.points == 11 and &1.finish == :none))
+
       quarters = Enum.filter(table, &(&1.exit_round == "QF"))
       assert quarters != []
-      assert Enum.all?(quarters, &(&1.points == 11 and &1.finish == :none))
+      assert Enum.all?(quarters, &(&1.points == 14 and &1.finish == :none))
     end
 
     test "players out at the same stage share a position and share their points" do
@@ -132,9 +141,8 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
     test "the double-elimination exits score by stage, not by wins" do
       {table, _players} = standings()
 
-      # A 32 draw runs the full depth-3 format, so every losers' round is a
-      # band of its own.
-      for {code, points} <- [{"L1", 2}, {"L2", 5}, {"L3", 7}, {"L4", 9}] do
+      # Every losers' round is a band of its own.
+      for {code, points} <- [{"L1", 2}, {"L2", 5}] do
         band = Enum.filter(table, &(&1.exit_round == code))
 
         assert band != [], "nobody went out in #{code}"
@@ -247,6 +255,43 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
       assert entry.won >= 1
       # ...but contributes no racks either way.
       assert entry.racks_played == rack_total_excluding_byes(table, entry)
+    end
+  end
+
+  describe "a full 128 men's circuit" do
+    @describetag timeout: 300_000
+
+    test "the round of 64 is a stage worth 9, and the champion still scores 46" do
+      {table, _players} = standings(128)
+
+      bands =
+        table
+        |> Enum.group_by(&{&1.exit_round, &1.position})
+        |> Map.new(fn {key, rows} ->
+          {key, {length(rows), Enum.uniq(Enum.map(rows, & &1.points))}}
+        end)
+
+      assert bands[{"L1", {97, 128}}] == {32, [2]}
+      assert bands[{"L2", {65, 96}}] == {32, [5]}
+      # Out in the round of 64, whichever side they came from: 33rd= on 9,
+      # and the R64 match itself earns no per-win points.
+      assert bands[{"R64", {33, 64}}] == {32, [9]}
+      assert bands[{"R32", {17, 32}}] == {16, [11]}
+
+      champion = hd(table)
+      assert champion.finish == :champion
+      assert champion.points == 46
+    end
+
+    test "a player through to the round of 64 already shows the 9 it guarantees" do
+      {table, _players} = standings(128, stop_before: "R64")
+
+      unbeaten = Enum.filter(table, &(&1.status == :winners_side))
+      survivors = Enum.filter(table, &(&1.status == :losers_side))
+
+      assert length(unbeaten) == 32
+      assert length(survivors) == 32
+      assert Enum.all?(unbeaten ++ survivors, &(&1.points == 9))
     end
   end
 

@@ -297,6 +297,37 @@ defmodule Cuevolution.Release do
   end
 
   @doc """
+  One-off: converts the `category` Circuit bracket to the agreed format in
+  place — see `Cuevolution.Competitions.reshape_circuit_bracket/2`. Every
+  result, live score and start time in WB R1-R2 and LB R1-R2 is kept; the
+  unplayed rounds after them are replaced with the round of 64 onwards, and
+  WB R2 winners already decided are moved into it.
+
+  Refuses (and changes nothing) if any match it would remove has been
+  started. Preview first — the dry run makes every change and rolls it back:
+
+      bin/cuevolution eval 'Cuevolution.Release.reshape_circuit_bracket("male", dry_run: true)'
+      bin/cuevolution eval 'Cuevolution.Release.reshape_circuit_bracket("male")'
+  """
+  def reshape_circuit_bracket(category \\ "male", opts \\ []) do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(@app)
+
+    stage = Cuevolution.Competitions.circuit_stage()
+
+    case Cuevolution.Competitions.get_knockout_bracket(stage.id, category) do
+      nil ->
+        IO.puts("No #{category} Circuit bracket to reshape.")
+        {:error, :no_bracket}
+
+      bracket ->
+        result = Cuevolution.Competitions.reshape_circuit_bracket(bracket.id, opts)
+        IO.puts("reshape_circuit_bracket: " <> inspect(result, limit: :infinity, pretty: true))
+        result
+    end
+  end
+
+  @doc """
   One-off: congratulates every player now sitting at Circuit on advancing
   there, over each player's own preferred channel(s) — email, SMS, or both.
   See `Cuevolution.Competitions.notify_circuit_advancement/1` for who is

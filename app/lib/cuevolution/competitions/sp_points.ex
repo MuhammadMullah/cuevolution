@@ -25,10 +25,16 @@ defmodule Cuevolution.Competitions.SpPoints do
       Quarter-finalist  5-8     17
       Last 16           9-16    14
       Last 32          17-32    11
-      Out in LB R4     33-48     9
-      Out in LB R3     49-64     7
+      Last 64          33-64     9
       Out in LB R2     65-96     5
       Out in LB R1    97-128     2
+
+  The brief's own example table was drawn for a deeper bracket (LB R3 and
+  LB R4, 49-64 = 7 and 33-48 = 9). The Circuit format has a round of 64 in
+  their place instead, and its losers take the 9 the brief gives the stage
+  just short of the last 32 (confirmed Nov 7 2026). The round of 64 is still
+  "the stage you went out at": the 3-a-win regime starts at the last 32, so
+  the champion's 46 is unchanged.
 
   Every number above is derived by `totals_by_finish/1` from the rules rather
   than typed in, so the published table and the engine cannot disagree.
@@ -40,16 +46,24 @@ defmodule Cuevolution.Competitions.SpPoints do
   is merged over `defaults/0`.
   """
 
+  # The 3-a-win regime and the finish bonuses start at the last 32, whatever
+  # size the single elimination starts at.
+  @last_stage_size 32
+
+  @doc "The size of the round from which per-win points apply: the last 32."
+  def last_stage_size, do: @last_stage_size
+
   @defaults %{
     # Awarded on check-in and playing (or receiving) a first match. A player
     # who does not turn up gets nothing.
     show_up: 2,
     # Single-elimination phase only.
     per_win: 3,
-    # What reaching each stage of the double-elimination phase is worth, on top
-    # of showing up. Keyed by the losers'-round code a player goes out in;
-    # `:qualified` is reaching the single elimination.
-    stage_awards: %{"L1" => 0, "L2" => 3, "L3" => 5, "L4" => 7, qualified: 9},
+    # What reaching each stage before the last 32 is worth, on top of showing
+    # up. Keyed by the round code a player goes out in — the losers' rounds,
+    # and the round of 64 that the 128 men's draw plays before the last 32;
+    # `:qualified` is reaching the last 32.
+    stage_awards: %{"L1" => 0, "L2" => 3, "R64" => 7, qualified: 9},
     # One bonus only, for the final finish — they do not stack.
     bonuses: %{champion: 20, runner_up: 10, semi_finalist: 5},
     all_circuits_bonus: 5,
@@ -81,7 +95,7 @@ defmodule Cuevolution.Competitions.SpPoints do
     * `:showed_up?` — false for a no-show, who scores nothing at all.
     * `:exit_round` — the round code they were knocked out in, or `nil` for the
       champion.
-    * `:qualified?` — true once they reach the single elimination.
+    * `:qualified?` — true once they reach the last 32.
     * `:se_wins` — matches won from the last 32 onwards, byes and walkovers
       included.
     * `:finish` — `:champion`, `:runner_up`, `:semi_finalist` or `:none`.
@@ -155,10 +169,29 @@ defmodule Cuevolution.Competitions.SpPoints do
   semi-finalists, `{97, 128}` for everyone out in LB R1 — since players who go
   out at the same stage share a position.
   """
-  def totals_by_finish(bracket_size \\ 128, depth \\ 3) do
+  def totals_by_finish(bracket_size \\ 128, depth \\ 2) do
     se = div(bracket_size, Integer.pow(2, depth - 1))
+    qualifying = min(se, @last_stage_size)
 
-    single_elimination_bands(se) ++ losers_bands(bracket_size, depth, se)
+    single_elimination_bands(qualifying) ++
+      pre_qualifying_bands(se, qualifying) ++ losers_bands(bracket_size, depth, se)
+  end
+
+  # Single-elimination rounds played before the last 32 — the round of 64 in a
+  # 128 men's draw — are scored like the losers' rounds: by the stage reached.
+  defp pre_qualifying_bands(se, qualifying) when se <= qualifying, do: []
+
+  defp pre_qualifying_bands(se, qualifying) do
+    se
+    |> Stream.iterate(&div(&1, 2))
+    |> Enum.take_while(&(&1 > qualifying))
+    |> Enum.reverse()
+    |> Enum.map_reduce(qualifying + 1, fn players, from ->
+      losers = div(players, 2)
+      points = circuit_points(%{exit_round: "R#{players}"})
+      {{"Last #{players}", {from, from + losers - 1}, points}, from + losers}
+    end)
+    |> elem(0)
   end
 
   # Walking back from the final: the champion, the runner-up, then each earlier
@@ -192,8 +225,8 @@ defmodule Cuevolution.Competitions.SpPoints do
   defp qualified(se_wins, finish),
     do: %{qualified?: true, se_wins: max(se_wins, 0), finish: finish}
 
-  # Then the losers' rounds, last first: LB R4's losers are 33-48, LB R1's are
-  # the bottom of the draw.
+  # Then the losers' rounds, last first: in a 128 draw LB R2's losers are
+  # 65-96, LB R1's the bottom of the draw.
   defp losers_bands(bracket_size, depth, se) do
     last = 2 * depth - 2
 

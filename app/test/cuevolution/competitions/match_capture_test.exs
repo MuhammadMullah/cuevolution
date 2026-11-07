@@ -86,8 +86,8 @@ defmodule Cuevolution.Competitions.MatchCaptureTest do
       assert Enum.all?(rounds, &(&1.bracket_side in ~w(winners losers knockout)))
 
       codes = Enum.map(rounds, & &1.code)
-      assert "W3" in codes
-      assert "L4" in codes
+      assert "W2" in codes
+      assert "L2" in codes
       assert List.last(codes) == "F"
     end
   end

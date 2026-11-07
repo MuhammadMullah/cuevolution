@@ -75,13 +75,13 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       {:ok, _view, html} = live(conn, ~p"/matches")
 
       assert html =~ "Winners Round 1"
-      assert html =~ "Winners Round 3"
-      assert html =~ "Losers Round 4"
+      assert html =~ "Winners Round 2"
+      assert html =~ "Losers Round 2"
       assert html =~ "Final"
 
-      # A 16 draw is 29 matches, all of them listed.
-      assert html =~ "All 29"
-      assert html =~ "29 matches"
+      # A 16 draw is 27 matches, all of them listed.
+      assert html =~ "All 27"
+      assert html =~ "27 matches"
     end
 
     test "matches are numbered across the whole draw", %{conn: conn} do
@@ -90,7 +90,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       {:ok, _view, html} = live(conn, ~p"/matches")
 
       assert html =~ ">M1<"
-      assert html =~ ">M29<"
+      assert html =~ ">M27<"
     end
 
     test "each card links to that match's own page", %{conn: conn} do
@@ -270,7 +270,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       assert html =~ "Knockout"
 
       # Every round of the draw, winners' side through to the final.
-      for round <- ["Winners Round 1", "Winners Round 3", "Losers Round 4", "Final"] do
+      for round <- ["Winners Round 1", "Winners Round 2", "Losers Round 2", "Final"] do
         assert html =~ round, "#{round} is missing from the chart"
       end
     end

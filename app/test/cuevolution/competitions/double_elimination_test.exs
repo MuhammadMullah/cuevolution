@@ -40,24 +40,23 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
   end
 
   describe "round structure" do
-    test "a 128 men's field is the brief's bracket exactly" do
+    test "a 128 men's field is the agreed Circuit format exactly" do
       %{rounds: rounds, depth: depth, qualifiers: qualifiers, fixtures: fixtures} =
         DE.build(Enum.to_list(1..128), category: "male")
 
-      assert depth == 3
-      assert qualifiers == 32
+      assert depth == 2
+      assert qualifiers == 64
 
       counts = Map.new(rounds, &{&1.code, &1.matches})
 
-      # Double elimination to the last 32: WB R1-R3 and LB R1-R4.
+      # WB R1-R2 and LB R1-R2, then the 32 unbeaten meet the 32 losers'-side
+      # survivors in a round of 64, and single elimination from there.
       assert counts == %{
                "W1" => 64,
                "W2" => 32,
-               "W3" => 16,
                "L1" => 32,
                "L2" => 32,
-               "L3" => 16,
-               "L4" => 16,
+               "R64" => 32,
                "R32" => 16,
                "R16" => 8,
                "QF" => 4,
@@ -65,22 +64,22 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
                "F" => 1
              }
 
-      assert length(fixtures) == 239
+      assert length(fixtures) == 223
     end
 
-    test "the losers' rounds eliminate exactly the brief's position bands" do
+    test "the losers' rounds and the round of 64 eliminate whole position bands" do
       %{rounds: rounds} = DE.build(Enum.to_list(1..128), category: "male")
       counts = Map.new(rounds, &{&1.code, &1.matches})
 
-      # Everyone beaten in a losers' round is out, so its match count is the
-      # size of that position band: 97-128, 65-96, 49-64, 33-48.
+      # Everyone beaten in a losers' round is out: 97-128 in LB R1, 65-96 in
+      # LB R2. The round of 64 is single elimination, so its 32 losers share
+      # 33-64.
       assert counts["L1"] == 32
       assert counts["L2"] == 32
-      assert counts["L3"] == 16
-      assert counts["L4"] == 16
+      assert counts["R64"] == 32
 
-      # 96 out in the double elimination, 32 through to the single.
-      assert counts["L1"] + counts["L2"] + counts["L3"] + counts["L4"] == 96
+      # 64 out in the double elimination, 64 into the single.
+      assert counts["L1"] + counts["L2"] == 64
     end
 
     test "the men race to 6, except the losers' side at 5 and the final at 7" do
@@ -89,14 +88,14 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
 
       # Round of 128 down to the semifinals, on the winners' side and in the
       # single elimination that follows it.
-      for code <- ~w(W1 W2 W3 R32 R16 QF SF), do: assert(races[code] == 6)
+      for code <- ~w(W1 W2 R64 R32 R16 QF SF), do: assert(races[code] == 6)
 
       # Both exceptions: every losers' round is shorter, the final longer.
-      for code <- ~w(L1 L2 L3 L4), do: assert(races[code] == 5)
+      for code <- ~w(L1 L2), do: assert(races[code] == 5)
       assert races["F"] == 7
     end
 
-    test "the ladies' bracket is unchanged, pending the format decision" do
+    test "the ladies' bracket is the same shape, one size down" do
       %{rounds: rounds, depth: depth} = DE.build(Enum.to_list(1..64), category: "female")
 
       assert depth == 2
@@ -107,6 +106,7 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
       assert counts["L1"] == 16
       assert counts["L2"] == 16
       assert counts["R32"] == 16
+      refute Map.has_key?(counts, "R64")
 
       races = Map.new(rounds, &{&1.code, &1.race_to})
       assert races["W1"] == 4
@@ -114,12 +114,15 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
       assert races["F"] == 5
     end
 
-    test "a small field runs the deepest double elimination it has room for" do
-      # A demo draw cannot play three winners' rounds and still have a final,
-      # so it drops to two rather than refusing.
+    test "every field size runs two winners' rounds unless told otherwise" do
       assert DE.build(Enum.to_list(1..8), category: "male").depth == 2
-      assert DE.build(Enum.to_list(1..16), category: "male").depth == 3
-      assert DE.build(Enum.to_list(1..128), category: "male").depth == 3
+      assert DE.build(Enum.to_list(1..16), category: "male").depth == 2
+      assert DE.build(Enum.to_list(1..128), category: "male").depth == 2
+
+      # The engine still supports a deeper bracket on request, capped at what
+      # the field has room for while keeping a final.
+      assert DE.build(Enum.to_list(1..128), category: "male", depth: 3).depth == 3
+      assert DE.build(Enum.to_list(1..8), category: "male", depth: 3).depth == 2
     end
 
     test "races can be overridden per draw without editing the module" do
@@ -146,32 +149,40 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
     end
 
     test "every crossover is mirrored, winners'-side dropper in slot A", %{plan: plan} do
-      # W2 droppers enter L2 from the far end; W3 droppers enter L4 the same way.
+      # W2 droppers enter L2 from the far end.
       assert find(plan, "W2-1").loser_to == {"L2-32", :a}
       assert find(plan, "W2-32").loser_to == {"L2-1", :a}
-      assert find(plan, "W3-1").loser_to == {"L4-16", :a}
-      assert find(plan, "W3-16").loser_to == {"L4-1", :a}
 
       # And the losers'-side survivors take slot B at the same index.
       assert find(plan, "L1-1").winner_to == {"L2-1", :b}
-      assert find(plan, "L3-1").winner_to == {"L4-1", :b}
+
+      # A deeper bracket mirrors its later crossovers the same way.
+      deep = DE.build(Enum.to_list(1..128), category: "male", depth: 3)
+      assert find(deep, "W3-1").loser_to == {"L4-16", :a}
+      assert find(deep, "W3-16").loser_to == {"L4-1", :a}
+      assert find(deep, "L3-1").winner_to == {"L4-1", :b}
     end
 
-    test "odd losers' rounds pair up, even ones feed the next pairing", %{plan: plan} do
+    test "odd losers' rounds pair up, even ones feed the next pairing" do
+      deep = DE.build(Enum.to_list(1..128), category: "male", depth: 3)
+
       # L2 winners pair into L3 two-to-one.
-      assert find(plan, "L2-1").winner_to == {"L3-1", :a}
-      assert find(plan, "L2-2").winner_to == {"L3-1", :b}
+      assert find(deep, "L2-1").winner_to == {"L3-1", :a}
+      assert find(deep, "L2-2").winner_to == {"L3-1", :b}
     end
 
-    test "the last 32 is offset by half a round", %{plan: plan} do
-      # W3 winners take slot A straight across; L4 winners are rotated into
-      # slot B so nobody replays the match that put them there.
-      assert find(plan, "W3-1").winner_to == {"R32-1", :a}
-      assert find(plan, "L4-1").winner_to == {"R32-9", :b}
-      assert find(plan, "L4-9").winner_to == {"R32-1", :b}
+    test "the round of 64 is offset by half a round", %{plan: plan} do
+      # The 32 unbeaten take slot A straight across; the LB R2 survivors are
+      # rotated into slot B so nobody replays the match that put them there.
+      assert find(plan, "W2-1").winner_to == {"R64-1", :a}
+      assert find(plan, "W2-32").winner_to == {"R64-32", :a}
+      assert find(plan, "L2-1").winner_to == {"R64-17", :b}
+      assert find(plan, "L2-17").winner_to == {"R64-1", :b}
     end
 
     test "single-elimination rounds merge in pairs down to the final", %{plan: plan} do
+      assert find(plan, "R64-1").winner_to == {"R32-1", :a}
+      assert find(plan, "R64-2").winner_to == {"R32-1", :b}
       assert find(plan, "R32-1").winner_to == {"R16-1", :a}
       assert find(plan, "R32-2").winner_to == {"R16-1", :b}
       assert find(plan, "QF-1").winner_to == {"SF-1", :a}
@@ -180,7 +191,7 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
     end
 
     test "a losers'-round defeat ends the run", %{plan: plan} do
-      for code <- ~w(L1 L2 L3 L4), fixture <- round_fixtures(plan, code) do
+      for code <- ~w(L1 L2), fixture <- round_fixtures(plan, code) do
         assert fixture.loser_to == nil,
                "#{fixture.code} should eliminate its loser"
       end
@@ -205,10 +216,10 @@ defmodule Cuevolution.Competitions.DoubleEliminationTest do
       end
     end
 
-    test "nobody meets a player they already knocked out, in the last 32", %{plan: plan} do
-      {slots, met} = play_through(plan, stop_before: "R32")
+    test "nobody meets a player they already played, in the round of 64", %{plan: plan} do
+      {slots, met} = play_through(plan, stop_before: "R64")
 
-      for f <- round_fixtures(plan, "R32") do
+      for f <- round_fixtures(plan, "R64") do
         a = Map.fetch!(slots, {f.code, :a})
         b = Map.fetch!(slots, {f.code, :b})
 
