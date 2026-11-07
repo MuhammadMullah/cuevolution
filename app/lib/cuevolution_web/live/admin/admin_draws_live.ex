@@ -447,7 +447,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
     %{
       id: player.id,
       kind: "player",
-      name: "#{player.first_name} #{player.last_name}",
+      name: Names.player_name(player),
       sub: "@#{player.username}"
     }
   end
@@ -456,7 +456,7 @@ defmodule CuevolutionWeb.AdminDrawsLive do
     %{
       id: team.id,
       kind: "team",
-      name: team.name,
+      name: Names.title_case(team.name),
       sub: "#{team.region.name} · #{length(team.roster)} on roster"
     }
   end

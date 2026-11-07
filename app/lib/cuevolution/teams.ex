@@ -12,6 +12,7 @@ defmodule Cuevolution.Teams do
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.StageParticipation
+  alias Cuevolution.Names
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.SearchTerm
@@ -437,10 +438,10 @@ defmodule Cuevolution.Teams do
   # `Accounts.register_player/1`'s registration-confirmation dispatch.
   defp dispatch_team_assignment(player, team) do
     team = Repo.preload(team, :captain)
-    captain_name = "#{team.captain.first_name} #{team.captain.last_name}"
+    captain_name = Names.player_name(team.captain)
 
     Notifications.dispatch(player, :team_assignment, %{
-      team_name: team.name,
+      team_name: Names.title_case(team.name),
       captain_name: captain_name
     })
   rescue
@@ -503,8 +504,8 @@ defmodule Cuevolution.Teams do
     captain = Repo.get!(Player, team.captain_id)
 
     Notifications.dispatch(captain, :team_player_left, %{
-      team_name: team.name,
-      player_name: "#{player.first_name} #{player.last_name}",
+      team_name: Names.title_case(team.name),
+      player_name: Names.player_name(player),
       roster_count: roster_count,
       eligible: eligible
     })
@@ -683,10 +684,10 @@ defmodule Cuevolution.Teams do
 
   defp dispatch_team_invitation(invitee, team) do
     team = Repo.preload(team, :captain)
-    captain_name = "#{team.captain.first_name} #{team.captain.last_name}"
+    captain_name = Names.player_name(team.captain)
 
     Notifications.dispatch(invitee, :team_invitation, %{
-      team_name: team.name,
+      team_name: Names.title_case(team.name),
       captain_name: captain_name
     })
   rescue

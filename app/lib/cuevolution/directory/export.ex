@@ -6,6 +6,7 @@ defmodule Cuevolution.Directory.Export do
   semicolon-joined roster in that same player format.
   """
 
+  alias Cuevolution.Names
   alias NimbleCSV.RFC4180, as: CSV
 
   @doc "`{headers, rows}` for the given players/teams — shared by `to_csv/1` and `to_xlsx/1`."
@@ -42,13 +43,13 @@ defmodule Cuevolution.Directory.Export do
     IO.iodata_to_binary(content)
   end
 
-  defp player_label(player), do: "#{player.first_name} #{player.last_name}(@#{player.username})"
+  defp player_label(player), do: "#{Names.player_name(player)}(@#{player.username})"
 
   defp player_row(player), do: ["Player", player_label(player), ""]
 
-  defp team_row(team), do: [team.name, roster_label(team.roster)]
+  defp team_row(team), do: [Names.title_case(team.name), roster_label(team.roster)]
 
-  defp team_mixed_row(team), do: ["Team", team.name, roster_label(team.roster)]
+  defp team_mixed_row(team), do: ["Team", Names.title_case(team.name), roster_label(team.roster)]
 
   defp roster_label(roster) do
     roster |> Enum.map(&player_label/1) |> Enum.sort() |> Enum.join("; ")

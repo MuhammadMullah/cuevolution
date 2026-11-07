@@ -41,7 +41,7 @@
       <% else %>
         <div class="flex items-center gap-2">
           <h1 class="mb-0.5 text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">
-            {@team.name}
+            {Names.title_case(@team.name)}
           </h1>
           <button
             :if={@is_captain}

@@ -250,6 +250,87 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
     end
   end
 
+  describe "ordering before anything has been played" do
+    # A draw of 8 has no byes, so every row really is 0 points with no
+    # rack-win %. Without a name tie-break the order is then whatever the
+    # database happened to return. (A bye awards points straight away, so a
+    # non-power-of-two draw legitimately has ranked players from the start.)
+    test "the table is alphabetical by name" do
+      stage = circuit()
+
+      for last <- ~w(Zulu Abara Mwangi Otieno Kamau Barasa Wafula Chebet) do
+        player = insert(:player, first_name: "Test", last_name: last)
+        insert(:stage_participation, stage_id: stage.id, category: "male", player_id: player.id)
+      end
+
+      participations =
+        Repo.all(
+          from p in Cuevolution.Competitions.StageParticipation,
+            where: p.stage_id == ^stage.id and p.category == "male"
+        )
+
+      {:ok, %{bracket: bracket}} =
+        Competitions.generate_circuit_bracket(stage.id, "male", participations)
+
+      names = Competitions.sp_points_standings(bracket.id) |> Enum.map(& &1.name)
+
+      assert names == Enum.sort_by(names, &String.downcase/1)
+
+      assert names == [
+               "Test Abara",
+               "Test Barasa",
+               "Test Chebet",
+               "Test Kamau",
+               "Test Mwangi",
+               "Test Otieno",
+               "Test Wafula",
+               "Test Zulu"
+             ]
+    end
+
+    test "casing as typed does not disturb the alphabetical order" do
+      stage = circuit()
+
+      entrants = [
+        {"test", "zulu"},
+        {"TEST", "ABARA"},
+        {"tEsT", "mwangi"},
+        {"TeSt", "OTIENO"},
+        {"test", "KAMAU"},
+        {"TEST", "barasa"},
+        {"tesT", "WaFuLa"},
+        {"TEst", "chebet"}
+      ]
+
+      for {first, last} <- entrants do
+        player = insert(:player, first_name: first, last_name: last)
+        insert(:stage_participation, stage_id: stage.id, category: "male", player_id: player.id)
+      end
+
+      participations =
+        Repo.all(
+          from p in Cuevolution.Competitions.StageParticipation,
+            where: p.stage_id == ^stage.id and p.category == "male"
+        )
+
+      {:ok, %{bracket: bracket}} =
+        Competitions.generate_circuit_bracket(stage.id, "male", participations)
+
+      names = Competitions.sp_points_standings(bracket.id) |> Enum.map(& &1.name)
+
+      assert names == [
+               "Test Abara",
+               "Test Barasa",
+               "Test Chebet",
+               "Test Kamau",
+               "Test Mwangi",
+               "Test Otieno",
+               "Test Wafula",
+               "Test Zulu"
+             ]
+    end
+  end
+
   # The racks a player's contested matches account for — a bye adds nothing, so
   # this is just their own figure, asserted to be consistent rather than zero.
   defp rack_total_excluding_byes(_table, entry), do: entry.racks_played

@@ -2,6 +2,7 @@ defmodule CuevolutionWeb.FixturePdf do
   @moduledoc false
 
   alias Cuevolution.Competitions
+  alias Cuevolution.Names
 
   @page_width 612
   @page_height 792
@@ -127,9 +128,9 @@ defmodule CuevolutionWeb.FixturePdf do
   end
 
   defp participant_label(%{player: %{first_name: first_name, last_name: last_name}}),
-    do: shorten("#{first_name} #{last_name}", 23)
+    do: shorten(Names.full_name(first_name, last_name), 23)
 
-  defp participant_label(%{team: %{name: name}}), do: shorten(name, 23)
+  defp participant_label(%{team: %{name: name}}), do: shorten(Names.title_case(name), 23)
   defp participant_label(participant), do: shorten(Competitions.participant_name(participant), 23)
 
   defp fixture_score(%{

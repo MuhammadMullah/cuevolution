@@ -96,7 +96,7 @@ defmodule CuevolutionWeb.TeamDetailLive do
              socket
              |> put_flash(
                :info,
-               "#{player.first_name} #{player.last_name} removed from the team."
+               "#{Names.player_name(player)} removed from the team."
              )
              |> reload_team()}
 
@@ -130,7 +130,7 @@ defmodule CuevolutionWeb.TeamDetailLive do
           {:ok, _team} ->
             {:noreply,
              socket
-             |> put_flash(:info, "#{player.first_name} #{player.last_name} is now the captain.")
+             |> put_flash(:info, "#{Names.player_name(player)} is now the captain.")
              |> reload_team()}
 
           {:error, :unauthorized} ->

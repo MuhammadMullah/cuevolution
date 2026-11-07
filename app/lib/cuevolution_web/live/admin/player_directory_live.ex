@@ -113,8 +113,8 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     %{
       id: player.id,
       kind: :player,
-      name: "#{player.first_name} #{player.last_name}",
-      avatar_name: "#{player.first_name} #{player.last_name}",
+      name: Names.player_name(player),
+      avatar_name: Names.player_name(player),
       avatar_src: ProfilePicture.url(player.profile_picture_path),
       sub: "Player · #{player.region.name} · @#{player.username}",
       stage: Map.get(stage_lookup, player.id),
@@ -127,8 +127,8 @@ defmodule CuevolutionWeb.PlayerDirectoryLive do
     %{
       id: team.id,
       kind: :team,
-      name: team.name,
-      avatar_name: team.name,
+      name: Names.title_case(team.name),
+      avatar_name: Names.title_case(team.name),
       avatar_src: nil,
       sub: "Team · #{team.region.name} · #{length(team.roster)} on roster",
       stage: Map.get(stage_lookup, team.id),

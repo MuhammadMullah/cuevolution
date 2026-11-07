@@ -173,7 +173,9 @@ defmodule CuevolutionWeb.PlayerDirectoryLiveTest do
     assert page_one =~ "Showing 50 of #{total} results"
     assert page_two =~ "Showing #{total - 50} of #{total} results"
 
-    for row <- Enum.map(players, & &1.username) ++ Enum.map(teams, & &1.name) do
+    team_labels = Enum.map(teams, &Cuevolution.Names.title_case(&1.name))
+
+    for row <- Enum.map(players, & &1.username) ++ team_labels do
       assert page_one =~ row != (page_two =~ row),
              "expected #{row} on exactly one of the two pages"
     end

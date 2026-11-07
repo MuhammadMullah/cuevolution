@@ -3216,4 +3216,33 @@ defmodule Cuevolution.CompetitionsTest do
       refute_enqueued(worker: Cuevolution.Notifications.Workers.SendSmsWorker)
     end
   end
+
+  describe "participant_name/1" do
+    # Names are stored as typed and title-cased on the way out, so every
+    # surface shows the same casing no matter how the player registered.
+    test "title-cases a player name however it was typed" do
+      for {first, last} <- [{"john", "otieno"}, {"JOHN", "OTIENO"}, {"jOhN", "oTiEnO"}] do
+        player = insert(:player, first_name: first, last_name: last)
+        participation = insert(:stage_participation, player_id: player.id)
+
+        assert Competitions.participant_name(participation) == "John Otieno"
+      end
+    end
+
+    test "title-cases a team name" do
+      team = insert(:team, name: "kpb WARRIORS")
+
+      participation =
+        insert(:stage_participation, player_id: nil, team_id: team.id, category: "team")
+
+      assert Competitions.participant_name(participation) == "Kpb Warriors"
+    end
+
+    test "leaves Kenyan apostrophe names readable" do
+      player = insert(:player, first_name: "peter", last_name: "NG'ANG'A")
+      participation = insert(:stage_participation, player_id: player.id)
+
+      assert Competitions.participant_name(participation) == "Peter Ng'ang'a"
+    end
+  end
 end

@@ -6,7 +6,7 @@
           SportPesa National Pool Circuit
         </p>
         <h1 class="text-xl font-bold tracking-tight text-ink-950">
-          {if @player, do: "#{@player.first_name} #{@player.last_name}", else: "Player"}
+          {if @player, do: Names.player_name(@player), else: "Player"}
         </h1>
         <p :if={@player} class="font-mono text-[12px] text-ink-500">@{@player.username}</p>
       </div>

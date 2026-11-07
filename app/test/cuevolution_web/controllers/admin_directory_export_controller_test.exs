@@ -115,7 +115,12 @@ defmodule CuevolutionWeb.AdminDirectoryExportControllerTest do
       |> get(~p"/admin/directory/export.csv?kind=team")
 
     body = response(conn, 200)
-    assert body =~ "'=SUM(A1:A9)"
+
+    # Team names are title-cased for display, so the payload lands lower-cased.
+    # What this test is about is the leading apostrophe that stops Excel and
+    # Sheets evaluating the cell as a formula.
+    assert body =~ "'=sum(a1:a9)"
+    refute body =~ ~r/(?<!')=sum\(a1:a9\)/
   end
 
   test "exports as a valid XLSX file", %{conn: conn} do

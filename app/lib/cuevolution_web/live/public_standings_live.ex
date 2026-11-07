@@ -113,7 +113,10 @@ defmodule CuevolutionWeb.PublicStandingsLive do
 
   @doc false
   def side_name(nil), do: "—"
-  def side_name(%{player: %{first_name: first, last_name: last}}), do: "#{first} #{last}"
+
+  def side_name(%{player: %{first_name: first, last_name: last}}),
+    do: Names.full_name(first, last)
+
   def side_name(%{team: %{name: name}}), do: name
   def side_name(_other), do: "—"
 

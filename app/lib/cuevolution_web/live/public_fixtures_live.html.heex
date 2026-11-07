@@ -44,7 +44,28 @@
     </div>
 
     <div :if={@total > 0} class="space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <div :if={@chartable?} class="flex gap-1 rounded-xl bg-ink-100 p-1">
+          <button
+            :for={{label, slug} <- [{"List", "list"}, {"Chart", "chart"}]}
+            type="button"
+            phx-click="switch"
+            phx-value-view={slug}
+            class={[
+              "rounded-lg px-3.5 py-1.5 text-[13px] font-semibold",
+              @view == slug && "bg-white text-ink-950 shadow-sm",
+              @view != slug && "text-ink-500 hover:text-ink-950"
+            ]}
+          >
+            {label}
+          </button>
+        </div>
+        <span class="ml-auto text-[12px] text-ink-400">
+          {@total} matches &middot; {@played} played &middot; {@live_now} live
+        </span>
+      </div>
+
+      <div :if={@view == "list"} class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-4 text-[12px] text-ink-500">
           <span class="inline-flex items-center gap-1.5">
             <span class="h-2 w-2 rounded-full bg-red-500"></span>In play
@@ -56,12 +77,9 @@
             <span class="h-2 w-2 rounded-full border border-dashed border-ink-400"></span>Waiting for players
           </span>
         </div>
-        <span class="text-[12px] text-ink-400">
-          {@total} matches &middot; {@played} played &middot; {@live_now} live
-        </span>
       </div>
 
-      <div class="flex flex-wrap gap-2">
+      <div :if={@view == "list"} class="flex flex-wrap gap-2">
         <button
           :for={
             {label, slug} <- [
@@ -85,13 +103,13 @@
       </div>
 
       <p
-        :if={@rounds == []}
+        :if={@view == "list" and @rounds == []}
         class="rounded-2xl border border-ink-200 bg-white px-5 py-8 text-center text-[13.5px] text-ink-400"
       >
         No matches in this filter.
       </p>
 
-      <div :for={round <- @rounds}>
+      <div :for={round <- @rounds} :if={@view == "list"}>
         <div class="mb-2 flex items-baseline justify-between gap-3">
           <h2 class="text-[13px] font-bold tracking-tight text-ink-950">{round.heading}</h2>
           <span class="text-[11px] text-ink-400">
@@ -161,6 +179,122 @@
             </span>
           </.link>
         </div>
+      </div>
+
+      <%!-- Chart: the bracket as a shape, so you can see where a match leads
+            rather than only what it is. --%>
+      <div :if={@view == "chart"} class="space-y-5">
+        <section
+          :for={lane <- @lanes}
+          class={[
+            "rounded-xl border p-4",
+            lane.side == "winners" && "border-green-100 bg-green-50/40",
+            lane.side == "losers" && "border-red-100 bg-red-50/40",
+            lane.side == "knockout" && "border-ink-200 bg-white"
+          ]}
+        >
+          <h2 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-500">
+            {lane.title}
+          </h2>
+
+          <div class="flex overflow-x-auto pb-1">
+            <div :for={{round, index} <- Enum.with_index(lane.rounds)} class="flex">
+              <div class="flex min-w-[210px] flex-col gap-2">
+                <div class="flex items-baseline justify-between gap-2">
+                  <span class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
+                    {round.name}
+                  </span>
+                  <span :if={round.race_to} class="text-[10px] text-ink-400">
+                    race to {round.race_to}
+                  </span>
+                </div>
+
+                <div class="flex flex-col justify-around" style={"height:#{lane.height}px"}>
+                  <.link
+                    :for={match <- round.matches}
+                    navigate={~p"/m/#{match.match_id}"}
+                    class={[
+                      "group relative block w-full rounded-lg bg-white text-left text-[13px] leading-[18px]",
+                      "transition hover:ring-2 hover:ring-ink-300",
+                      match.state == :waiting && "border border-dashed border-ink-300 opacity-70",
+                      match.state == :live && "border-2 border-red-500 shadow-sm",
+                      match.state == :final && "border border-green-300",
+                      match.state in [:walkover, :bye] && "border border-gold-500 bg-gold-100/40",
+                      match.state == :upcoming && "border border-ink-200"
+                    ]}
+                  >
+                    <span class="flex items-center justify-between gap-2 px-2.5 pt-1 text-[10px] text-ink-400">
+                      <span class="font-mono">{match.number}</span>
+                      <span
+                        :if={match.state == :live}
+                        class="rounded-full bg-red-500 px-1.5 py-px font-semibold text-white"
+                      >
+                        Live
+                      </span>
+                    </span>
+
+                    <%!-- Whoever dropped from the winners' side sits on top,
+                          shaded, so the two halves stay tellable apart. --%>
+                    <span class={[
+                      "flex items-center gap-2 px-2.5 py-0.5",
+                      round.shade_a? && "bg-green-50"
+                    ]}>
+                      <span class={[
+                        "flex-1 truncate",
+                        match.a_won && "font-bold text-ink-950",
+                        !match.a_won && match.state == :final && "text-ink-500"
+                      ]}>
+                        {match.a || "—"}
+                      </span>
+                      <span class="w-4 text-right font-bold tabular-nums">{match.a_score}</span>
+                    </span>
+
+                    <span class="block h-px bg-ink-200"></span>
+
+                    <span class="flex items-center gap-2 px-2.5 py-0.5">
+                      <span class={[
+                        "flex-1 truncate",
+                        match.b_won && "font-bold text-ink-950",
+                        !match.b_won && match.state == :final && "text-ink-500"
+                      ]}>
+                        {match.b || "—"}
+                      </span>
+                      <span class="w-4 text-right font-bold tabular-nums">{match.b_score}</span>
+                    </span>
+
+                    <span class="block border-t border-ink-100 px-2.5 py-1 text-[10px] text-ink-400">
+                      {match.loser_to || match.start || "—"}
+                    </span>
+                  </.link>
+                </div>
+              </div>
+
+              <%!-- The elbows that say which two cards feed the next one. --%>
+              <div
+                :if={index < length(lane.rounds) - 1}
+                aria-hidden="true"
+                class="flex w-11 flex-col gap-2"
+              >
+                <div class="h-[14px]"></div>
+                <div class="flex flex-col justify-around" style={"height:#{lane.height}px"}>
+                  <div
+                    :for={link <- Enum.at(lane.links, index, [])}
+                    class="flex items-center"
+                    style={"height:#{link.height}px"}
+                  >
+                    <div
+                      :if={link.merge?}
+                      class="w-5 self-stretch rounded-r-md border-2 border-l-0 border-ink-300"
+                    >
+                    </div>
+                    <div :if={link.merge?} class="w-5 border-t-2 border-ink-300"></div>
+                    <div :if={!link.merge?} class="w-11 border-t-2 border-ink-300"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </main>

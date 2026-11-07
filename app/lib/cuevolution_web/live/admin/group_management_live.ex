@@ -1820,15 +1820,17 @@ defmodule CuevolutionWeb.GroupManagementLive do
     Enum.map(rows, &Map.put(&1, :name, Map.get(names, &1.participant_id, "Unknown")))
   end
 
-  defp player_name(%{player: %{first_name: first, last_name: last}}), do: "#{first} #{last}"
+  defp player_name(%{player: %{first_name: first, last_name: last}}),
+    do: Names.full_name(first, last)
+
   defp player_name(_), do: "Team"
 
   ## View helpers
 
   # nil covers a bracket slot whose player is still to be decided.
   defp participant_name(nil), do: nil
-  defp participant_name(%{player_id: nil, team: team}), do: team.name
-  defp participant_name(%{player: %{first_name: f, last_name: l}}), do: "#{f} #{l}"
+  defp participant_name(%{player_id: nil, team: team}), do: Names.title_case(team.name)
+  defp participant_name(%{player: %{first_name: f, last_name: l}}), do: Names.full_name(f, l)
   defp participant_name(%{team: %{name: name}}), do: name
   defp participant_name(_other), do: nil
 

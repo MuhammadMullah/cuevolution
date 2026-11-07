@@ -384,8 +384,8 @@ defmodule CuevolutionWeb.StageManagementLive do
   defp group_category_label("female"), do: "Individual Female"
   defp group_category_label("team"), do: "Teams"
 
-  defp participant_name(%{player_id: nil, team: team}), do: team.name
-  defp participant_name(%{player: player}), do: "#{player.first_name} #{player.last_name}"
+  defp participant_name(%{player_id: nil, team: team}), do: Names.title_case(team.name)
+  defp participant_name(%{player: player}), do: Names.player_name(player)
 
   defp participant_sub(%{player_id: nil} = p), do: "Team · #{p.region.name}"
   defp participant_sub(p), do: "Player · #{p.region.name}"

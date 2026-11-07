@@ -32,6 +32,7 @@ defmodule Cuevolution.Competitions do
   alias Cuevolution.Competitions.StandingsCalculator
   alias Cuevolution.Competitions.VenueEarlyClosure
   alias Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications
+  alias Cuevolution.Names
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.SearchTerm
@@ -2850,12 +2851,11 @@ defmodule Cuevolution.Competitions do
 
   @doc "Display name for a `StageParticipation` — the team name, or the player's full name. Used in notification payloads and everywhere a fixture participant renders."
   def participant_name(%StageParticipation{player_id: nil} = participation) do
-    Repo.preload(participation, :team).team.name
+    Repo.preload(participation, :team).team.name |> Names.title_case()
   end
 
   def participant_name(%StageParticipation{} = participation) do
-    player = Repo.preload(participation, :player).player
-    "#{player.first_name} #{player.last_name}"
+    Repo.preload(participation, :player).player |> Names.player_name()
   end
 
   @doc """
@@ -3989,7 +3989,6 @@ defmodule Cuevolution.Competitions do
   defp present_standings_row(row) do
     row
     |> Map.put(:finish_label, finish_label(row))
-    |> Map.put(:name, participant_name(row.participation))
     |> Map.put(:region, row.participation.region && row.participation.region.name)
   end
 
@@ -4081,7 +4080,10 @@ defmodule Cuevolution.Competitions do
     rounds
     |> bracket_entrants()
     |> Enum.map(fn participation ->
-      runs |> Map.fetch!(participation.id) |> Map.put(:participation, participation)
+      runs
+      |> Map.fetch!(participation.id)
+      |> Map.put(:participation, participation)
+      |> Map.put(:name, participant_name(participation))
     end)
     |> rank_standings(rounds)
   end
@@ -4089,12 +4091,13 @@ defmodule Cuevolution.Competitions do
   # Ranked on SP Points, then rack-win % — and nothing else. Players out at the
   # same stage share a position and share their points; rack-win % orders the
   # rows inside that band for display only, which is why it never reaches the
-  # position itself.
+  # position itself. Name breaks a remaining tie so the table is alphabetical
+  # before anything has been played, rather than in database order.
   defp rank_standings(rows, rounds) do
     bands = position_bands(rounds)
 
     rows
-    |> Enum.sort_by(&{-&1.points, -(&1.rack_win_pct || -1)})
+    |> Enum.sort_by(&{-&1.points, -(&1.rack_win_pct || -1), Names.sort_key(&1.name)})
     |> Enum.map(fn row -> Map.put(row, :position, Map.get(bands, band_key(row))) end)
   end
 
@@ -4650,11 +4653,10 @@ defmodule Cuevolution.Competitions do
     # One transaction so a correction can never land without the bracket
     # moving with it. `correct_result/3` opens its own transaction, which joins
     # this one rather than nesting, so a rollback here undoes both.
+    # `correct_result/3` re-points the bracket itself, for every caller.
     Repo.transaction(fn ->
-      with {:ok, result} <- correct_result(fixture.result, admin, attrs),
-           {:ok, _slots} <- advance_bracket(Repo, fixture, result.winner_participation_id) do
-        result
-      else
+      case correct_result(fixture.result, admin, attrs) do
+        {:ok, result} -> result
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
@@ -4667,6 +4669,24 @@ defmodule Cuevolution.Competitions do
         {:error, reason}
     end
   end
+
+  # Re-points the bracket at whatever the result now says, in the same
+  # transaction that changed it.
+  #
+  # Every path that can change a winner has to do this, not just the one the
+  # Circuit screen uses: a result corrected from the results list or amended
+  # while verifying is the same event as far as the bracket is concerned, and
+  # when only one path advanced, correcting a winner left the *loser* standing
+  # in the next round. `advance_bracket/3` is idempotent and refuses once an
+  # onward match has been played, so this is safe to run on every correction,
+  # and writes nothing for a round-robin fixture.
+  defp readvance_bracket(multi, %Fixture{} = fixture) do
+    Multi.run(multi, :readvance, fn repo, %{result: result} ->
+      advance_bracket(repo, fixture, result.winner_participation_id)
+    end)
+  end
+
+  defp readvance_bracket(multi, _no_fixture), do: multi
 
   @doc "Records the five structured singles frames and moves a scheduled fixture to completed."
   def record_frames(%Fixture{} = fixture, %Admin{} = admin, frame_winners)
@@ -4789,6 +4809,7 @@ defmodule Cuevolution.Competitions do
       Multi.new()
       |> Multi.update(:result, MatchResult.correction_changeset(fixture.result, correction_attrs))
       |> Multi.update(:fixture, Ecto.Changeset.change(fixture, status: "verified"))
+      |> readvance_bracket(fixture)
       |> Multi.run(:log, fn _repo, %{fixture: verified} ->
         Accounts.log_admin_action("verify_result", admin, verified)
       end)
@@ -4812,6 +4833,7 @@ defmodule Cuevolution.Competitions do
       |> maybe_replace_structured_frames(fixture, winners)
       |> Multi.update(:result, MatchResult.correction_changeset(fixture.result, correction_attrs))
       |> Multi.update(:fixture, Ecto.Changeset.change(fixture, status: "verified"))
+      |> readvance_bracket(fixture)
       |> Multi.run(:log, fn _repo, %{fixture: verified} ->
         Accounts.log_admin_action("verify_result", admin, verified)
       end)
@@ -4993,6 +5015,9 @@ defmodule Cuevolution.Competitions do
   end
 
   defp do_correct_result(%MatchResult{} = result, %Admin{} = admin, attrs) do
+    # The fixture carries the routing edges `advance_bracket/3` needs.
+    result = Repo.preload(result, :fixture)
+
     prior_value = %{
       "winner_participation_id" => result.winner_participation_id,
       "score" => result.score
@@ -5006,6 +5031,7 @@ defmodule Cuevolution.Competitions do
 
     Multi.new()
     |> Multi.update(:result, MatchResult.correction_changeset(result, correction_attrs))
+    |> readvance_bracket(result.fixture)
     |> Multi.run(:log, fn _repo, %{result: updated} ->
       Accounts.log_admin_action("correct_result", admin, updated,
         prior_value: prior_value,
@@ -6526,6 +6552,8 @@ defmodule Cuevolution.Competitions do
       live_score: f.live_score,
       round_name: r.name,
       round_sequence: r.sequence,
+      round_code: r.code,
+      bracket_side: r.bracket_side,
       race_to: r.race_to,
       group_name: g.name,
       a_id: f.participant_a_id,
@@ -6559,6 +6587,8 @@ defmodule Cuevolution.Competitions do
       live_score: f.live_score,
       round_name: r.name,
       round_sequence: r.sequence,
+      round_code: r.code,
+      bracket_side: r.bracket_side,
       race_to: r.race_to,
       # A bracket fixture belongs to a round, not a group — only the team
       # event plays in groups.
@@ -6905,7 +6935,8 @@ defmodule Cuevolution.Competitions do
   # a row that is identical on all four, so the table does not reshuffle
   # between renders.
   defp ranking_key(row) do
-    {-row.sp_points, -row.match_difference, -row.frame_difference, -row.frames_won, row.name}
+    {-row.sp_points, -row.match_difference, -row.frame_difference, -row.frames_won,
+     Names.sort_key(row.name)}
   end
 
   defp mark_advancing(rows, category) do
@@ -6921,7 +6952,7 @@ defmodule Cuevolution.Competitions do
       cap = Map.fetch!(caps, stage_id)
 
       stage_rows
-      |> Enum.sort_by(&{-&1.points, &1.name})
+      |> Enum.sort_by(&{-&1.points, Names.sort_key(&1.name)})
       |> Enum.with_index(1)
       |> Enum.map(fn {row, stage_rank} ->
         Map.put(row, :advancing, not is_nil(cap) and stage_rank <= cap)

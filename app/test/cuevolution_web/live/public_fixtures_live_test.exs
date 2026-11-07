@@ -259,6 +259,98 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     end
   end
 
+  describe "the chart view" do
+    test "it draws all three lanes of the bracket", %{conn: conn} do
+      drawn("male", 32)
+
+      {:ok, _view, html} = live(conn, ~p"/matches?view=chart")
+
+      assert html =~ "Winners&#39; side"
+      assert html =~ "Losers&#39; side"
+      assert html =~ "Knockout"
+
+      # Every round of the draw, winners' side through to the final.
+      for round <- ["Winners Round 1", "Winners Round 3", "Losers Round 4", "Final"] do
+        assert html =~ round, "#{round} is missing from the chart"
+      end
+    end
+
+    test "it draws the connectors that say which cards feed which", %{conn: conn} do
+      drawn("male", 32)
+
+      {:ok, _view, html} = live(conn, ~p"/matches?view=chart")
+
+      # A merge elbow brackets two cards into one; a carry runs one-for-one.
+      assert html =~ "rounded-r-md border-2"
+      assert html =~ "w-11 border-t-2"
+    end
+
+    test "every card still opens that match's own page", %{conn: conn} do
+      %{bracket: bracket} = drawn("male", 32)
+      [fixture | _] = opening_fixtures(bracket)
+
+      {:ok, _view, html} = live(conn, ~p"/matches?view=chart")
+
+      assert html =~ ~s(href="/m/#{fixture.match_id}")
+    end
+
+    test "the chart shows the whole bracket even with a filter applied", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn("male", 32)
+      [fixture | _] = opening_fixtures(bracket)
+
+      {:ok, _} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id,
+          "score" => %{"a" => 6, "b" => 0}
+        })
+
+      # A half-drawn bracket is not a bracket, so the status filter is a
+      # list-view thing only.
+      {:ok, _view, html} = live(conn, ~p"/matches?view=chart&filter=finished")
+
+      assert html =~ "Winners Round 1"
+      assert html =~ "Final"
+    end
+
+    test "switching views is in the URL so a link opens the same one", %{conn: conn} do
+      drawn("male", 32)
+
+      {:ok, view, list} = live(conn, ~p"/matches")
+      refute list =~ "Winners&#39; side"
+
+      chart = view |> element("button[phx-value-view='chart']") |> render_click()
+      assert_patch(view) =~ "view=chart"
+      assert chart =~ "Winners&#39; side"
+    end
+
+    test "the team event offers no chart, having no bracket", %{conn: conn} do
+      stage = circuit()
+      admin = insert(:admin, role: "tournament_director")
+
+      for _ <- 1..20 do
+        team = insert(:team)
+
+        insert(:stage_participation,
+          stage_id: stage.id,
+          category: "team",
+          player_id: nil,
+          team_id: team.id,
+          region_id: team.region_id
+        )
+      end
+
+      {:ok, _} = Competitions.draw_circuit_team_groups(stage.id, admin)
+
+      {:ok, _view, html} = live(conn, ~p"/matches?category=team")
+      refute html =~ ~s(phx-value-view="chart")
+
+      # And asking for one anyway still gets the list.
+      {:ok, _view, forced} = live(conn, ~p"/matches?category=team&view=chart")
+      assert forced =~ "Group A"
+      refute forced =~ "Winners&#39; side"
+    end
+  end
+
   describe "the team event" do
     test "rounds are headed by their group", %{conn: conn} do
       stage = circuit()

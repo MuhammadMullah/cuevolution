@@ -88,6 +88,7 @@ defmodule CuevolutionWeb do
       import CuevolutionWeb.CoreComponents
 
       # Common modules used in templates
+      alias Cuevolution.Names
       alias CuevolutionWeb.Layouts
       alias Phoenix.LiveView.JS
 

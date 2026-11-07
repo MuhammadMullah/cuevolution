@@ -18,6 +18,7 @@ defmodule Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications do
 
   alias Cuevolution.Accounts.Player
   alias Cuevolution.Competitions.{Fixture, Group, GroupMembership, Round, StageParticipation}
+  alias Cuevolution.Names
   alias Cuevolution.Notifications
   alias Cuevolution.Repo
   alias Cuevolution.Teams.Team
@@ -59,8 +60,8 @@ defmodule Cuevolution.Competitions.Workers.DispatchDrawPublishedNotifications do
 
   defp individual_payloads(%{player_a: player_a, player_b: player_b} = fixture) do
     [
-      {player_a, fixture_payload(fixture, "#{player_b.first_name} #{player_b.last_name}")},
-      {player_b, fixture_payload(fixture, "#{player_a.first_name} #{player_a.last_name}")}
+      {player_a, fixture_payload(fixture, Names.player_name(player_b))},
+      {player_b, fixture_payload(fixture, Names.player_name(player_a))}
     ]
   end
 

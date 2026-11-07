@@ -15,6 +15,7 @@ defmodule CuevolutionWeb.PlayerComponents do
   use CuevolutionWeb, :verified_routes
 
   alias Cuevolution.Accounts.ProfilePicture
+  alias Cuevolution.Names
   alias Phoenix.HTML.Form
   alias Phoenix.HTML.FormField
   alias Phoenix.LiveView.JS
@@ -601,7 +602,7 @@ defmodule CuevolutionWeb.PlayerComponents do
               title="Account"
             >
               <.avatar
-                name={"#{@current_player.first_name} #{@current_player.last_name}"}
+                name={Names.player_name(@current_player)}
                 src={ProfilePicture.url(@current_player.profile_picture_path)}
                 size="size-9"
                 class="text-[13px]"
@@ -613,7 +614,7 @@ defmodule CuevolutionWeb.PlayerComponents do
             >
               <div class="border-b border-ink-100 px-4 py-3">
                 <div class="text-sm font-semibold text-ink-950">
-                  {@current_player.first_name} {@current_player.last_name}
+                  {Names.player_name(@current_player)}
                 </div>
                 <div class="font-mono text-[12.5px] text-ink-400">@{@current_player.username}</div>
               </div>
@@ -751,10 +752,10 @@ defmodule CuevolutionWeb.PlayerComponents do
         class="flex flex-wrap items-center gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3.5"
       >
         <div class="min-w-[200px] flex-1 text-[13.5px] text-ink-700">
-          <span class="font-semibold text-ink-950">{invitation.team.name}</span>
+          <span class="font-semibold text-ink-950">{Names.title_case(invitation.team.name)}</span>
           invited you to join, sent by
           <span class="font-semibold text-ink-950">
-            {invitation.team.captain.first_name} {invitation.team.captain.last_name}
+            {Names.player_name(invitation.team.captain)}
           </span>
           · expires {time_until(invitation.expires_at)}
         </div>

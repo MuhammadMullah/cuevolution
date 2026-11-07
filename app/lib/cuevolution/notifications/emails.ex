@@ -16,6 +16,7 @@ defmodule Cuevolution.Notifications.Emails do
   import Swoosh.Email
 
   alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Names
   alias CuevolutionWeb.Endpoint
 
   @ink "#0d0c22"
@@ -26,7 +27,7 @@ defmodule Cuevolution.Notifications.Emails do
 
   @doc "Welcome email sent right after successful registration."
   def registration_confirmation(player) do
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Welcome to Sportpesa National Pool Circuit!")
@@ -55,7 +56,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     Your Sportpesa National Pool Circuit account is ready, and you're officially part of Kenya's pool circuit.
 
@@ -77,7 +78,7 @@ defmodule Cuevolution.Notifications.Emails do
   """
   def fixture_assignment(player, payload) do
     %{opponent_name: opponent, venue: venue, date: date, time: time} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Your next fixture: vs #{opponent}")
@@ -91,7 +92,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     A new fixture has been published for you:
 
@@ -108,7 +109,7 @@ defmodule Cuevolution.Notifications.Emails do
 
   @doc "Sent when a Grassroots draw is published for the player."
   def draw_published(player, _payload) do
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("You've been drawn — Grassroots")
@@ -121,7 +122,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     You've been drawn into your Grassroots group. Log in to see your upcoming fixtures: #{url("/fixtures")}
 
@@ -132,7 +133,7 @@ defmodule Cuevolution.Notifications.Emails do
   @doc "Reminds a player to complete scheduled Grassroots fixtures before the deadline."
   def grassroots_match_reminder(player, payload) do
     %{deadline: deadline} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Complete your Grassroots fixtures before #{deadline}")
@@ -148,7 +149,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     You still have scheduled Grassroots fixtures to complete. Please arrange and finish your matches
     before #{deadline} to avoid a double walkover.
@@ -160,7 +161,7 @@ defmodule Cuevolution.Notifications.Emails do
   @doc "Corrects the Grassroots deadline communicated in an earlier reminder."
   def grassroots_deadline_apology(player, payload) do
     %{deadline: deadline} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Correction: Grassroots deadline is #{deadline}")
@@ -179,7 +180,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     We apologize for the incorrect Grassroots deadline communicated earlier.
 
@@ -194,10 +195,10 @@ defmodule Cuevolution.Notifications.Emails do
 
   @doc "Sends birthday wishes to a player."
   def birthday_greeting(player) do
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
-    |> subject("Happy birthday, #{player.first_name}!")
+    |> subject("Happy birthday, #{Names.title_case(player.first_name)}!")
     |> html_body(
       layout("""
       <p style="margin:0 0 16px;">Hi #{first_name},</p>
@@ -209,7 +210,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     Happy birthday from everyone at Sportpesa National Pool Circuit!
     We hope your day is a great one, both on and off the table.
@@ -220,7 +221,7 @@ defmodule Cuevolution.Notifications.Emails do
 
   @doc "One-off announcement of Circuit 1 (Timba XO, Eldoret, 6-8 November 2026) to the players who qualified for it."
   def circuit_advancement(player) do
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Circuit 1, Eldoret \u2014 6th\u20138th November")
@@ -248,7 +249,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     Congratulations once again on securing your places in the SportPesa National
     Pool Circuit 2026/27!
@@ -270,7 +271,7 @@ defmodule Cuevolution.Notifications.Emails do
   @doc "Sent when a captain adds the player to a team's roster."
   def team_assignment(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
     team_name_esc = esc(team_name)
     captain_name_esc = esc(captain_name)
 
@@ -287,7 +288,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     #{captain_name} added you to #{team_name}. You can see your roster and teammates any time
     in the app.
@@ -299,7 +300,7 @@ defmodule Cuevolution.Notifications.Emails do
   @doc "Sent when a captain invites the player to join a team's roster."
   def team_invitation(player, payload) do
     %{team_name: team_name, captain_name: captain_name} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
     team_name_esc = esc(team_name)
     captain_name_esc = esc(captain_name)
 
@@ -316,7 +317,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     #{captain_name} invited you to join #{team_name}. Sign in to accept or decline — this
     invitation expires in 48 hours.
@@ -335,7 +336,7 @@ defmodule Cuevolution.Notifications.Emails do
     } =
       payload
 
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
     team_name_esc = esc(team_name)
     player_name_esc = esc(player_name)
 
@@ -355,7 +356,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     #{player_name} has left #{team_name}. Your roster now has #{roster_count} players.
     #{status}
@@ -367,7 +368,7 @@ defmodule Cuevolution.Notifications.Emails do
   @doc "Sent when an admin changes a player's region or preferred venue."
   def player_location_updated(player, payload) do
     %{region_name: region_name, venue_name: venue_name} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Your Cuevolution location was updated")
@@ -380,7 +381,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     An administrator updated your registered location.
     Region: #{region_name}
@@ -399,7 +400,7 @@ defmodule Cuevolution.Notifications.Emails do
   """
   def venue_deactivated(player, payload) do
     %{venue_name: venue_name, suggested_venues: suggested_venues} = payload
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
     venue_name_esc = esc(venue_name)
 
     base(player)
@@ -416,7 +417,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     #{venue_name} is no longer an active venue, so it can't stay your preferred venue.
 
@@ -430,7 +431,7 @@ defmodule Cuevolution.Notifications.Emails do
   `Notifications.dispatch/3` — see that worker's moduledoc for why.
   """
   def reset_password_instructions(player, url) do
-    first_name = esc(player.first_name)
+    first_name = esc(Names.title_case(player.first_name))
 
     base(player)
     |> subject("Reset your password")
@@ -449,7 +450,7 @@ defmodule Cuevolution.Notifications.Emails do
       """)
     )
     |> text_body("""
-    Hi #{player.first_name},
+    Hi #{Names.title_case(player.first_name)},
 
     We got a request to reset your password. Use the link below to choose a new
     one — it expires in 20 minutes.
@@ -535,7 +536,7 @@ defmodule Cuevolution.Notifications.Emails do
 
   defp base(player) do
     new()
-    |> to({"#{player.first_name} #{player.last_name}", player.email})
+    |> to({Names.player_name(player), player.email})
     |> from(Application.get_env(:cuevolution, :mail_from))
   end
 

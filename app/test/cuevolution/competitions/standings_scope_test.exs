@@ -82,8 +82,19 @@ defmodule Cuevolution.Competitions.StandingsScopeTest do
       circuit = Repo.get_by!(Stage, name: "Circuit")
       admin = insert(:admin, role: "tournament_director")
 
-      # Enough entrants for a draw, including the two who came up.
-      for _ <- 1..14 do
+      # Top up to exactly 16, counting whoever is already there. The
+      # participation factory assigns a cycling stage, so a stray Circuit
+      # entrant from another insert would otherwise push the field to 17 or
+      # 18 — a 32 bracket, and more byes than its losers' side can hold.
+      existing =
+        Repo.aggregate(
+          from(sp in Cuevolution.Competitions.StageParticipation,
+            where: sp.stage_id == ^circuit.id and sp.category == "male"
+          ),
+          :count
+        )
+
+      for _ <- 1..(16 - existing)//1 do
         insert(:stage_participation, stage_id: circuit.id, category: "male")
       end
 

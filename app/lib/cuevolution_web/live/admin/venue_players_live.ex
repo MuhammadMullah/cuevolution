@@ -203,8 +203,8 @@ defmodule CuevolutionWeb.VenuePlayersLive do
   defp player_row(player, stage_lookup) do
     %{
       id: player.id,
-      name: "#{player.first_name} #{player.last_name}",
-      avatar_name: "#{player.first_name} #{player.last_name}",
+      name: Names.player_name(player),
+      avatar_name: Names.player_name(player),
       avatar_src: ProfilePicture.url(player.profile_picture_path),
       sub: "@#{player.username} · #{kind_label(player)}",
       stage: Map.get(stage_lookup, player.id)

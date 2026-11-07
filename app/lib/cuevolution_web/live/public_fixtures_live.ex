@@ -19,6 +19,12 @@ defmodule CuevolutionWeb.PublicFixturesLive do
 
   @tabs [{"male", "Individual Male"}, {"female", "Individual Female"}, {"team", "Teams"}]
   @filters ~w(all live next finished)
+  @views ~w(list chart)
+
+  # A card is ~92px tall; the rest is the breathing room the connectors run
+  # through. Same geometry as the tournament director's chart, so the two
+  # views of one bracket look like the same bracket.
+  @slot_height 112
 
   @impl true
   def mount(_params, _session, socket) do
@@ -34,17 +40,25 @@ defmodule CuevolutionWeb.PublicFixturesLive do
   def handle_params(params, _uri, socket) do
     category = if params["category"] in ~w(male female team), do: params["category"], else: "male"
     filter = if params["filter"] in @filters, do: params["filter"], else: "all"
+    # The team event is a round robin — there is no bracket to chart.
+    view = if params["view"] in @views and category != "team", do: params["view"], else: "list"
 
-    {:noreply, socket |> assign(category: category, filter: filter) |> load()}
+    {:noreply, socket |> assign(category: category, filter: filter, view: view) |> load()}
   end
 
   @impl true
   def handle_event("switch", %{"category" => category}, socket) do
-    {:noreply, push_patch(socket, to: path_for(category, "all"))}
+    {:noreply, push_patch(socket, to: path_for(category, "all", "list"))}
   end
 
   def handle_event("switch", %{"filter" => filter}, socket) do
-    {:noreply, push_patch(socket, to: path_for(socket.assigns.category, filter))}
+    {:noreply,
+     push_patch(socket, to: path_for(socket.assigns.category, filter, socket.assigns.view))}
+  end
+
+  def handle_event("switch", %{"view" => view}, socket) do
+    {:noreply,
+     push_patch(socket, to: path_for(socket.assigns.category, socket.assigns.filter, view))}
   end
 
   @impl true
@@ -56,11 +70,13 @@ defmodule CuevolutionWeb.PublicFixturesLive do
     {:noreply, StandingsRefresh.refreshed(socket, &load/1)}
   end
 
-  defp path_for(category, filter) do
+  defp path_for(category, filter, view) do
     query =
-      Enum.reject([{"category", category}, {"filter", filter}], fn {_k, v} -> v == "all" end)
+      [{"category", category}, {"filter", filter}, {"view", view}]
+      |> Enum.reject(fn {_k, v} -> v in ["all", "list"] end)
+      |> Map.new()
 
-    ~p"/matches?#{Map.new(query)}"
+    ~p"/matches?#{query}"
   end
 
   # Everything is presented here rather than in the template: a `<% x = ... %>`
@@ -78,9 +94,98 @@ defmodule CuevolutionWeb.PublicFixturesLive do
       total: length(rows),
       played: Enum.count(rows, &(&1.state in [:final, :walkover, :bye])),
       live_now: Enum.count(rows, &(&1.state == :live)),
-      rounds: group_rounds(rows, shown)
+      chartable?: Enum.any?(rows, &(&1.bracket_side in ["winners", "losers", "knockout"])),
+      rounds: group_rounds(rows, shown),
+      # The chart always shows the whole bracket: a half-drawn bracket is not
+      # a bracket, so the status filter belongs to the list view only.
+      lanes: if(socket.assigns.view == "chart", do: build_lanes(rows), else: [])
     )
   end
+
+  # ------------------------------------------------------------------ chart
+
+  @lane_titles [
+    {"Winners' side", "winners"},
+    {"Losers' side", "losers"},
+    {"Knockout", "knockout"}
+  ]
+
+  defp build_lanes(rows) do
+    first_knockout =
+      rows
+      |> Enum.filter(&(&1.bracket_side == "knockout"))
+      |> Enum.map(& &1.round_sequence)
+      |> Enum.min(fn -> nil end)
+
+    @lane_titles
+    |> Enum.map(fn {title, side} ->
+      lane_rounds =
+        rows
+        |> Enum.filter(&(&1.bracket_side == side))
+        |> Enum.chunk_by(& &1.round_sequence)
+        |> Enum.map(fn [first | _] = matches ->
+          %{
+            name: first.round_name,
+            race_to: first.race_to,
+            shade_a?: shade_a?(first, first_knockout),
+            matches: matches
+          }
+        end)
+
+      height = lane_height(lane_rounds)
+
+      %{
+        title: title,
+        side: side,
+        rounds: lane_rounds,
+        height: height,
+        links: lane_links(lane_rounds, height)
+      }
+    end)
+    |> Enum.reject(&(&1.rounds == []))
+  end
+
+  defp lane_height([]), do: @slot_height
+
+  defp lane_height(lane_rounds) do
+    widest = lane_rounds |> Enum.map(&length(&1.matches)) |> Enum.max(fn -> 1 end)
+    max(widest * @slot_height, @slot_height)
+  end
+
+  # Two shapes only: a merge, where two cards feed one and the elbow brackets
+  # them together, and a carry, where a round feeds the next one for one.
+  defp lane_links(lane_rounds, height) do
+    lane_rounds
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.map(fn [round, next] ->
+      count = length(round.matches)
+      next_count = length(next.matches)
+
+      cond do
+        count == 0 or next_count == 0 ->
+          []
+
+        next_count * 2 == count ->
+          List.duplicate(%{height: div(height, count), merge?: true}, next_count)
+
+        true ->
+          List.duplicate(%{height: 2, merge?: false}, count)
+      end
+    end)
+  end
+
+  # Slot A holds whoever came down from the winners' side: on a crossover
+  # round, and on the round where the two halves first meet. Keyed on the
+  # round code, not its name — under the current format L2 *and* L4 are
+  # crossovers, and only the code says so reliably.
+  defp shade_a?(%{bracket_side: "losers", round_code: "L" <> n}, _first_knockout) do
+    match?({i, ""} when rem(i, 2) == 0, Integer.parse(n))
+  end
+
+  defp shade_a?(%{bracket_side: "knockout", round_sequence: seq}, first_knockout),
+    do: seq == first_knockout
+
+  defp shade_a?(_row, _first_knockout), do: false
 
   # Numbered across the whole draw in play order, so the numbers do not move
   # when a filter is applied.
@@ -128,6 +233,10 @@ defmodule CuevolutionWeb.PublicFixturesLive do
     %{
       number: Map.get(numbers, row.id, "—"),
       match_id: row.match_id,
+      bracket_side: row.bracket_side,
+      round_code: row.round_code,
+      round_name: row.round_name,
+      round_sequence: row.round_sequence,
       round_key: {row.round_sequence, row.group_name},
       round_heading: round_heading(row),
       race_to: row.race_to,

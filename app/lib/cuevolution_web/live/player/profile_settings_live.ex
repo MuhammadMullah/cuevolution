@@ -239,7 +239,7 @@ defmodule CuevolutionWeb.ProfileSettingsLive do
   end
 
   defp team_label(nil), do: "No team yet"
-  defp team_label(team), do: team.name
+  defp team_label(team), do: Names.title_case(team.name)
 
   defp profile_rows(player) do
     [

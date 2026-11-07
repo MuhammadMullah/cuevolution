@@ -32,7 +32,7 @@ defmodule CuevolutionWeb.PublicPlayerMatchesLive do
         {:ok,
          socket
          |> assign(
-           page_title: "#{player.first_name} #{player.last_name}",
+           page_title: Names.player_name(player),
            username: username,
            player: player
          )

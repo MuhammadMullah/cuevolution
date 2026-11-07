@@ -116,14 +116,14 @@
         </button>
         <div class="flex items-center gap-3.5 pr-10">
           <PlayerComponents.avatar
-            name={"#{@modal_player.first_name} #{@modal_player.last_name}"}
+            name={Names.player_name(@modal_player)}
             src={ProfilePicture.url(@modal_player.profile_picture_path)}
             size="size-14"
             class="text-lg"
           />
           <div class="min-w-0 flex-1">
             <div class="text-[20px] font-bold tracking-tight">
-              {@modal_player.first_name} {@modal_player.last_name}
+              {Names.player_name(@modal_player)}
             </div>
             <div class="text-[13px] text-ink-400">Player · {@modal_player.region.name}</div>
           </div>
@@ -198,7 +198,7 @@
             :if={@anonymize_warnings == []}
             class="m-0 text-[13px] leading-relaxed text-amber-800"
           >
-            This will permanently remove {@modal_player.first_name} {@modal_player.last_name}'s personal details. Historical results and points remain intact.
+            This will permanently remove {Names.player_name(@modal_player)}'s personal details. Historical results and points remain intact.
           </p>
           <div class="mt-3 flex gap-2">
             <button
