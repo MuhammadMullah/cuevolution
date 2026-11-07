@@ -15,16 +15,12 @@ defmodule CuevolutionWeb.PublicFixturesLive do
   use CuevolutionWeb, :live_view
 
   alias Cuevolution.Competitions
+  alias CuevolutionWeb.BracketComponents
   alias CuevolutionWeb.StandingsRefresh
 
   @tabs [{"male", "Individual Male"}, {"female", "Individual Female"}, {"team", "Teams"}]
   @filters ~w(all live next finished)
   @views ~w(list chart)
-
-  # A card is ~92px tall; the rest is the breathing room the connectors run
-  # through. Same geometry as the tournament director's chart, so the two
-  # views of one bracket look like the same bracket.
-  @slot_height 112
 
   @impl true
   def mount(_params, _session, socket) do
@@ -32,7 +28,7 @@ defmodule CuevolutionWeb.PublicFixturesLive do
 
     {:ok,
      socket
-     |> assign(page_title: "Fixtures", tabs: @tabs)
+     |> assign(page_title: "Fixtures", tabs: @tabs, fit: true)
      |> StandingsRefresh.init()}
   end
 
@@ -59,6 +55,12 @@ defmodule CuevolutionWeb.PublicFixturesLive do
   def handle_event("switch", %{"view" => view}, socket) do
     {:noreply,
      push_patch(socket, to: path_for(socket.assigns.category, socket.assigns.filter, view))}
+  end
+
+  # Fit scales the two-sided knockout to the screen; 100% shows it at full
+  # size, scrolling sideways, for reading names on a small screen.
+  def handle_event("fit", %{"fit" => fit}, socket) do
+    {:noreply, assign(socket, fit: fit == "true")}
   end
 
   @impl true
@@ -132,46 +134,9 @@ defmodule CuevolutionWeb.PublicFixturesLive do
           }
         end)
 
-      height = lane_height(lane_rounds)
-
-      %{
-        title: title,
-        side: side,
-        rounds: lane_rounds,
-        height: height,
-        links: lane_links(lane_rounds, height)
-      }
+      BracketComponents.build_lane(title, side, lane_rounds, :matches)
     end)
     |> Enum.reject(&(&1.rounds == []))
-  end
-
-  defp lane_height([]), do: @slot_height
-
-  defp lane_height(lane_rounds) do
-    widest = lane_rounds |> Enum.map(&length(&1.matches)) |> Enum.max(fn -> 1 end)
-    max(widest * @slot_height, @slot_height)
-  end
-
-  # Two shapes only: a merge, where two cards feed one and the elbow brackets
-  # them together, and a carry, where a round feeds the next one for one.
-  defp lane_links(lane_rounds, height) do
-    lane_rounds
-    |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.map(fn [round, next] ->
-      count = length(round.matches)
-      next_count = length(next.matches)
-
-      cond do
-        count == 0 or next_count == 0 ->
-          []
-
-        next_count * 2 == count ->
-          List.duplicate(%{height: div(height, count), merge?: true}, next_count)
-
-        true ->
-          List.duplicate(%{height: 2, merge?: false}, count)
-      end
-    end)
   end
 
   # Slot A holds whoever came down from the winners' side: on a crossover

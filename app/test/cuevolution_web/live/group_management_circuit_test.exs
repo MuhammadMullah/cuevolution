@@ -101,7 +101,11 @@ defmodule CuevolutionWeb.GroupManagementCircuitTest do
       {:ok, view, _html} = live(as_td(conn), ~p"/admin/groups")
       view = open_circuit(view, "female")
 
-      html = view |> element("button[phx-click='draw_circuit']") |> render_click()
+      view |> element("button[phx-click='draw_circuit']") |> render_click()
+
+      # The losers' side is race to 3, so this needs the whole chart rather
+      # than the single lane the page opens on.
+      html = view |> element("button[phx-value-view='chart']") |> render_click()
 
       assert html =~ "race to 4"
       assert html =~ "race to 3"
@@ -333,18 +337,41 @@ defmodule CuevolutionWeb.GroupManagementCircuitTest do
       %{view: view}
     end
 
-    test "full chart is the default and shows every lane", %{view: view} do
+    test "it opens on one lane, not the whole chart", %{view: view} do
       html = render(view)
 
       assert html =~ "Full chart"
       assert html =~ "By stage"
       assert html =~ "List"
+
+      # A 128 draw is 239 cards and 127 connectors across three lanes — about
+      # 400KB of HTML, sent over HTTP and again when the socket connects.
+      # Opening on the winners' side alone roughly halves that.
       assert html =~ "Winners&#39; side" or html =~ "Winners' side"
+      refute html =~ "Losers&#39; side" or html =~ "Losers' side"
+    end
+
+    test "the full chart is still one click away", %{view: view} do
+      html = view |> element("button[phx-value-view='chart']") |> render_click()
+
+      assert html =~ "Winners&#39; side" or html =~ "Winners' side"
+      assert html =~ "Losers&#39; side" or html =~ "Losers' side"
+      assert html =~ "Knockout"
+    end
+
+    test "the chosen view survives reloading the bracket", %{view: view} do
+      view |> element("button[phx-value-view='chart']") |> render_click()
+
+      # Switching category reloads the scope; the view should not snap back.
+      view |> element("button[phx-value-category='female']") |> render_click()
+      html = view |> element("button[phx-value-category='male']") |> render_click()
+
       assert html =~ "Losers&#39; side" or html =~ "Losers' side"
     end
 
     test "matches are numbered M1 upwards across the whole bracket", %{view: view} do
-      html = render(view)
+      # M27 is the final — outside the winners' lane the page now opens on.
+      html = view |> element("button[phx-value-view='chart']") |> render_click()
 
       # 16 players: 8 + 4 + 4 + 4 + 4 + 2 + 1 = 27 matches.
       assert html =~ "M1"
@@ -352,7 +379,8 @@ defmodule CuevolutionWeb.GroupManagementCircuitTest do
     end
 
     test "each match says where its loser goes", %{view: view} do
-      html = render(view)
+      # "Loser is out" only appears on losers'-bracket cards.
+      html = view |> element("button[phx-value-view='chart']") |> render_click()
 
       assert html =~ "Loser to M"
       # The losers' bracket is the end of the road.
@@ -360,11 +388,13 @@ defmodule CuevolutionWeb.GroupManagementCircuitTest do
     end
 
     test "connector lines join each round to the next", %{view: view} do
-      html = render(view)
+      # A carry runs one-for-one between rounds of equal size, which only
+      # happens on the losers' side — outside the lane the page opens on.
+      html = view |> element("button[phx-value-view='chart']") |> render_click()
 
       # The elbow that brackets two cards into one, and the straight carry.
-      assert html =~ "rounded-r-md border-2 border-l-0 border-ink-300"
-      assert html =~ "border-t-2 border-ink-300"
+      assert html =~ "bracket-link__elbow"
+      assert html =~ "bracket-link__carry"
     end
 
     test "the winners'-side player is shaded on a crossover card", %{view: view} do
@@ -372,6 +402,21 @@ defmodule CuevolutionWeb.GroupManagementCircuitTest do
 
       assert html =~ "bg-green-50"
       assert html =~ "Down from the winners&#39; side" or html =~ "Down from the winners' side"
+    end
+
+    test "the knockout is two-sided, fitted to the screen at Fit", %{view: view} do
+      html = view |> element("button[phx-value-view='chart']") |> render_click()
+
+      # One fold only: the knockout. The winners' and losers' sides stay lanes.
+      assert length(String.split(html, ~s(data-layout="two-sided"))) == 2
+      assert view |> element(~s(#circuit-bracket-knockout[data-fit="true"])) |> has_element?()
+
+      # 80% and 100% show it at its own size instead, scrolling sideways.
+      view |> element(~s(button[phx-value-zoom="100"])) |> render_click()
+      assert view |> element(~s(#circuit-bracket-knockout[data-fit="false"])) |> has_element?()
+
+      view |> element(~s(button[phx-value-zoom="fit"])) |> render_click()
+      assert view |> element(~s(#circuit-bracket-knockout[data-fit="true"])) |> has_element?()
     end
 
     test "by stage narrows to one side at a time", %{view: view} do

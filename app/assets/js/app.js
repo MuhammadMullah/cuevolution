@@ -80,11 +80,43 @@ const EChart = {
   }
 }
 
+// Scales the two-sided Circuit knockout (BracketComponents.bracket_lane) to
+// the width of its frame, so the whole draw is on screen at any size. The
+// scale is a CSS variable on the frame's own style, which the template tells
+// LiveView to leave alone, so live score updates don't reset it. Measured at
+// full size each time: the board's natural width only changes with the draw.
+const BracketFit = {
+  mounted() {
+    this.observer = new ResizeObserver(() => this.fit())
+    this.observer.observe(this.el)
+    this.fit()
+  },
+  updated() {
+    this.fit()
+  },
+  destroyed() {
+    this.observer?.disconnect()
+  },
+  fit() {
+    const board = this.el.querySelector(".bracket-split")
+    if (!board) return
+
+    this.el.style.setProperty("--bracket-zoom", "1")
+    if (this.el.dataset.fit !== "true") return
+
+    const natural = board.offsetWidth
+    const available = this.el.clientWidth
+    if (natural > available && available > 0) {
+      this.el.style.setProperty("--bracket-zoom", (available / natural).toFixed(4))
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, EChart},
+  hooks: {...colocatedHooks, EChart, BracketFit},
 })
 
 // Show progress bar on live navigation and form submits

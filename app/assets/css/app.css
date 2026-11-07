@@ -315,3 +315,161 @@
 }
 
 /* This file is for your main application CSS */
+
+/*
+  Bracket chart cards.
+
+  A 128-player Circuit draw renders 239 of these, each previously carrying
+  ~800 characters of repeated utility classes. That was 40% of a 400KB page,
+  sent once over HTTP and again when the LiveView socket connects. Naming
+  them here costs one class attribute per element instead.
+
+  Shared by the tournament director's chart (group_management_live) and the
+  public one (public_fixtures_live) — the two views of a bracket should look
+  like the same bracket, and now they cannot drift.
+*/
+.bracket-card {
+  @apply relative block w-full rounded-lg border border-ink-200 bg-white text-left;
+  @apply text-[13px] leading-[18px] transition hover:ring-2 hover:ring-ink-300;
+}
+
+.bracket-card--waiting {
+  @apply border-dashed border-ink-300 opacity-70;
+}
+
+.bracket-card--live {
+  @apply border-2 border-red-500 shadow-sm;
+}
+
+.bracket-card--done {
+  @apply border-green-300;
+}
+
+.bracket-card--walkover {
+  @apply border-gold-500 bg-gold-100/40;
+}
+
+.bracket-card--selected {
+  @apply ring-2 ring-ink-950;
+}
+
+.bracket-card__head {
+  @apply flex items-center justify-between gap-2 px-2.5 pt-1 text-[10px] text-ink-400;
+}
+
+.bracket-card__badge {
+  @apply rounded-full bg-red-500 px-1.5 py-px font-semibold text-white;
+}
+
+.bracket-card__slot {
+  @apply flex items-center gap-2 px-2.5 py-0.5;
+}
+
+/* Whoever came down from the winners' side, so the two halves stay
+   tellable apart on a crossover card. */
+.bracket-card__slot--dropped {
+  @apply bg-green-50;
+}
+
+/* The winner of a decided match, moved to the top line of the card. */
+.bracket-card__slot--winner {
+  @apply bg-green-100;
+}
+
+.bracket-card__name {
+  @apply flex-1 truncate;
+}
+
+.bracket-card__name--won {
+  @apply font-bold text-ink-950;
+}
+
+.bracket-card__name--beaten {
+  @apply text-ink-500;
+}
+
+.bracket-card__score {
+  @apply w-4 text-right font-bold tabular-nums;
+}
+
+.bracket-card__rule {
+  @apply block h-px bg-ink-200;
+}
+
+.bracket-card__foot {
+  @apply flex items-center justify-between gap-1.5 border-t border-ink-100 px-2.5 py-1 text-[10px] text-ink-400;
+}
+
+.bracket-card__dest {
+  @apply truncate;
+}
+
+.bracket-card__time {
+  @apply shrink-0;
+}
+
+.bracket-card__time--tbd {
+  @apply italic text-ink-300;
+}
+
+/* The elbows that say which two cards feed the next one. */
+.bracket-links {
+  @apply flex w-11 flex-col gap-2;
+}
+
+.bracket-link {
+  @apply flex items-center;
+}
+
+.bracket-link__elbow {
+  @apply w-5 self-stretch rounded-r-md border-2 border-l-0 border-ink-300;
+}
+
+.bracket-link__stem {
+  @apply w-5 border-t-2 border-ink-300;
+}
+
+.bracket-link__carry {
+  @apply w-11 border-t-2 border-ink-300;
+}
+
+.bracket-lane {
+  @apply rounded-xl border p-4;
+}
+
+.bracket-lane--winners {
+  @apply border-green-100 bg-green-50/40;
+}
+
+.bracket-lane--losers {
+  @apply border-red-100 bg-red-50/40;
+}
+
+.bracket-lane--knockout {
+  @apply border-ink-200 bg-white;
+}
+
+/* The two-sided knockout: both halves and the final share one top edge, so
+   the final card centres level with the two semifinals feeding it. Sized to
+   its content so the BracketFit hook can measure its natural width, then
+   scaled by the --bracket-zoom the hook sets on the frame around it. */
+.bracket-split {
+  @apply flex w-max items-start;
+  zoom: var(--bracket-zoom, 1);
+}
+
+/* The frame the two-sided knockout is fitted into. At "Fit" the board is
+   scaled to this width; at "100%" it is full size and scrolls sideways. */
+.bracket-fit {
+  @apply overflow-x-auto;
+}
+
+/* The right-hand half of a two-sided knockout runs in towards the final, so
+   its elbows face left: stem first, then the bracket opening the other way. */
+.bracket-links--mirrored .bracket-link {
+  @apply flex-row-reverse;
+}
+
+.bracket-links--mirrored .bracket-link__elbow {
+  @apply rounded-l-md rounded-r-none border-l-2 border-r-0;
+}

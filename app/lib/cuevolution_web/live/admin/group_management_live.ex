@@ -36,6 +36,7 @@ defmodule CuevolutionWeb.GroupManagementLive do
   alias Cuevolution.Venues
   alias CuevolutionWeb.Admin.MatchEntryComponent
   alias CuevolutionWeb.AdminComponents
+  alias CuevolutionWeb.BracketComponents
 
   @categories ~w(male female team)
   @draw_states ~w(draft previewed approved published)
@@ -1183,23 +1184,13 @@ defmodule CuevolutionWeb.GroupManagementLive do
   defp status_label(:waiting), do: "Waiting"
 
   # Lanes with their geometry already worked out, so the template only reads.
+  # Shared with the public chart (BracketComponents), knockout folding and all.
   defp circuit_lane_data(rounds) do
     rounds
     |> circuit_lanes()
     |> Enum.reject(fn {_title, _side, lane_rounds} -> lane_rounds == [] end)
     |> Enum.map(fn {title, side, lane_rounds} ->
-      %{
-        title: title,
-        side: side,
-        rounds: lane_rounds,
-        height: circuit_lane_height(lane_rounds),
-        links:
-          lane_rounds
-          |> Enum.chunk_every(2, 1, :discard)
-          |> Enum.map(fn [round, next] ->
-            circuit_links(round, next, circuit_lane_height(lane_rounds))
-          end)
-      }
+      BracketComponents.build_lane(title, side, lane_rounds, :fixtures)
     end)
   end
 
@@ -1214,42 +1205,6 @@ defmodule CuevolutionWeb.GroupManagementLive do
       {"Losers' side", "losers", Enum.filter(rounds, &(&1.bracket_side == "losers"))},
       {"Knockout", "knockout", Enum.filter(rounds, &(&1.bracket_side == "knockout"))}
     ]
-  end
-
-  # Each card is ~92px tall; the extra room is the breathing space between
-  # them and what gives the connectors somewhere to run.
-  @circuit_slot_height 112
-
-  defp circuit_lane_height(rounds) do
-    matches = rounds |> Enum.map(&length(&1.fixtures)) |> Enum.max(fn -> 1 end)
-    max(matches * @circuit_slot_height, @circuit_slot_height)
-  end
-
-  @doc """
-  The connector run between one round and the next, as a list of
-  `%{height:, merge?:}`.
-
-  Two shapes only: a **merge**, where two cards feed one and the elbow brackets
-  them together, and a **carry**, where a round feeds the next one for one —
-  the losers' bracket and the drop into the knockout both do that. Geometry
-  follows the cards: with `justify-around` over a fixed lane height, a link of
-  height `H/n` centred in its own band lands exactly on the midpoint between
-  the two cards it joins.
-  """
-  def circuit_links(round, next_round, height) do
-    count = length(round.fixtures)
-    next_count = length(next_round.fixtures)
-
-    cond do
-      count == 0 or next_count == 0 ->
-        []
-
-      next_count * 2 == count ->
-        List.duplicate(%{height: div(height, count), merge?: true}, next_count)
-
-      true ->
-        List.duplicate(%{height: 2, merge?: false}, count)
-    end
   end
 
   @doc """
@@ -1500,7 +1455,12 @@ defmodule CuevolutionWeb.GroupManagementLive do
         if(bracket, do: [], else: Competitions.circuit_entrants(stage.id, category)),
       circuit_redraws_left: Competitions.circuit_redraws_remaining(stage.id, category),
       circuit_selected: selected,
-      circuit_view: socket.assigns[:circuit_view] || :chart,
+      # Opens on one lane rather than all three. A 128 draw is 239 cards and
+      # 127 connectors — around 400 KB of HTML, sent once over HTTP and again
+      # when the socket connects — and laying that out is what made the page
+      # slow to appear, not the queries behind it (those total ~40ms). The
+      # full chart is still one click away in the view switcher.
+      circuit_view: socket.assigns[:circuit_view] || :stage,
       circuit_side: socket.assigns[:circuit_side] || :winners,
       circuit_zoom: socket.assigns[:circuit_zoom] || :fit,
       circuit_filter: socket.assigns[:circuit_filter] || :all,

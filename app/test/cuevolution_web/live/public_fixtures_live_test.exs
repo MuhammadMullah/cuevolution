@@ -169,6 +169,26 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       assert html =~ "TBD"
     end
 
+    test "the chart shows the time as well as where the loser goes", %{conn: conn} do
+      # The chart footer used to hold one or the other, and the loser
+      # destination won, so every feeder card hid its kick-off time.
+      %{bracket: bracket, admin: admin} = drawn("male", 32)
+      [fixture | _] = opening_fixtures(bracket)
+
+      {:ok, _} =
+        Competitions.schedule_bracket_fixture(fixture, admin, %{
+          "date" => Date.to_iso8601(Competitions.today_in_eat()),
+          "time" => "11:15"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/matches?view=chart")
+
+      card = view |> element(~s(a[href="/m/#{fixture.match_id}"])) |> render()
+
+      assert card =~ "11:15"
+      assert card =~ "Loser to M"
+    end
+
     test "a bye carries no time at all, since nobody plays it", %{conn: conn} do
       # 14 in a 16 bracket leaves two byes.
       stage = circuit()
@@ -275,14 +295,86 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       end
     end
 
+    test "the knockout folds into two halves that meet in the final", %{conn: conn} do
+      drawn("male", 32)
+
+      {:ok, view, html} = live(conn, ~p"/matches?view=chart")
+
+      # Only the knockout folds; the winners' and losers' sides stay as lanes.
+      assert length(String.split(html, ~s(data-layout="two-sided"))) == 2
+
+      top = view |> element(~s([data-layout="two-sided"] [data-half="top"])) |> render()
+      final = view |> element(~s([data-layout="two-sided"] [data-half="final"])) |> render()
+      bottom = view |> element(~s([data-layout="two-sided"] [data-half="bottom"])) |> render()
+
+      # A 32 draw's knockout is R16-QF-SF-F, M41-M55. The first half of every
+      # round runs in from the left and the second half from the right.
+      for n <- ~w(M41 M44 M49 M50 M53) do
+        assert top =~ ">#{n}<", "#{n} should be on the left"
+        refute bottom =~ ">#{n}<"
+      end
+
+      for n <- ~w(M45 M48 M51 M52 M54) do
+        assert bottom =~ ">#{n}<", "#{n} should be on the right"
+        refute top =~ ">#{n}<"
+      end
+
+      assert final =~ ">M55<"
+      assert final =~ "Final"
+      refute final =~ ">M53<"
+
+      # The right half is drawn final-side first, its connectors facing in.
+      assert :binary.match(bottom, ">M54<") < :binary.match(bottom, ">M45<")
+      assert bottom =~ "bracket-links--mirrored"
+      refute top =~ "bracket-links--mirrored"
+    end
+
+    test "the two-sided knockout fits the screen until 100% is chosen", %{conn: conn} do
+      drawn("male", 32)
+
+      {:ok, view, html} = live(conn, ~p"/matches?view=chart")
+
+      # Fitted by the BracketFit hook by default, at every screen width.
+      assert html =~ ~s(phx-hook="BracketFit")
+      assert view |> element(~s(#bracket-knockout[data-fit="true"])) |> has_element?()
+
+      view |> element(~s(button[phx-value-fit="false"])) |> render_click()
+      assert view |> element(~s(#bracket-knockout[data-fit="false"])) |> has_element?()
+
+      view |> element(~s(button[phx-value-fit="true"])) |> render_click()
+      assert view |> element(~s(#bracket-knockout[data-fit="true"])) |> has_element?()
+    end
+
+    test "a decided match puts its winner on top, highlighted", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn("male", 32)
+      [fixture | _] = opening_fixtures(bracket)
+
+      # Slot B wins, so the card should flip it above slot A.
+      {:ok, _} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_b_id,
+          "score" => %{"a" => 2, "b" => 6}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/matches?view=chart")
+
+      card = view |> element(~s(a[href="/m/#{fixture.match_id}"])) |> render()
+      [first_line, second_line] = card |> String.split("bracket-card__rule") |> Enum.take(2)
+
+      assert first_line =~ "bracket-card__slot--winner"
+      assert first_line =~ ">6<"
+      refute second_line =~ "bracket-card__slot--winner"
+      assert second_line =~ ">2<"
+    end
+
     test "it draws the connectors that say which cards feed which", %{conn: conn} do
       drawn("male", 32)
 
       {:ok, _view, html} = live(conn, ~p"/matches?view=chart")
 
       # A merge elbow brackets two cards into one; a carry runs one-for-one.
-      assert html =~ "rounded-r-md border-2"
-      assert html =~ "w-11 border-t-2"
+      assert html =~ "bracket-link__elbow"
+      assert html =~ "bracket-link__carry"
     end
 
     test "every card still opens that match's own page", %{conn: conn} do

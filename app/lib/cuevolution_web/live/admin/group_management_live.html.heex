@@ -1113,6 +1113,9 @@
           Waiting for players
         </span>
         <span class="inline-flex items-center gap-1.5">
+          <span class="h-2.5 w-2.5 rounded-sm border border-green-400 bg-green-100"></span> Winner
+        </span>
+        <span class="inline-flex items-center gap-1.5">
           <span class="h-2.5 w-2.5 rounded-sm border border-green-300 bg-green-50"></span>
           Down from the winners' side
         </span>
@@ -1131,129 +1134,69 @@
         <section
           :for={lane <- @circuit_lanes}
           :if={@circuit_view == :chart or lane.side == lane_side(@circuit_side)}
-          class={[
-            "rounded-xl border p-4",
-            lane.side == "winners" && "border-green-100 bg-green-50/40",
-            lane.side == "losers" && "border-red-100 bg-red-50/40",
-            lane.side == "knockout" && "border-ink-200 bg-white"
-          ]}
+          class={["bracket-lane", "bracket-lane--#{lane.side}"]}
         >
           <h2 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-500">
             {lane.title}
           </h2>
 
-          <div class="flex overflow-x-auto pb-1">
-            <div
-              :for={{round, index} <- Enum.with_index(lane.rounds)}
-              class="flex"
-            >
-              <div class="flex min-w-[210px] flex-col gap-2">
-                <div class="flex items-baseline justify-between gap-2">
-                  <span class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
-                    {round.name}
-                  </span>
-                  <span class="text-[10px] text-ink-400">race to {round.race_to}</span>
-                </div>
-
-                <div class="flex flex-col justify-around" style={"height:#{lane.height}px"}>
-                  <button
-                    :for={fixture <- round.fixtures}
-                    type="button"
-                    phx-click="select_circuit_fixture"
-                    phx-value-id={fixture.id}
-                    class={[
-                      "group relative w-full rounded-lg bg-white text-left text-[13px] leading-[18px]",
-                      "transition hover:ring-2 hover:ring-ink-300",
-                      fixture_state(fixture) == :waiting &&
-                        "border border-dashed border-ink-300 opacity-70",
-                      fixture_state(fixture) == :live && "border-2 border-red-500 shadow-sm",
-                      fixture_state(fixture) == :done && "border border-green-300",
-                      fixture_state(fixture) == :walkover &&
-                        "border border-gold-500 bg-gold-100/40",
-                      fixture_state(fixture) == :ready && "border border-ink-200",
-                      @circuit_selected == fixture.id && "ring-2 ring-ink-950"
-                    ]}
-                  >
-                    <span class="flex items-center justify-between gap-2 px-2.5 pt-1 text-[10px] text-ink-400">
-                      <span>
-                        {match_number(@circuit_numbers, fixture)}<span :if={slot_label(fixture)}>
-                        · {slot_label(fixture)}</span>
-                      </span>
-                      <span
-                        :if={fixture_state(fixture) == :live}
-                        class="rounded-full bg-red-500 px-1.5 py-px font-semibold text-white"
-                      >
-                        Live
-                      </span>
-                    </span>
-
-                    <%!-- Whoever dropped from the winners' side sits on top,
-                          shaded, so the two halves stay tellable apart. --%>
-                    <span class={[
-                      "flex items-center gap-2 px-2.5 py-0.5",
-                      from_winners_side?(round, "a", @circuit_first_knockout) && "bg-green-50"
-                    ]}>
-                      <span class={[
-                        "flex-1 truncate",
-                        fixture_winner?(fixture, "a") && "font-bold text-ink-950",
-                        !fixture_winner?(fixture, "a") && fixture_state(fixture) == :done &&
-                          "text-ink-500"
-                      ]}>
-                        {participant_name(fixture.participant_a) || "—"}
-                      </span>
-                      <span class="w-4 text-right font-bold tabular-nums">
-                        {fixture_score(fixture, "a")}
-                      </span>
-                    </span>
-
-                    <span class="block h-px bg-ink-200"></span>
-
-                    <span class="flex items-center gap-2 px-2.5 py-0.5">
-                      <span class={[
-                        "flex-1 truncate",
-                        fixture_winner?(fixture, "b") && "font-bold text-ink-950",
-                        !fixture_winner?(fixture, "b") && fixture_state(fixture) == :done &&
-                          "text-ink-500"
-                      ]}>
-                        {participant_name(fixture.participant_b) || "—"}
-                      </span>
-                      <span class="w-4 text-right font-bold tabular-nums">
-                        {fixture_score(fixture, "b")}
-                      </span>
-                    </span>
-
-                    <span class="block border-t border-ink-100 px-2.5 py-1 text-[10px] text-ink-400">
-                      {loser_destination(@circuit_numbers, fixture)}
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <%!-- The elbows that say which two cards feed the next one. --%>
-              <div
-                :if={index < length(lane.rounds) - 1}
-                aria-hidden="true"
-                class="flex w-11 flex-col gap-2"
+          <BracketComponents.bracket_lane
+            lane={lane}
+            key={:fixtures}
+            id={"circuit-bracket-#{lane.side}"}
+            fit={@circuit_zoom == :fit}
+          >
+            <:card :let={{fixture, round}}>
+              <button
+                type="button"
+                phx-click="select_circuit_fixture"
+                phx-value-id={fixture.id}
+                class={[
+                  "bracket-card",
+                  fixture_state(fixture) == :waiting && "bracket-card--waiting",
+                  fixture_state(fixture) == :live && "bracket-card--live",
+                  fixture_state(fixture) == :done && "bracket-card--done",
+                  fixture_state(fixture) == :walkover && "bracket-card--walkover",
+                  @circuit_selected == fixture.id && "bracket-card--selected"
+                ]}
               >
-                <div class="h-[14px]"></div>
-                <div class="flex flex-col justify-around" style={"height:#{lane.height}px"}>
-                  <div
-                    :for={link <- Enum.at(lane.links, index, [])}
-                    class="flex items-center"
-                    style={"height:#{link.height}px"}
-                  >
-                    <div
-                      :if={link.merge?}
-                      class="w-5 self-stretch rounded-r-md border-2 border-l-0 border-ink-300"
-                    >
-                    </div>
-                    <div :if={link.merge?} class="w-5 border-t-2 border-ink-300"></div>
-                    <div :if={!link.merge?} class="w-11 border-t-2 border-ink-300"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+                <span class="bracket-card__head">
+                  <span>
+                    {match_number(@circuit_numbers, fixture)}<span :if={slot_label(fixture)}>
+                    · {slot_label(fixture)}</span>
+                  </span>
+                  <span :if={fixture_state(fixture) == :live} class="bracket-card__badge">
+                    Live
+                  </span>
+                </span>
+
+                <BracketComponents.bracket_slots
+                  a={
+                    %{
+                      name: participant_name(fixture.participant_a),
+                      score: fixture_score(fixture, "a"),
+                      won?: fixture_winner?(fixture, "a")
+                    }
+                  }
+                  b={
+                    %{
+                      name: participant_name(fixture.participant_b),
+                      score: fixture_score(fixture, "b"),
+                      won?: fixture_winner?(fixture, "b")
+                    }
+                  }
+                  decided={fixture_state(fixture) in [:done, :walkover]}
+                  shade_a={from_winners_side?(round, "a", @circuit_first_knockout)}
+                />
+
+                <span class="bracket-card__foot">
+                  <span class="bracket-card__dest">
+                    {loser_destination(@circuit_numbers, fixture)}
+                  </span>
+                </span>
+              </button>
+            </:card>
+          </BracketComponents.bracket_lane>
         </section>
       </div>
 
