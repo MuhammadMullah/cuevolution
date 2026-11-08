@@ -20,7 +20,10 @@ defmodule CuevolutionWeb.PublicFixturesLive do
 
   @tabs [{"male", "Individual Male"}, {"female", "Individual Female"}, {"team", "Teams"}]
   @filters ~w(all live next finished)
-  @views ~w(list chart)
+  # By stage first: one side of the bracket at a time is what fits a screen,
+  # and it opens on whichever stage is being played.
+  @views ~w(stage chart list)
+  @sides ~w(winners losers finals)
 
   @impl true
   def mount(_params, _session, socket) do
@@ -37,24 +40,37 @@ defmodule CuevolutionWeb.PublicFixturesLive do
     category = if params["category"] in ~w(male female team), do: params["category"], else: "male"
     filter = if params["filter"] in @filters, do: params["filter"], else: "all"
     # The team event is a round robin — there is no bracket to chart.
-    view = if params["view"] in @views and category != "team", do: params["view"], else: "list"
+    view =
+      cond do
+        category == "team" -> "list"
+        params["view"] in @views -> params["view"]
+        true -> "stage"
+      end
 
-    {:noreply, socket |> assign(category: category, filter: filter, view: view) |> load()}
+    side = if params["side"] in @sides, do: params["side"]
+
+    {:noreply,
+     socket |> assign(category: category, filter: filter, view: view, side: side) |> load()}
   end
 
   @impl true
   def handle_event("switch", %{"category" => category}, socket) do
-    {:noreply, push_patch(socket, to: path_for(category, "all", "list"))}
+    {:noreply, push_patch(socket, to: path_for(category, "all", "stage", nil))}
   end
 
   def handle_event("switch", %{"filter" => filter}, socket) do
-    {:noreply,
-     push_patch(socket, to: path_for(socket.assigns.category, filter, socket.assigns.view))}
+    %{category: category, view: view, side: side} = socket.assigns
+    {:noreply, push_patch(socket, to: path_for(category, filter, view, side))}
   end
 
   def handle_event("switch", %{"view" => view}, socket) do
-    {:noreply,
-     push_patch(socket, to: path_for(socket.assigns.category, socket.assigns.filter, view))}
+    %{category: category, filter: filter, side: side} = socket.assigns
+    {:noreply, push_patch(socket, to: path_for(category, filter, view, side))}
+  end
+
+  def handle_event("switch", %{"side" => side}, socket) do
+    %{category: category, filter: filter} = socket.assigns
+    {:noreply, push_patch(socket, to: path_for(category, filter, "stage", side))}
   end
 
   # Fit scales the two-sided knockout to the screen; 100% shows it at full
@@ -72,10 +88,12 @@ defmodule CuevolutionWeb.PublicFixturesLive do
     {:noreply, StandingsRefresh.refreshed(socket, &load/1)}
   end
 
-  defp path_for(category, filter, view) do
+  # Defaults stay out of the URL: no filter, the By stage view, and the stage
+  # in play (which is worked out on load, so a shared link follows the event).
+  defp path_for(category, filter, view, side) do
     query =
-      [{"category", category}, {"filter", filter}, {"view", view}]
-      |> Enum.reject(fn {_k, v} -> v in ["all", "list"] end)
+      [{"category", category}, {"filter", filter}, {"view", view}, {"side", side}]
+      |> Enum.reject(fn {_k, v} -> v in [nil, "all", "stage"] end)
       |> Map.new()
 
     ~p"/matches?#{query}"
@@ -90,19 +108,42 @@ defmodule CuevolutionWeb.PublicFixturesLive do
 
     rows = Enum.map(fixtures, &present(&1, numbers))
     shown = Enum.filter(rows, &matches_filter?(&1, socket.assigns.filter))
+    chartable? = Enum.any?(rows, &(&1.bracket_side in ["winners", "losers", "knockout"]))
+    # No bracket (the team round robin, or no draw yet) means no chart views.
+    view = if chartable?, do: socket.assigns.view, else: "list"
 
     assign(socket,
+      view: view,
+      current_side: socket.assigns.side || side_in_play(rows),
       counts: counts(rows),
       total: length(rows),
       played: Enum.count(rows, &(&1.state in [:final, :walkover, :bye])),
       live_now: Enum.count(rows, &(&1.state == :live)),
-      chartable?: Enum.any?(rows, &(&1.bracket_side in ["winners", "losers", "knockout"])),
+      chartable?: chartable?,
       rounds: group_rounds(rows, shown),
       # The chart always shows the whole bracket: a half-drawn bracket is not
       # a bracket, so the status filter belongs to the list view only.
-      lanes: if(socket.assigns.view == "chart", do: build_lanes(rows), else: [])
+      lanes: if(view in ["stage", "chart"], do: build_lanes(rows), else: [])
     )
   end
+
+  # The stage being played: the side of the earliest round that still has a
+  # match to play. Byes never need playing. Once everything is decided, the
+  # finals are what anyone wants to see.
+  defp side_in_play(rows) do
+    rows
+    |> Enum.filter(&(&1.state in [:upcoming, :waiting, :live] and &1.bracket_side != nil))
+    |> Enum.min_by(& &1.round_sequence, fn -> nil end)
+    |> case do
+      %{bracket_side: "winners"} -> "winners"
+      %{bracket_side: "losers"} -> "losers"
+      _knockout_or_done -> "finals"
+    end
+  end
+
+  @doc false
+  def lane_for_side("finals"), do: "knockout"
+  def lane_for_side(side), do: side
 
   # ------------------------------------------------------------------ chart
 

@@ -81,11 +81,12 @@ const EChart = {
 }
 
 // Scales the two-sided Circuit knockout (BracketComponents.bracket_lane) to
-// the width of its frame, so the whole draw is on screen at any size. The
+// the width of its frame, down to a readable minimum. The
 // scale is a CSS variable on the frame's own style, which the template tells
 // LiveView to leave alone, so live score updates don't reset it. Measured at
 // full size each time: the board's natural width only changes with the draw.
 const BracketFit = {
+  minZoom: 0.75,
   mounted() {
     this.observer = new ResizeObserver(() => this.fit())
     this.observer.observe(this.el)
@@ -104,10 +105,13 @@ const BracketFit = {
     this.el.style.setProperty("--bracket-zoom", "1")
     if (this.el.dataset.fit !== "true") return
 
+    // Never below 75%: smaller than that the names stop being readable, so
+    // a narrow screen gets a readable chart that scrolls sideways instead.
     const natural = board.offsetWidth
     const available = this.el.clientWidth
     if (natural > available && available > 0) {
-      this.el.style.setProperty("--bracket-zoom", (available / natural).toFixed(4))
+      const zoom = Math.max(available / natural, BracketFit.minZoom)
+      this.el.style.setProperty("--bracket-zoom", zoom.toFixed(4))
     }
   }
 }

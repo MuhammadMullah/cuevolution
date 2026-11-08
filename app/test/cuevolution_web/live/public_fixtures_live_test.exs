@@ -28,6 +28,16 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     %{bracket: bracket, admin: admin}
   end
 
+  defp round_fixtures(bracket, code) do
+    Repo.all(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        where: r.knockout_bracket_id == ^bracket.id and r.code == ^code,
+        order_by: f.slot
+    )
+  end
+
   defp opening_fixtures(bracket) do
     Repo.all(
       from f in Fixture,
@@ -61,7 +71,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       [fixture | _] = opening_fixtures(bracket)
       player = Repo.preload(fixture, participant_a: :player).participant_a.player
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       refute html =~ player.mobile_number
       refute html =~ "tel:"
@@ -72,7 +82,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     test "every match of the draw is shown, grouped by round", %{conn: conn} do
       drawn()
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "Winners Round 1"
       assert html =~ "Winners Round 2"
@@ -87,7 +97,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     test "matches are numbered across the whole draw", %{conn: conn} do
       drawn()
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ ">M1<"
       assert html =~ ">M27<"
@@ -97,7 +107,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       %{bracket: bracket} = drawn()
       [fixture | _] = opening_fixtures(bracket)
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ ~s(href="/m/#{fixture.match_id}")
     end
@@ -105,7 +115,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     test "a double-elimination card says where the loser goes", %{conn: conn} do
       drawn()
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "Loser to M"
     end
@@ -120,7 +130,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
           "score" => %{"a" => 6, "b" => 2}
         })
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "1 of 8 played"
       assert html =~ "race to 6"
@@ -131,7 +141,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     test "a match with no time yet says TBD rather than showing nothing", %{conn: conn} do
       drawn()
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "TBD"
     end
@@ -147,7 +157,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
           "time" => "14:30"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "14:30"
       assert html =~ Calendar.strftime(date, "%a %-d %b")
@@ -163,7 +173,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
           "time" => "09:00"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "09:00"
       assert html =~ "TBD"
@@ -209,7 +219,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
             limit: 1
         )
 
-      {:ok, view, _html} = live(conn, ~p"/matches")
+      {:ok, view, _html} = live(conn, ~p"/matches?view=list")
 
       card = view |> element(~s(a[href="/m/#{bye.match_id}"])) |> render()
 
@@ -225,7 +235,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
 
       {:ok, _} = Competitions.update_live_score(fixture, admin, %{"a" => 2, "b" => 1})
 
-      {:ok, _view, html} = live(conn, ~p"/matches")
+      {:ok, _view, html} = live(conn, ~p"/matches?view=list")
 
       assert html =~ "Live 1"
       assert html =~ "In play"
@@ -243,7 +253,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
           })
       end
 
-      {:ok, view, all} = live(conn, ~p"/matches")
+      {:ok, view, all} = live(conn, ~p"/matches?view=list")
       numbers = fn html -> Regex.scan(~r/>(M\d+)</, html) |> Enum.map(&List.last/1) end
 
       finished = view |> element("button[phx-value-filter='finished']") |> render_click()
@@ -258,7 +268,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     test "the filter is in the URL so it can be shared", %{conn: conn} do
       drawn()
 
-      {:ok, view, _html} = live(conn, ~p"/matches")
+      {:ok, view, _html} = live(conn, ~p"/matches?view=list")
 
       view |> element("button[phx-value-filter='live']") |> render_click()
       assert_patch(view) =~ "filter=live"
@@ -269,7 +279,7 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
       drawn()
       drawn("female", 16)
 
-      {:ok, view, _html} = live(conn, ~p"/matches?filter=finished")
+      {:ok, view, _html} = live(conn, ~p"/matches?view=list&filter=finished")
 
       view |> element("button[phx-value-category='female']") |> render_click()
       path = assert_patch(view)
@@ -407,12 +417,56 @@ defmodule CuevolutionWeb.PublicFixturesLiveTest do
     test "switching views is in the URL so a link opens the same one", %{conn: conn} do
       drawn("male", 32)
 
-      {:ok, view, list} = live(conn, ~p"/matches")
-      refute list =~ "Winners&#39; side"
+      {:ok, view, _html} = live(conn, ~p"/matches")
 
       chart = view |> element("button[phx-value-view='chart']") |> render_click()
-      assert_patch(view) =~ "view=chart"
+      assert assert_patch(view) =~ "view=chart"
       assert chart =~ "Winners&#39; side"
+      assert chart =~ "Losers&#39; side"
+
+      list = view |> element("button[phx-value-view='list']") |> render_click()
+      assert assert_patch(view) =~ "view=list"
+      refute list =~ "Winners&#39; side"
+    end
+
+    test "it opens By stage, on the stage being played", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = drawn("male", 32)
+
+      {:ok, _view, html} = live(conn, ~p"/matches")
+
+      # By stage is the first view and the default, on one lane at a time:
+      # nothing is played yet, so that is the winners' side.
+      assert html =~ ~r/By stage.*Full chart.*List/s
+      assert html =~ "Winners&#39; side"
+      refute html =~ "Losers&#39; side"
+      refute html =~ "Knockout"
+
+      # Once the winners' side is finished, the losers' side is in play.
+      for code <- ~w(W1 W2) do
+        for f <- round_fixtures(bracket, code) do
+          {:ok, _} =
+            Competitions.record_result(Repo.reload!(f), admin, %{
+              "winner_participation_id" => Repo.reload!(f).participant_a_id,
+              "score" => %{"a" => 6, "b" => 1}
+            })
+        end
+      end
+
+      {:ok, _view, html} = live(conn, ~p"/matches")
+      assert html =~ "Losers&#39; side"
+      refute html =~ "Winners&#39; side"
+    end
+
+    test "a stage chosen is in the URL", %{conn: conn} do
+      drawn("male", 32)
+
+      {:ok, view, _html} = live(conn, ~p"/matches")
+
+      html = view |> element("button[phx-value-side='finals']") |> render_click()
+      assert assert_patch(view) =~ "side=finals"
+      assert html =~ "Knockout"
+      assert html =~ ~s(data-layout="two-sided")
+      refute html =~ "Winners&#39; side"
     end
 
     test "the team event offers no chart, having no bracket", %{conn: conn} do

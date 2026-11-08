@@ -458,6 +458,20 @@
   zoom: var(--bracket-zoom, 1);
 }
 
+/* Narrower connectors inside the two-sided knockout. */
+.bracket-links--tight {
+  @apply w-6;
+}
+
+.bracket-links--tight .bracket-link__elbow,
+.bracket-links--tight .bracket-link__stem {
+  @apply w-3;
+}
+
+.bracket-links--tight .bracket-link__carry {
+  @apply w-6;
+}
+
 /* The frame the two-sided knockout is fitted into. At "Fit" the board is
    scaled to this width; at "100%" it is full size and scrolls sideways. */
 .bracket-fit {

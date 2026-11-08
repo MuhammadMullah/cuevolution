@@ -20,7 +20,7 @@
         fit it, so every extra pixel is bigger names. --%>
   <main class={[
     "mx-auto px-4 py-5",
-    if(@view == "chart", do: "max-w-[1800px]", else: "max-w-6xl")
+    if(@view in ["stage", "chart"], do: "max-w-[1800px]", else: "max-w-6xl")
   ]}>
     <div class="mb-4 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
       <button
@@ -52,7 +52,9 @@
       <div class="flex flex-wrap items-center gap-3">
         <div :if={@chartable?} class="flex gap-1 rounded-xl bg-ink-100 p-1">
           <button
-            :for={{label, slug} <- [{"List", "list"}, {"Chart", "chart"}]}
+            :for={
+              {label, slug} <- [{"By stage", "stage"}, {"Full chart", "chart"}, {"List", "list"}]
+            }
             type="button"
             phx-click="switch"
             phx-value-view={slug}
@@ -60,6 +62,27 @@
               "rounded-lg px-3.5 py-1.5 text-[13px] font-semibold",
               @view == slug && "bg-white text-ink-950 shadow-sm",
               @view != slug && "text-ink-500 hover:text-ink-950"
+            ]}
+          >
+            {label}
+          </button>
+        </div>
+        <div :if={@view == "stage"} class="flex gap-1 rounded-xl bg-ink-100 p-1">
+          <button
+            :for={
+              {label, slug} <- [
+                {"Winners", "winners"},
+                {"Losers", "losers"},
+                {"Finals", "finals"}
+              ]
+            }
+            type="button"
+            phx-click="switch"
+            phx-value-side={slug}
+            class={[
+              "rounded-lg px-3 py-1.5 text-[13px] font-semibold",
+              @current_side == slug && "bg-white text-ink-950 shadow-sm",
+              @current_side != slug && "text-ink-500 hover:text-ink-950"
             ]}
           >
             {label}
@@ -188,7 +211,7 @@
 
       <%!-- Chart: the bracket as a shape, so you can see where a match leads
             rather than only what it is. --%>
-      <div :if={@view == "chart"} class="space-y-5">
+      <div :if={@view in ["stage", "chart"]} class="space-y-5">
         <div class="flex flex-wrap items-center gap-3">
           <span class="inline-flex items-center gap-1.5 text-xs text-ink-500">
             <span class="h-2.5 w-2.5 rounded-sm border border-green-400 bg-green-100"></span>
@@ -217,6 +240,7 @@
 
         <section
           :for={lane <- @lanes}
+          :if={@view == "chart" or lane.side == lane_for_side(@current_side)}
           class={["bracket-lane", "bracket-lane--#{lane.side}"]}
         >
           <h2 class="mb-3 text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-500">

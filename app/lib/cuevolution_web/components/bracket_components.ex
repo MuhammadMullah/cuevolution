@@ -183,11 +183,12 @@ defmodule CuevolutionWeb.BracketComponents do
               :if={index < length(@lane.split.left) - 1}
               links={Enum.at(@lane.split.left_links, index, [])}
               height={@lane.split.height}
+              tight
             />
           </div>
         </div>
 
-        <.bracket_links links={[%{height: 2, merge?: false}]} height={@lane.split.height} />
+        <.bracket_links links={[%{height: 2, merge?: false}]} height={@lane.split.height} tight />
 
         <div class="flex" data-half="final">
           <.bracket_column round={@lane.split.final} key={@key} height={@lane.split.height} compact>
@@ -195,7 +196,7 @@ defmodule CuevolutionWeb.BracketComponents do
           </.bracket_column>
         </div>
 
-        <.bracket_links links={[%{height: 2, merge?: false}]} height={@lane.split.height} />
+        <.bracket_links links={[%{height: 2, merge?: false}]} height={@lane.split.height} tight />
 
         <div class="flex" data-half="bottom">
           <div :for={{round, index} <- Enum.with_index(@lane.split.right)} class="flex">
@@ -204,6 +205,7 @@ defmodule CuevolutionWeb.BracketComponents do
               links={Enum.at(@lane.split.right_links, index - 1, [])}
               height={@lane.split.height}
               mirrored
+              tight
             />
             <.bracket_column round={round} key={@key} height={@lane.split.height} compact>
               <:card :let={item}>{render_slot(@card, item)}</:card>
@@ -227,7 +229,7 @@ defmodule CuevolutionWeb.BracketComponents do
     ~H"""
     <div class={[
       "flex flex-col gap-2",
-      if(@compact, do: "w-[180px]", else: "min-w-[210px]")
+      if(@compact, do: "w-[160px]", else: "min-w-[210px]")
     ]}>
       <div class="flex items-baseline justify-between gap-2">
         <span class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">
@@ -250,13 +252,22 @@ defmodule CuevolutionWeb.BracketComponents do
   attr :links, :list, required: true
   attr :height, :integer, required: true
   attr :mirrored, :boolean, default: false
+  attr :tight, :boolean, default: false
 
   # The elbows that say which two cards feed the next one. `mirrored` turns
   # them to face left, for the half of a two-sided chart that runs in from the
-  # right.
+  # right; `tight` narrows them, since every pixel saved across the eleven
+  # columns of a two-sided chart is a bigger card once it is fitted.
   defp bracket_links(assigns) do
     ~H"""
-    <div aria-hidden="true" class={["bracket-links", @mirrored && "bracket-links--mirrored"]}>
+    <div
+      aria-hidden="true"
+      class={[
+        "bracket-links",
+        @mirrored && "bracket-links--mirrored",
+        @tight && "bracket-links--tight"
+      ]}
+    >
       <div class="h-[14px]"></div>
       <div class="flex flex-col justify-around" style={"height:#{@height}px"}>
         <div :for={link <- @links} class="bracket-link" style={"height:#{link.height}px"}>

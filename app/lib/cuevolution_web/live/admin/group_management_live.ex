@@ -1194,6 +1194,32 @@ defmodule CuevolutionWeb.GroupManagementLive do
     end)
   end
 
+  # A side the director picked is kept. Otherwise none is chosen until there is
+  # a bracket to choose from, or a pre-draw load would settle on Finals and
+  # keep it after the draw.
+  defp circuit_side(socket, bracket, rounds) do
+    cond do
+      socket.assigns[:circuit_side] -> socket.assigns.circuit_side
+      bracket -> side_in_play(rounds)
+      true -> nil
+    end
+  end
+
+  # The side of the earliest round that still has a match to play; byes never
+  # need playing. Finals once everything is decided.
+  defp side_in_play(rounds) do
+    rounds
+    |> Enum.filter(fn round ->
+      Enum.any?(round.fixtures, &(not &1.bye and fixture_state(&1) in [:ready, :waiting, :live]))
+    end)
+    |> Enum.min_by(& &1.sequence, fn -> nil end)
+    |> case do
+      %{bracket_side: "winners"} -> :winners
+      %{bracket_side: "losers"} -> :losers
+      _knockout_or_done -> :finals
+    end
+  end
+
   # The "Finals" tab is the knockout lane.
   defp lane_side(:winners), do: "winners"
   defp lane_side(:losers), do: "losers"
@@ -1461,7 +1487,9 @@ defmodule CuevolutionWeb.GroupManagementLive do
       # slow to appear, not the queries behind it (those total ~40ms). The
       # full chart is still one click away in the view switcher.
       circuit_view: socket.assigns[:circuit_view] || :stage,
-      circuit_side: socket.assigns[:circuit_side] || :winners,
+      # By stage opens on the stage being played rather than always on the
+      # winners' side, which is finished long before the event is.
+      circuit_side: circuit_side(socket, bracket, rounds),
       circuit_zoom: socket.assigns[:circuit_zoom] || :fit,
       circuit_filter: socket.assigns[:circuit_filter] || :all,
       circuit_notice: nil
