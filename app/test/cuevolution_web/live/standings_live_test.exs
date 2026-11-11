@@ -131,6 +131,37 @@ defmodule CuevolutionWeb.StandingsLiveTest do
     refute html =~ "No standings yet"
   end
 
+  test "shows the match and frame record for a ranked participant", %{conn: conn} do
+    player = insert(:player)
+    fixture = circuit_fixture()
+    admin = insert(:admin)
+
+    {:ok, _result} =
+      Competitions.record_result(fixture, admin, %{
+        "winner_participation_id" => fixture.participant_a_id,
+        "score" => %{"a" => 5, "b" => 3}
+      })
+
+    participant = Cuevolution.Repo.preload(fixture, :participant_a).participant_a
+    conn = log_in_player(conn, player)
+
+    {:ok, view, _html} = live(conn, ~p"/standings")
+
+    html =
+      view
+      |> element("button[phx-click='switch_tab'][phx-value-tab='#{participant.category}']")
+      |> render_click()
+
+    for {label, title} <- CuevolutionWeb.StandingsLive.metric_columns() do
+      assert html =~ ~s(title="#{title}"), "the #{label} column is missing"
+    end
+
+    # A 5-3 win: both sides played 8 frames, so 5/8 and 3/8 of them.
+    assert html =~ "100.0%"
+    assert html =~ "62.5%"
+    assert html =~ "37.5%"
+  end
+
   test "a points change from another process live-updates a connected StandingsLive session",
        %{conn: conn} do
     player = insert(:player)

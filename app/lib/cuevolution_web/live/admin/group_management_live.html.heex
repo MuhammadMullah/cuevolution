@@ -1413,7 +1413,7 @@
       </div>
 
       <%!-- Group tables: ranked on SP Points, top four shaded as advancing. --%>
-      <div :if={@circuit_team_view == :table} class="grid gap-4 lg:grid-cols-2">
+      <div :if={@circuit_team_view == :table} class="grid gap-4 2xl:grid-cols-2">
         <div
           :for={%{group: group, rows: rows, advancer_count: advancers} <- @circuit_team_standings}
           class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
@@ -1426,7 +1426,7 @@
           </div>
 
           <div class="overflow-x-auto">
-            <table class="table-stack w-full border-collapse sm:min-w-[520px]">
+            <table class="table-stack w-full border-collapse sm:min-w-[860px]">
               <thead>
                 <tr>
                   <th
@@ -1470,7 +1470,7 @@
                     data-label="Matches played"
                     class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
                   >
-                    {row.wins + row.losses}
+                    {row.matches_played}
                   </td>
                   <td
                     data-label="Matches won"
@@ -1485,10 +1485,34 @@
                     {row.losses}
                   </td>
                   <td
+                    data-label="Win %"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
+                    {Competitions.pct_label(row.win_pct) || "-"}
+                  </td>
+                  <td
+                    data-label="Frames played"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
+                    {row.frames_played}
+                  </td>
+                  <td
                     data-label="Frames won"
                     class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
                   >
                     {row.frames_won}
+                  </td>
+                  <td
+                    data-label="Frames lost"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
+                    {row.frames_lost}
+                  </td>
+                  <td
+                    data-label="Frame win %"
+                    class="px-3 py-2 text-right text-[13px] tabular-nums text-ink-600"
+                  >
+                    {Competitions.pct_label(row.frame_win_pct) || "-"}
                   </td>
                   <td
                     data-label="Frame difference"

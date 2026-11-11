@@ -4354,9 +4354,15 @@ defmodule Cuevolution.Competitions do
   def position_label(%{position: {n, n}}, _state), do: to_string(n)
   def position_label(%{position: {from, _to}}, _state), do: "#{from}="
 
-  @doc "Rack-win % to one decimal place, or `nil` when no racks have been played."
-  def rack_win_label(%{rack_win_pct: nil}), do: nil
-  def rack_win_label(%{rack_win_pct: pct}), do: "#{:erlang.float_to_binary(pct, decimals: 1)}%"
+  @doc """
+  A standings percentage to one decimal place — `"75.0%"` — or `nil` when
+  there was nothing to divide by: no matches played, or no racks played. The
+  tables print their own placeholder for `nil` rather than a misleading 0.0%.
+  """
+  def pct_label(nil), do: nil
+
+  def pct_label(pct) when is_number(pct),
+    do: "#{:erlang.float_to_binary(pct / 1, decimals: 1)}%"
 
   @doc "The Status column of the live view."
   def status_label(%{status: :winners_side}), do: "Winners side"
@@ -4382,8 +4388,11 @@ defmodule Cuevolution.Competitions do
         position:       {from, to} — the shared band, nil while provisional,
         played:         matches, byes and walkovers included,
         won:            matches won, byes and walkovers included,
-        racks_won:      racks, byes and walkovers excluded,
-        racks_played:   racks, byes and walkovers excluded,
+        lost:           matches lost, byes and walkovers included,
+        win_pct:        won / played * 100, nil with no matches,
+        racks_won:      racks won, byes and walkovers excluded,
+        racks_lost:     racks lost, byes and walkovers excluded,
+        racks_played:   racks played, byes and walkovers excluded,
         rack_win_pct:   racks_won / racks_played * 100, nil with no racks,
         points:         SP Points
       }
@@ -4530,17 +4539,25 @@ defmodule Cuevolution.Competitions do
     # show 9, not the bare 2 for turning up.
     reached = exit_round || guaranteed_exit(played)
 
+    matches_played = Enum.count(decided)
+    matches_won = Enum.count(decided, fn {_r, f} -> bracket_winner_id(f) == id end)
+    racks_won = rack_total(decided, id, :for)
+    racks_played = rack_total(decided, id, :total)
+
     %{
       exit_round: exit_round,
       status: status_for(lost, decided, id),
       qualified?: qualified?,
       se_wins: se_wins,
       finish: finish,
-      played: Enum.count(decided),
-      won: Enum.count(decided, fn {_r, f} -> bracket_winner_id(f) == id end),
-      racks_won: rack_total(decided, id, :for),
-      racks_played: rack_total(decided, id, :total),
-      rack_win_pct: rack_win_pct(decided, id),
+      played: matches_played,
+      won: matches_won,
+      lost: matches_played - matches_won,
+      win_pct: StandingsCalculator.pct(matches_won, matches_played),
+      racks_won: racks_won,
+      racks_played: racks_played,
+      racks_lost: racks_played - racks_won,
+      rack_win_pct: StandingsCalculator.pct(racks_won, racks_played),
       points:
         SpPoints.circuit_points(%{
           qualified?: qualified?,
@@ -4624,13 +4641,6 @@ defmodule Cuevolution.Competitions do
       {mine, theirs} = racks_for(fixture, id)
       acc + if(which == :for, do: mine, else: mine + theirs)
     end)
-  end
-
-  defp rack_win_pct(decided, id) do
-    case rack_total(decided, id, :total) do
-      0 -> nil
-      total -> rack_total(decided, id, :for) / total * 100
-    end
   end
 
   defp racks_for(%Fixture{} = fixture, id) do
@@ -5833,21 +5843,18 @@ defmodule Cuevolution.Competitions do
   end
 
   # `standings` is already filtered to participants who've actually played
-  # (see `played_participant_ids/1`), so `wins + losses + draws` here is
-  # always >= 1 — safe as the points/frame-diff-per-match denominator. Must
-  # include `draws` (Regional's 4-frame format allows a 2-2 draw) — a
-  # participant whose only match was drawn has `wins == losses == 0`.
+  # (see `played_participant_ids/1`), so the row's `matches_played` here is
+  # always >= 1 — safe as the points/frame-diff-per-match denominator. It
+  # counts draws (Regional's 4-frame format allows a 2-2 draw), so a
+  # participant whose only match was drawn still divides by 1 rather than 0.
   defp best_rest_row(row, top_ids, group_id) do
     if MapSet.member?(top_ids, row.participant_id) do
       []
     else
-      played = row.wins + row.losses + row.draws
-
       [
         Map.merge(row, %{
-          matches_played: played,
-          points_per_match: row.points / played,
-          frame_diff_per_match: row.frame_diff / played,
+          points_per_match: row.points / row.matches_played,
+          frame_diff_per_match: row.frame_diff / row.matches_played,
           group_id: group_id
         })
       ]
@@ -7239,6 +7246,8 @@ defmodule Cuevolution.Competitions do
           frames_lost: 0
         })
 
+      frames_played = stats.frames_won + stats.frames_lost
+
       %{
         id: participation.id,
         name: participant_name(participation),
@@ -7249,10 +7258,13 @@ defmodule Cuevolution.Competitions do
         played: stats.played,
         won: stats.won,
         lost: stats.played - stats.won,
+        win_pct: StandingsCalculator.pct(stats.won, stats.played),
         match_difference: stats.won - (stats.played - stats.won),
+        frames_played: frames_played,
         frames_won: stats.frames_won,
         frames_lost: stats.frames_lost,
         frame_difference: stats.frames_won - stats.frames_lost,
+        frame_win_pct: StandingsCalculator.pct(stats.frames_won, frames_played),
         points: Map.get(points, participation.id, 0),
         sp_points: Map.get(sp_points, participation.id, 0)
       }

@@ -33,6 +33,34 @@ defmodule Cuevolution.CompetitionsTest do
     )
   end
 
+  defp circuit_team_fixture do
+    circuit = stage("Circuit")
+    bracket = Competitions.ensure_knockout_bracket(circuit.id, "team")
+
+    [participant_a, participant_b] =
+      for _ <- 1..2 do
+        insert(:stage_participation,
+          stage_id: circuit.id,
+          category: "team",
+          player_id: nil,
+          team_id: insert(:team).id
+        )
+      end
+
+    {:ok, round} =
+      Competitions.create_round(%{
+        stage_id: circuit.id,
+        knockout_bracket_id: bracket.id,
+        name: "Round of 4"
+      })
+
+    insert(:fixture,
+      round_id: round.id,
+      participant_a_id: participant_a.id,
+      participant_b_id: participant_b.id
+    )
+  end
+
   describe "list_stages/0" do
     test "returns all 6 seeded stages in pipeline order" do
       assert Enum.map(Competitions.list_stages(), & &1.name) == [
@@ -2471,6 +2499,67 @@ defmodule Cuevolution.CompetitionsTest do
       assert a.points == 5
       assert b.points == 0
       assert a.rank < b.rank
+    end
+
+    test "every row carries the match and frame record with both percentages" do
+      fixture = circuit_fixture("male")
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id,
+          "score" => %{"a" => 5, "b" => 3}
+        })
+
+      standings = Competitions.standings_for_category("male")
+      winner = Enum.find(standings, &(&1.id == fixture.participant_a_id))
+      loser = Enum.find(standings, &(&1.id == fixture.participant_b_id))
+
+      assert %{played: 1, won: 1, lost: 0, win_pct: 100.0} = winner
+      assert %{frames_played: 8, frames_won: 5, frames_lost: 3} = winner
+      assert_in_delta winner.frame_win_pct, 62.5, 0.001
+
+      assert %{played: 1, won: 0, lost: 1} = loser
+      assert loser.win_pct == 0.0
+      assert %{frames_played: 8, frames_won: 3, frames_lost: 5} = loser
+      assert_in_delta loser.frame_win_pct, 37.5, 0.001
+    end
+
+    test "the team table carries the same record as the singles one" do
+      fixture = circuit_team_fixture()
+      admin = insert(:admin)
+
+      {:ok, _result} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id,
+          "score" => %{"a" => 7, "b" => 2}
+        })
+
+      standings = Competitions.standings_for_category("team")
+      winner = Enum.find(standings, &(&1.id == fixture.participant_a_id))
+      loser = Enum.find(standings, &(&1.id == fixture.participant_b_id))
+
+      assert %{played: 1, won: 1, lost: 0, win_pct: 100.0} = winner
+      assert %{frames_played: 9, frames_won: 7, frames_lost: 2} = winner
+      assert_in_delta winner.frame_win_pct, 7 / 9 * 100, 0.001
+
+      assert %{played: 1, won: 0, lost: 1} = loser
+      assert loser.win_pct == 0.0
+      assert %{frames_played: 9, frames_won: 2, frames_lost: 7} = loser
+      assert_in_delta loser.frame_win_pct, 2 / 9 * 100, 0.001
+    end
+
+    test "a participant who has played nothing has nil percentages, not a misleading zero" do
+      participant = insert(:stage_participation, stage_id: stage("Circuit").id, category: "male")
+
+      row = Enum.find(Competitions.standings_for_category("male"), &(&1.id == participant.id))
+
+      assert row.played == 0
+      assert row.won == 0
+      assert row.lost == 0
+      assert row.frames_played == 0
+      assert is_nil(row.win_pct)
+      assert is_nil(row.frame_win_pct)
     end
 
     test "excludes Grassroots/Regional participants — standings only cover Circuit/Finals" do

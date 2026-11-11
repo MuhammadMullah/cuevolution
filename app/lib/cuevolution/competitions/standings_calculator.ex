@@ -7,6 +7,10 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
   the query-wrapping layer that feeds this real data); this module never
   touches `Repo` or any Ecto schema.
 
+  Each row also carries the metrics a standings table prints but never ranks
+  on: the match record (played, won, lost, drawn, win %) and the frame record
+  (played, won, lost, difference, frame win %).
+
   The default cascade is (1) match wins, (2) head-to-head result among
   still-tied participants, (3) frame/rack differential, (4) total frames
   won. The `:points_first` cascade used by Grassroots is (1) total points,
@@ -31,8 +35,13 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
           wins: non_neg_integer(),
           losses: non_neg_integer(),
           draws: non_neg_integer(),
+          matches_played: non_neg_integer(),
+          win_pct: float() | nil,
           frame_diff: integer(),
           frames_won: non_neg_integer(),
+          frames_lost: non_neg_integer(),
+          frames_played: non_neg_integer(),
+          frame_win_pct: float() | nil,
           tied: boolean()
         }
 
@@ -85,6 +94,22 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
     |> assign_ranks()
   end
 
+  @doc """
+  `part` as a percentage of `total`, or `nil` when `total` is zero.
+
+  `nil` rather than 0.0 so a table can print "-" for "nothing to divide by"
+  instead of a 0.0% that reads like a participant who lost everything. A drawn
+  match counts towards the total and not towards the part, which is what
+  MW / MP asks for.
+  """
+  @spec pct(non_neg_integer(), non_neg_integer()) :: float() | nil
+  def pct(_part, 0), do: nil
+  def pct(part, total), do: part / total * 100
+
+  # Every row carries the full match record (played/won/lost/drawn and win %)
+  # and the full frame record (played/won/lost, difference and frame win %),
+  # so a standings table never has to re-derive a total from the two it was
+  # given and get the arithmetic subtly different from the next table along.
   defp build_stat(participant_id, matches) do
     totals =
       Enum.reduce(
@@ -110,7 +135,16 @@ defmodule Cuevolution.Competitions.StandingsCalculator do
         end
       )
 
-    Map.put(totals, :frame_diff, totals.frames_won - totals.frames_lost)
+    matches_played = totals.wins + totals.losses + totals.draws
+    frames_played = totals.frames_won + totals.frames_lost
+
+    Map.merge(totals, %{
+      matches_played: matches_played,
+      win_pct: pct(totals.wins, matches_played),
+      frame_diff: totals.frames_won - totals.frames_lost,
+      frames_played: frames_played,
+      frame_win_pct: pct(totals.frames_won, frames_played)
+    })
   end
 
   defp add_frames(acc, won, lost),

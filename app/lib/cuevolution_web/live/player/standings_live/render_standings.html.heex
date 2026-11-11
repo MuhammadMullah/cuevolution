@@ -115,7 +115,7 @@
       @rows_empty? && "hidden"
     ]}
   >
-    <table class="table-stack w-full border-collapse sm:min-w-[680px]">
+    <table class="table-stack w-full border-collapse sm:min-w-[1100px]">
       <thead>
         <tr class="border-b border-ink-200 bg-ink-50">
           <th class="sticky top-0 w-14 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
@@ -127,11 +127,13 @@
           <th class="sticky top-0 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
             Region
           </th>
-          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-            Played
-          </th>
-          <th class="sticky top-0 bg-ink-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500">
-            W–L
+          <th
+            :for={{label, title} <- metric_columns()}
+            scope="col"
+            title={title}
+            class="sticky top-0 whitespace-nowrap bg-ink-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500"
+          >
+            {label}
           </th>
           <th class="sticky top-0 bg-ink-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
             Stage
@@ -176,14 +178,12 @@
             </div>
           </td>
           <td data-label="Region" class="px-4 py-3 text-sm text-ink-600">{row.region}</td>
-          <td data-label="Played" class="px-4 py-3 text-right font-mono text-sm text-ink-500">
-            {row.played}
-          </td>
           <td
-            data-label="W–L"
-            class="px-4 py-3 text-right font-mono text-sm font-semibold text-ink-950"
+            :for={{label, value} <- metrics(row)}
+            data-label={label}
+            class="whitespace-nowrap px-4 py-3 text-right font-mono text-sm text-ink-600"
           >
-            {row.won}–{row.lost}
+            {value}
           </td>
           <td data-label="Stage" class="px-4 py-3">
             <PlayerComponents.stage_badge stage={row.stage} />
@@ -202,7 +202,8 @@
   <p :if={not @rows_empty?} class="mt-3.5 text-[12.5px] text-ink-400">
     Points in gold are SP Points — 2 for entering a circuit, 3 for every match won, plus 20 for
     the title, 10 for the runner-up and 5 for a semi-final. They decide the ranking; matches and
-    frames only separate players level on points. Rank #1 is marked with a red accent; players
+    frames only separate players level on points. MP/MW/ML and FP/FW/FL are the match and frame
+    record, with each win percentage alongside. Rank #1 is marked with a red accent; players
     currently on pace to advance to the next stage are marked with a green accent.
   </p>
 

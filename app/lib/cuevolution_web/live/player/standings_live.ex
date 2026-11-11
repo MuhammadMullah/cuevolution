@@ -87,4 +87,35 @@ defmodule CuevolutionWeb.StandingsLive do
         (stage_filter == "All" or row.stage == stage_filter)
     end)
   end
+
+  # ------------------------------------------------------------- the record
+
+  # The match record then the frame record, in table order. The header and the
+  # cells both read this one list, so neither can go missing from the other.
+  @metric_columns [
+    {"MP", "Matches played"},
+    {"MW", "Matches won"},
+    {"ML", "Matches lost"},
+    {"Win %", "Matches won / matches played"},
+    {"FP", "Frames played"},
+    {"FW", "Frames won"},
+    {"FL", "Frames lost"},
+    {"Frame Win %", "Frames won / frames played"}
+  ]
+
+  @doc false
+  def metric_columns, do: @metric_columns
+
+  @doc false
+  def metrics(row),
+    do: Enum.map(@metric_columns, fn {label, _} -> {label, metric(row, label)} end)
+
+  defp metric(row, "MP"), do: row.played
+  defp metric(row, "MW"), do: row.won
+  defp metric(row, "ML"), do: row.lost
+  defp metric(row, "Win %"), do: Competitions.pct_label(row.win_pct) || "—"
+  defp metric(row, "FP"), do: row.frames_played
+  defp metric(row, "FW"), do: row.frames_won
+  defp metric(row, "FL"), do: row.frames_lost
+  defp metric(row, "Frame Win %"), do: Competitions.pct_label(row.frame_win_pct) || "—"
 end

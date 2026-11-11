@@ -376,6 +376,101 @@ defmodule Cuevolution.Competitions.SpPointsStandingsTest do
     end
   end
 
+  describe "the match and frame record" do
+    test "matches and frames both split into played, won and lost" do
+      {table, _players} = standings()
+
+      for row <- table do
+        assert row.played == row.won + row.lost,
+               "#{row.name} played #{row.played} but won #{row.won} and lost #{row.lost}"
+
+        assert row.racks_played == row.racks_won + row.racks_lost,
+               "#{row.name} played #{row.racks_played} frames but won #{row.racks_won} " <>
+                 "and lost #{row.racks_lost}"
+      end
+    end
+
+    test "each win percentage is its own won over its own played" do
+      {table, _players} = standings()
+
+      for row <- table, row.played > 0 do
+        assert_in_delta row.win_pct, row.won / row.played * 100, 0.001
+      end
+
+      for row <- table, row.racks_played > 0 do
+        assert_in_delta row.rack_win_pct, row.racks_won / row.racks_played * 100, 0.001
+      end
+    end
+
+    test "a player knocked straight out has lost everything they played" do
+      {table, _players} = standings()
+      lowest = List.last(table)
+
+      # Out in L1 off two matches, both lost, and every match here was 6-1, so
+      # two frames of fourteen.
+      assert lowest.played == 2
+      assert lowest.won == 0
+      assert lowest.lost == 2
+      assert lowest.win_pct == 0.0
+      assert lowest.racks_played == 14
+      assert lowest.racks_won == 2
+      assert lowest.racks_lost == 12
+      assert_in_delta lowest.rack_win_pct, 2 / 14 * 100, 0.001
+    end
+
+    test "nothing played leaves both percentages nil rather than a misleading zero" do
+      stage = circuit()
+
+      players =
+        for _ <- 1..16, do: insert(:stage_participation, stage_id: stage.id, category: "male")
+
+      {:ok, %{bracket: bracket}} =
+        Competitions.generate_circuit_bracket(stage.id, "male", players)
+
+      table = Competitions.sp_points_standings(bracket.id)
+
+      assert Enum.all?(table, &(&1.played == 0 and &1.lost == 0 and is_nil(&1.win_pct)))
+
+      assert Enum.all?(
+               table,
+               &(&1.racks_played == 0 and &1.racks_lost == 0 and is_nil(&1.rack_win_pct))
+             )
+    end
+
+    test "byes and walkovers count as matches but not as frames" do
+      stage = circuit()
+
+      # 12 into a 16 bracket, so four of the opening fixtures are byes.
+      players =
+        for _ <- 1..12, do: insert(:stage_participation, stage_id: stage.id, category: "male")
+
+      {:ok, %{bracket: bracket}} =
+        Competitions.generate_circuit_bracket(stage.id, "male", players)
+
+      bye =
+        Repo.one!(
+          from f in Fixture,
+            join: r in Round,
+            on: r.id == f.round_id,
+            where: r.knockout_bracket_id == ^bracket.id and f.bye == true,
+            order_by: [asc: f.slot],
+            limit: 1
+        )
+
+      id = bye.participant_a_id || bye.participant_b_id
+      row = Enum.find(Competitions.sp_points_standings(bracket.id), &(&1.participation.id == id))
+
+      assert row.played == 1
+      assert row.won == 1
+      assert row.lost == 0
+      assert row.win_pct == 100.0
+      assert row.racks_played == 0
+      assert row.racks_won == 0
+      assert row.racks_lost == 0
+      assert is_nil(row.rack_win_pct)
+    end
+  end
+
   # The racks a player's contested matches account for — a bye adds nothing, so
   # this is just their own figure, asserted to be consistent rather than zero.
   defp rack_total_excluding_byes(_table, entry), do: entry.racks_played

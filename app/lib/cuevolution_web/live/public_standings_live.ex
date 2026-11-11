@@ -139,9 +139,14 @@ defmodule CuevolutionWeb.PublicStandingsLive do
     [
       {"Pos", "Position", "text-left"},
       {"Team", "Team", "text-left"},
-      {"P", "Matches played", "text-right"},
-      {"W", "Matches won", "text-right"},
-      {"L", "Matches lost", "text-right"},
+      {"MP", "Matches played", "text-right"},
+      {"MW", "Matches won", "text-right"},
+      {"ML", "Matches lost", "text-right"},
+      {"Win %", "Matches won / matches played", "text-right"},
+      {"FP", "Frames played", "text-right"},
+      {"FW", "Frames won", "text-right"},
+      {"FL", "Frames lost", "text-right"},
+      {"Frame Win %", "Frames won / frames played", "text-right"},
       {"SP Points", "SportPesa Points", "text-right"}
     ]
   end
@@ -152,10 +157,14 @@ defmodule CuevolutionWeb.PublicStandingsLive do
       {"Player", "Player", "text-left"},
       {"Region", "Region", "text-left"},
       {"Finish", "Where their circuit ended", "text-left"},
-      {"P", "Matches played, byes and walkovers included", "text-right"},
-      {"W", "Matches won, byes and walkovers included", "text-right"},
-      {"Racks won", "Racks won, byes and walkovers excluded", "text-right"},
-      {"Rack-win %", "Racks won / racks played", "text-right"},
+      {"MP", "Matches played, byes and walkovers included", "text-right"},
+      {"MW", "Matches won, byes and walkovers included", "text-right"},
+      {"ML", "Matches lost, byes and walkovers included", "text-right"},
+      {"Win %", "Matches won / matches played", "text-right"},
+      {"FP", "Frames (racks) played, byes and walkovers excluded", "text-right"},
+      {"FW", "Frames (racks) won, byes and walkovers excluded", "text-right"},
+      {"FL", "Frames (racks) lost, byes and walkovers excluded", "text-right"},
+      {"Frame Win %", "Frames won / frames played", "text-right"},
       {"SP Points", "SportPesa Points", "text-right"}
     ]
 
@@ -177,11 +186,23 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   def standings_cell(row, "Region", _state), do: row.region
   def standings_cell(row, "Status", _state), do: Competitions.status_label(row)
   def standings_cell(row, "Finish", _state), do: row.finish_label
-  def standings_cell(row, "P", _state), do: row.played
-  def standings_cell(row, "W", _state), do: row.won
-  def standings_cell(row, "L", _state), do: Map.get(row, :lost)
-  def standings_cell(row, "Racks won", _state), do: row.racks_won
-  def standings_cell(row, "Rack-win %", _state), do: Competitions.rack_win_label(row) || "-"
+  def standings_cell(row, "MP", _state), do: row.played
+  def standings_cell(row, "MW", _state), do: row.won
+  def standings_cell(row, "ML", _state), do: row.lost
+  def standings_cell(row, "Win %", _state), do: Competitions.pct_label(row.win_pct) || "-"
+  def standings_cell(row, "FP", :team), do: row.frames_played
+  def standings_cell(row, "FP", _state), do: row.racks_played
+  def standings_cell(row, "FW", :team), do: row.frames_won
+  def standings_cell(row, "FW", _state), do: row.racks_won
+  def standings_cell(row, "FL", :team), do: row.frames_lost
+  def standings_cell(row, "FL", _state), do: row.racks_lost
+
+  def standings_cell(row, "Frame Win %", :team),
+    do: Competitions.pct_label(row.frame_win_pct) || "-"
+
+  def standings_cell(row, "Frame Win %", _state),
+    do: Competitions.pct_label(row.rack_win_pct) || "-"
+
   def standings_cell(row, "SP Points", :team), do: row.sp_points
   def standings_cell(row, "SP Points", _state), do: row.points
 

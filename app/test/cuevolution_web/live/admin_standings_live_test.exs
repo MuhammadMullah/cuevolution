@@ -14,6 +14,7 @@ defmodule CuevolutionWeb.Admin.StandingsLiveTest do
   alias Cuevolution.Competitions.Round
   alias Cuevolution.Competitions.Stage
   alias Cuevolution.Repo
+  alias CuevolutionWeb.Admin.StandingsLive
   alias Ecto.Adapters.SQL.Sandbox
 
   defp circuit, do: Repo.get_by!(Stage, name: "Circuit")
@@ -109,28 +110,44 @@ defmodule CuevolutionWeb.Admin.StandingsLiveTest do
 
       {:ok, _view, html} = live(as_td(conn), ~p"/admin/standings")
 
-      for header <- [
-            "Pos",
-            "Player",
-            "Region",
-            "Finish",
-            "Racks won",
-            "Racks played",
-            "Rack-win %",
-            "SP Points"
-          ] do
-        assert html =~ header, "the #{header} column is missing"
+      # The header's `title` rather than its label: "ML" and "FL" are two
+      # letters that could match anything else on the page.
+      for {short, full, _align} <- StandingsLive.columns(:final) do
+        assert html =~ ~s(title="#{full}"), "the #{short} column is missing"
+      end
+
+      for short <-
+            ~w(Pos Player Region Finish MP MW ML FP FW FL) ++
+              ["Win %", "Frame Win %", "SP Points"] do
+        assert html =~ short, "the #{short} label is missing"
       end
     end
 
-    test "rack-win % is shown to one decimal place", %{conn: conn} do
+    test "both win percentages are shown to one decimal place", %{conn: conn} do
       %{bracket: bracket, admin: admin} = bracket_for("male", 16)
       play_out(bracket, admin)
 
       {:ok, _view, html} = live(as_td(conn), ~p"/admin/standings")
 
-      # Every match here was 6-2, so a winner's share is 6/8 = 75.0%.
+      # A 16 draw has no byes, so whoever lost both their matches played 2 and
+      # won none — 0.0% — and every match here was 6-2, so the frame shares are
+      # 6/8 = 75.0% and 2/8 = 25.0%.
       assert html =~ "75.0%"
+      assert html =~ "25.0%"
+      assert html =~ "0.0%"
+    end
+
+    test "the match and frame records add up on every row", %{conn: conn} do
+      %{bracket: bracket, admin: admin} = bracket_for("male", 16)
+      play_out(bracket, admin)
+
+      {:ok, _view, _html} = live(as_td(conn), ~p"/admin/standings")
+      rows = Competitions.circuit_standings(circuit().id, "male").rows
+
+      for row <- rows do
+        assert row.played == row.won + row.lost
+        assert row.racks_played == row.racks_won + row.racks_lost
+      end
     end
   end
 

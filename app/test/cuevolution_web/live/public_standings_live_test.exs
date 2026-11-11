@@ -177,8 +177,9 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/live?category=male&view=table")
 
-      for header <- ["Pos", "Player", "Region", "Finish", "Racks won", "Rack-win %", "SP Points"] do
-        assert html =~ header, "the #{header} column is missing"
+      for {short, full, _align} <-
+            CuevolutionWeb.PublicStandingsLive.standings_columns(:provisional) do
+        assert html =~ ~s(title="#{full}"), "the #{short} column is missing"
       end
 
       # Provisional while the circuit runs, so the Status column is there too.
@@ -250,6 +251,10 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
 
       assert html =~ "SP Points"
       assert html =~ "Team"
+
+      for {short, full, _align} <- CuevolutionWeb.PublicStandingsLive.standings_columns(:team) do
+        assert html =~ ~s(title="#{full}"), "the #{short} column is missing"
+      end
     end
 
     test "switching to the team tab from the table view does not crash", %{conn: conn} do

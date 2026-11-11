@@ -1315,10 +1315,14 @@ defmodule CuevolutionWeb.GroupManagementLive do
     [
       {"#", "Position", "text-left"},
       {"Team", "Team name", "text-left"},
-      {"P", "Matches played", "text-right"},
-      {"W", "Matches won", "text-right"},
-      {"L", "Matches lost", "text-right"},
+      {"MP", "Matches played", "text-right"},
+      {"MW", "Matches won", "text-right"},
+      {"ML", "Matches lost", "text-right"},
+      {"Win %", "Matches won / matches played", "text-right"},
+      {"FP", "Frames played", "text-right"},
       {"FW", "Frames won", "text-right"},
+      {"FL", "Frames lost", "text-right"},
+      {"Frame Win %", "Frames won / frames played", "text-right"},
       {"FD", "Frame difference", "text-right"},
       {"SP Points", "SportPesa Points", "text-right"}
     ]

@@ -122,6 +122,14 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
       assert html =~ "Top 4 to the Nationals"
     end
 
+    test "the group tables carry the match and frame record", %{view: view} do
+      html = render(view)
+
+      for {short, full, _align} <- CuevolutionWeb.GroupManagementLive.team_table_columns() do
+        assert html =~ ~s(title="#{full}"), "the #{short} column is missing"
+      end
+    end
+
     test "every team starts on the 2 points for entering", %{view: view} do
       html = render(view)
 
@@ -200,11 +208,21 @@ defmodule CuevolutionWeb.CircuitTeamsLiveTest do
 
       # 2 for entering + 3 for the win, and the frames carried through.
       assert row.sp_points == 5
+      assert row.matches_played == 1
+      assert row.wins == 1
+      assert row.losses == 0
+      assert row.win_pct == 100.0
+      assert row.frames_played == 19
       assert row.frames_won == 13
       assert row.frames_lost == 6
+      assert_in_delta row.frame_win_pct, 13 / 19 * 100, 0.001
 
       html = view |> element("button[phx-value-view='table']") |> render_click()
       assert html =~ "SP Points"
+
+      # A 13-6 win is 68.4% of the frames played, printed to one decimal.
+      assert html =~ "68.4%"
+      assert html =~ "31.6%"
     end
 
     test "the draw can no longer be re-dealt once a result exists", %{view: view, admin: admin} do

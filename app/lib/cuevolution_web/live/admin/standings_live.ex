@@ -3,8 +3,9 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
   The singles player standings table for the admin console.
 
   The per-circuit standings table from the SP Points & Standings brief
-  (Nov 2026): Position, Player, Region, Status, Finish, P, W, Racks won, Racks
-  played, Rack-win % and SP Points.
+  (Nov 2026): Position, Player, Region, Status, Finish, the match record
+  (MP, MW, ML, Win %), the frame record (FP, FW, FL, Frame Win %) and
+  SP Points.
 
   Two views of the same table, and the difference matters:
 
@@ -77,11 +78,14 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
       {"Player", "Player", "text-left"},
       {"Region", "Region", "text-left"},
       {"Finish", "Where their circuit ended", "text-left"},
-      {"P", "Matches played, byes and walkovers included", "text-right"},
-      {"W", "Matches won, byes and walkovers included", "text-right"},
-      {"Racks won", "Racks won, byes and walkovers excluded", "text-right"},
-      {"Racks played", "Racks played, byes and walkovers excluded", "text-right"},
-      {"Rack-win %", "Racks won / racks played", "text-right"},
+      {"MP", "Matches played, byes and walkovers included", "text-right"},
+      {"MW", "Matches won, byes and walkovers included", "text-right"},
+      {"ML", "Matches lost, byes and walkovers included", "text-right"},
+      {"Win %", "Matches won / matches played", "text-right"},
+      {"FP", "Frames (racks) played, byes and walkovers excluded", "text-right"},
+      {"FW", "Frames (racks) won, byes and walkovers excluded", "text-right"},
+      {"FL", "Frames (racks) lost, byes and walkovers excluded", "text-right"},
+      {"Frame Win %", "Frames won / frames played", "text-right"},
       {"SP Points", "SportPesa Points", "text-right"}
     ]
   end
@@ -97,10 +101,13 @@ defmodule CuevolutionWeb.Admin.StandingsLive do
   def cell(row, "Region", _state), do: row.region
   def cell(row, "Status", _state), do: Competitions.status_label(row)
   def cell(row, "Finish", _state), do: row.finish_label
-  def cell(row, "P", _state), do: row.played
-  def cell(row, "W", _state), do: row.won
-  def cell(row, "Racks won", _state), do: row.racks_won
-  def cell(row, "Racks played", _state), do: row.racks_played
-  def cell(row, "Rack-win %", _state), do: Competitions.rack_win_label(row) || "-"
+  def cell(row, "MP", _state), do: row.played
+  def cell(row, "MW", _state), do: row.won
+  def cell(row, "ML", _state), do: row.lost
+  def cell(row, "Win %", _state), do: Competitions.pct_label(row.win_pct) || "-"
+  def cell(row, "FP", _state), do: row.racks_played
+  def cell(row, "FW", _state), do: row.racks_won
+  def cell(row, "FL", _state), do: row.racks_lost
+  def cell(row, "Frame Win %", _state), do: Competitions.pct_label(row.rack_win_pct) || "-"
   def cell(row, "SP Points", _state), do: row.points
 end

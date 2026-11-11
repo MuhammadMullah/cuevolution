@@ -245,4 +245,74 @@ defmodule Cuevolution.Competitions.StandingsCalculatorTest do
       assert b.wins == 0 and b.losses == 0
     end
   end
+
+  describe "rank/2 — the match and frame record every table prints" do
+    test "matches and frames each split into played, won and lost" do
+      matches = [
+        match(:a, :a, :b, 3, 1),
+        match(:a, :a, :c, 3, 0),
+        match(:b, :b, :c, 3, 2)
+      ]
+
+      standings = StandingsCalculator.rank([:a, :b, :c], matches)
+      a = entry(standings, :a)
+
+      assert a.matches_played == 2
+      assert a.wins == 2
+      assert a.losses == 0
+      assert a.win_pct == 100.0
+
+      assert a.frames_played == 7
+      assert a.frames_won == 6
+      assert a.frames_lost == 1
+      assert_in_delta a.frame_win_pct, 6 / 7 * 100, 0.001
+
+      c = entry(standings, :c)
+
+      assert c.matches_played == 2
+      assert c.wins == 0
+      assert c.losses == 2
+      assert c.win_pct == 0.0
+      # 0-3 then 2-3: eight frames played, two of them won.
+      assert c.frames_played == 8
+      assert c.frames_won == 2
+      assert c.frames_lost == 6
+      assert_in_delta c.frame_win_pct, 25.0, 0.001
+    end
+
+    test "every row's totals agree with its own parts" do
+      matches = [
+        match(:a, :a, :b, 3, 1),
+        match(nil, :a, :c, 2, 2),
+        match(:b, :b, :c, 3, 1)
+      ]
+
+      for row <- StandingsCalculator.rank([:a, :b, :c, :d], matches) do
+        assert row.matches_played == row.wins + row.losses + row.draws
+        assert row.frames_played == row.frames_won + row.frames_lost
+        assert row.frame_diff == row.frames_won - row.frames_lost
+      end
+    end
+
+    test "a drawn match counts as played and not won" do
+      standings = StandingsCalculator.rank([:a, :b], [match(nil, :a, :b, 2, 2)])
+      a = entry(standings, :a)
+
+      assert a.draws == 1
+      assert a.matches_played == 1
+      assert a.win_pct == 0.0
+      assert a.frames_played == 4
+      assert a.frame_win_pct == 50.0
+    end
+
+    test "a participant with no matches has nil percentages rather than zero" do
+      standings = StandingsCalculator.rank([:a, :b, :bye], [match(:a, :a, :b, 3, 1)])
+      bye = entry(standings, :bye)
+
+      assert bye.matches_played == 0
+      assert bye.frames_played == 0
+      assert is_nil(bye.win_pct)
+      assert is_nil(bye.frame_win_pct)
+    end
+  end
 end

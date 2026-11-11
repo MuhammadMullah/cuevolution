@@ -13,6 +13,7 @@ defmodule CuevolutionWeb.AdminComponents do
   use CuevolutionWeb, :verified_routes
 
   alias Cuevolution.Accounts.Admin
+  alias Cuevolution.Competitions
   alias Phoenix.LiveView.JS
 
   @doc "The small uppercase mono label used above page/section titles."
@@ -221,21 +222,40 @@ defmodule CuevolutionWeb.AdminComponents do
     """
   end
 
+  # The metric columns, in the order the cells below print them: the match
+  # record, the frame record, then the points that rank the table.
+  @group_standings_columns [
+    "P",
+    "W",
+    "L",
+    "D",
+    "Win %",
+    "FP",
+    "FW",
+    "FL",
+    "Frame Win %",
+    "FD",
+    "BONUS",
+    "PTS"
+  ]
+
   @doc "Shared Grassroots points standings table used by admin and player views."
   attr :rows, :list, required: true
   attr :current_participant_id, :string, default: nil
   attr :show_group, :boolean, default: false
 
   def grassroots_standings_table(assigns) do
+    assigns = assign(assigns, :columns, @group_standings_columns)
+
     ~H"""
     <div class="overflow-x-auto rounded-xl border border-ink-200 bg-white">
-      <table class="table-stack min-w-full text-left text-sm">
+      <table class="table-stack min-w-full text-left text-sm sm:min-w-[940px]">
         <thead class="bg-ink-25 font-mono text-[10px] uppercase tracking-wider text-ink-500">
           <tr>
             <th class="px-3 py-3">POS</th>
             <th class="px-3 py-3">PLAYER</th>
             <th :if={@show_group} class="px-3 py-3">GROUP</th>
-            <th :for={label <- ~w(P W L D FW FL FD BONUS PTS)} class="px-3 py-3">{label}</th>
+            <th :for={label <- @columns} class="px-3 py-3">{label}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-ink-100">
@@ -262,14 +282,23 @@ defmodule CuevolutionWeb.AdminComponents do
               {Map.get(row, :group_name, "—")}
             </td>
             <td data-label="Played" class="px-3 py-3 font-mono text-ink-700">
-              {row.wins + row.losses + row.draws}
+              {row.matches_played}
             </td>
             <td data-label="Won" class="px-3 py-3 font-mono text-ink-700">{row.wins}</td>
             <td data-label="Lost" class="px-3 py-3 font-mono text-ink-700">{row.losses}</td>
             <td data-label="Drawn" class="px-3 py-3 font-mono text-ink-700">{row.draws}</td>
+            <td data-label="Win %" class="px-3 py-3 font-mono text-ink-700">
+              {Competitions.pct_label(row.win_pct) || "-"}
+            </td>
+            <td data-label="Frames played" class="px-3 py-3 font-mono text-ink-700">
+              {row.frames_played}
+            </td>
             <td data-label="Frames won" class="px-3 py-3 font-mono text-ink-700">{row.frames_won}</td>
             <td data-label="Frames lost" class="px-3 py-3 font-mono text-ink-700">
-              {row.frames_won - row.frame_diff}
+              {row.frames_lost}
+            </td>
+            <td data-label="Frame win %" class="px-3 py-3 font-mono text-ink-700">
+              {Competitions.pct_label(row.frame_win_pct) || "-"}
             </td>
             <td data-label="Frame difference" class="px-3 py-3 font-mono text-ink-700">
               {row.frame_diff}
