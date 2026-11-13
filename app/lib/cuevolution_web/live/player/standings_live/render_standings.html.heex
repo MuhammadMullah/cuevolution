@@ -44,6 +44,7 @@
     </div>
 
     <div
+      :if={not @groups?}
       class="relative shrink-0 pb-2"
       id="standings-filter"
       phx-click-away={JS.hide(to: "#standings-filter-panel")}
@@ -108,7 +109,138 @@
     </div>
   </div>
 
+  <%!-- Teams is the only event drawn into groups, so the scope switch shows
+        on its tab alone. --%>
+  <div :if={@tab == "team"} class="mb-4 flex w-fit gap-1 rounded-xl bg-ink-100 p-1">
+    <button
+      :for={{label, scope} <- team_scopes()}
+      type="button"
+      phx-click="switch_team_scope"
+      phx-value-scope={scope}
+      class={[
+        "min-h-11 rounded-lg px-4 py-2 text-[14px] font-semibold sm:min-h-0",
+        @team_scope == scope && "bg-white text-ink-950 shadow-sm",
+        @team_scope != scope && "text-ink-500 hover:text-ink-950"
+      ]}
+    >
+      {label}
+    </button>
+  </div>
+
+  <%!-- Groups: one table per Circuit group, qualifiers marked. --%>
+  <div :if={@groups? and not @rows_empty?} class="space-y-4">
+    <div
+      :for={%{group: group, rows: rows, advancer_count: advancers} <- @group_tables}
+      class="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-sm"
+    >
+      <div class="flex items-center justify-between gap-3 border-b border-ink-200 px-4 py-3">
+        <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{group.name}</h2>
+        <span class="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-400">
+          Top {advancers} to the Nationals
+        </span>
+      </div>
+
+      <div class="overflow-auto">
+        <table class="table-stack w-full border-collapse sm:min-w-[900px]">
+          <thead>
+            <tr class="border-b border-ink-200 bg-ink-50">
+              <th class="w-14 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                #
+              </th>
+              <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                Team
+              </th>
+              <th
+                :for={{label, title} <- metric_columns()}
+                scope="col"
+                title={title}
+                class="whitespace-nowrap px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500"
+              >
+                {label}
+              </th>
+              <th
+                scope="col"
+                title="Frame difference"
+                class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500"
+              >
+                FD
+              </th>
+              <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+                SP Points
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={row <- rows}
+              class={[
+                "border-b border-ink-100 last:border-b-0",
+                row.advancing && "bg-green-50/60"
+              ]}
+            >
+              <td
+                data-label="Position"
+                class={[
+                  "border-l-4 px-4 py-3 font-mono text-[15px] font-semibold text-ink-950",
+                  row.advancing && "border-green-500",
+                  !row.advancing && "border-transparent"
+                ]}
+              >
+                {row.rank}
+              </td>
+              <td class="px-4 py-3 text-[15px] font-semibold text-ink-950">
+                {row.name}
+                <span
+                  :if={row.advancing}
+                  title="In the top four — qualifying for the Nationals"
+                  class="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700"
+                >
+                  Q
+                </span>
+                <span
+                  :if={row.tied}
+                  class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                >
+                  TIED
+                </span>
+              </td>
+              <td
+                :for={{label, value} <- group_metrics(row)}
+                data-label={label}
+                class="whitespace-nowrap px-4 py-3 text-right font-mono text-sm text-ink-600"
+              >
+                {value}
+              </td>
+              <td
+                data-label="Frame difference"
+                class="whitespace-nowrap px-4 py-3 text-right font-mono text-sm text-ink-600"
+              >
+                {signed_frames(row.frame_diff)}
+              </td>
+              <td
+                data-label="SP Points"
+                class="px-4 py-3 text-right font-mono text-[15px] font-semibold text-gold-700"
+              >
+                {row.sp_points}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p :if={@groups? and not @rows_empty?} class="mt-3.5 text-[12.5px] text-ink-400">
+    Each group is a season-long round robin, and the top four — shaded and marked Q — go to the
+    Nationals. Ranked
+    on SP Points — 2 for entering and 3 for every match won — then head-to-head, then frame
+    difference. A team marked TIED is still level with its rivals after every tiebreaker, so
+    nothing yet separates them. The region and stage filters apply to the overall table, not to a
+    group.
+  </p>
+
   <div
+    :if={not @groups?}
     id="standings-table"
     class={[
       "overflow-auto rounded-2xl border border-ink-200 bg-white shadow-sm",
@@ -154,8 +286,9 @@
             class={[
               "border-l-4 px-4 py-3 font-mono text-[15px] font-semibold",
               row.rank == 1 && "border-red-500 text-gold-700",
-              row.rank != 1 && row.advancing && "border-green-500 text-ink-950",
-              row.rank != 1 && !row.advancing && "border-transparent text-ink-950"
+              row.rank != 1 && @tab != "team" && row.advancing && "border-green-500 text-ink-950",
+              row.rank != 1 && (@tab == "team" or !row.advancing) &&
+                "border-transparent text-ink-950"
             ]}
           >
             {row.rank}
@@ -199,16 +332,21 @@
     </table>
   </div>
 
-  <p :if={not @rows_empty?} class="mt-3.5 text-[12.5px] text-ink-400">
+  <p :if={not @groups? and not @rows_empty?} class="mt-3.5 text-[12.5px] text-ink-400">
     Points in gold are SP Points — 2 for entering a circuit, 3 for every match won, plus 20 for
     the title, 10 for the runner-up and 5 for a semi-final. They decide the ranking; matches and
     frames only separate players level on points. MP/MW/ML and FP/FW/FL are the match and frame
-    record, with each win percentage alongside. Rank #1 is marked with a red accent; players
-    currently on pace to advance to the next stage are marked with a green accent.
+    record, with each win percentage alongside. Rank #1 is marked with a red accent.
+    <span :if={@tab != "team"}>
+      Players currently on pace to advance to the next stage are marked with a green accent.
+    </span>
+    <span :if={@tab == "team"}>
+      Which teams qualify is decided inside their group — see the Groups table above.
+    </span>
   </p>
 
   <PlayerComponents.empty_state
-    :if={@rows_empty? and not @all_rows_empty?}
+    :if={not @groups? and @rows_empty? and not @all_rows_empty?}
     icon="hero-flag"
     title="No players match these filters"
   >
@@ -216,10 +354,19 @@
   </PlayerComponents.empty_state>
 
   <PlayerComponents.empty_state
-    :if={@all_rows_empty?}
+    :if={not @groups? and @all_rows_empty?}
     icon="hero-hashtag"
     title="No standings yet"
   >
     Rankings appear here once the admin records the first match results of the season.
+  </PlayerComponents.empty_state>
+
+  <PlayerComponents.empty_state
+    :if={@groups? and @rows_empty?}
+    icon="hero-user-group"
+    title="No team groups yet"
+  >
+    The Circuit team draw has not been made yet. The two groups and their tables appear here as
+    soon as it is.
   </PlayerComponents.empty_state>
 </PlayerComponents.app_shell>

@@ -7,9 +7,12 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
 
   alias Cuevolution.Competitions
   alias Cuevolution.Competitions.Fixture
+  alias Cuevolution.Competitions.Group
   alias Cuevolution.Competitions.Round
   alias Cuevolution.Competitions.Stage
+  alias Cuevolution.Competitions.StageGroupConfig
   alias Cuevolution.Repo
+  alias Ecto.Adapters.SQL.Sandbox
 
   defp circuit, do: Repo.get_by!(Stage, name: "Circuit")
 
@@ -45,6 +48,47 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
         "score" => %{"a" => 6, "b" => 2}
       })
     end
+  end
+
+  # Twenty teams is what the team event takes: two national groups of ten.
+  defp drawn_team_groups do
+    stage = circuit()
+    admin = insert(:admin, role: "tournament_director")
+
+    for _ <- 1..20 do
+      team = insert(:team)
+
+      insert(:stage_participation,
+        stage_id: stage.id,
+        category: "team",
+        player_id: nil,
+        team_id: team.id,
+        region_id: team.region_id
+      )
+    end
+
+    {:ok, _} = Competitions.draw_circuit_team_groups(stage.id, admin)
+    %{admin: admin}
+  end
+
+  defp team_configs(stage) do
+    Repo.aggregate(
+      from(c in StageGroupConfig, where: c.stage_id == ^stage.id and c.category == "team"),
+      :count
+    )
+  end
+
+  defp first_team_fixture do
+    Repo.one!(
+      from f in Fixture,
+        join: r in Round,
+        on: r.id == f.round_id,
+        join: g in Group,
+        on: g.id == r.group_id,
+        where: g.category == "team" and f.bye == false,
+        order_by: [asc: r.sequence, asc: f.slot],
+        limit: 1
+    )
   end
 
   defp first_fixture(bracket) do
@@ -276,6 +320,204 @@ defmodule CuevolutionWeb.PublicStandingsLiveTest do
       assert_patch(view) =~ "category=team"
 
       assert render(view) =~ "SP Points"
+    end
+  end
+
+  describe "the team group standings" do
+    test "the scope switch is on the Teams tab only", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, _view, teams} = live(conn, ~p"/live?category=team&view=table")
+      assert teams =~ "phx-value-scope=\"groups\""
+      assert teams =~ "Overall"
+
+      {:ok, _view, singles} = live(conn, ~p"/live?category=male&view=table")
+      refute singles =~ "phx-value-scope=\"groups\""
+    end
+
+    test "the groups scope shows both group tables with the qualification line", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      assert html =~ "Group A"
+      assert html =~ "Group B"
+      assert html =~ "Top 4 to the Nationals"
+
+      for {short, full, _align} <-
+            CuevolutionWeb.PublicStandingsLive.standings_columns(:team_group) do
+        assert html =~ ~s(title="#{full}"), "the #{short} column is missing"
+      end
+    end
+
+    test "the overall scope stays one table", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table")
+
+      refute html =~ "Group A"
+      refute html =~ "Top 4 to the Nationals"
+      assert html =~ "SP Points"
+    end
+
+    test "the scope is in the URL so a group table can be linked", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/live?category=team&view=table")
+
+      view |> element("button[phx-value-scope='groups']") |> render_click()
+      path = assert_patch(view)
+
+      assert path =~ "scope=groups"
+      assert path =~ "category=team"
+      assert render(view) =~ "Group A"
+
+      # And back again.
+      view |> element("button[phx-value-scope='overall']") |> render_click()
+      refute assert_patch(view) =~ "scope=groups"
+    end
+
+    test "switching away from Teams drops the scope rather than carrying it", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      view |> element("button[phx-value-tab='male']") |> render_click()
+
+      refute assert_patch(view) =~ "scope=groups"
+    end
+
+    test "a team result moves the group table on a page nobody touched", %{conn: conn} do
+      %{admin: admin} = drawn_team_groups()
+      fixture = first_team_fixture()
+
+      {:ok, view, _html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      parent = self()
+
+      Task.async(fn ->
+        Sandbox.allow(Repo, parent, self())
+
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id,
+          "score" => %{"a" => 13, "b" => 6}
+        })
+      end)
+      |> Task.await()
+
+      # 2 for entering + 3 for the win, and 13 of 19 frames.
+      html = render(view)
+      assert html =~ "68.4%"
+      assert html =~ "31.6%"
+    end
+
+    test "before the draw the groups scope says so instead of showing an empty table",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      assert html =~ "The team groups have not been drawn yet."
+    end
+
+    test "an unknown scope falls back to the overall table", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=nonsense")
+
+      refute html =~ "Group A"
+      assert html =~ "SP Points"
+    end
+
+    test "a place nothing has settled yet is marked tied, not presented as decided",
+         %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      # Nothing played: every team in the group is level after every
+      # tiebreaker, so the table must say so rather than print a bare 1..10.
+      [%{rows: rows} | _] = Competitions.circuit_team_standings(circuit().id)
+      assert Enum.all?(rows, & &1.tied)
+      assert html =~ "4="
+      assert html =~ "still level after every tiebreaker"
+    end
+
+    test "the group order is stable rather than whatever the database returned",
+         %{conn: conn} do
+      drawn_team_groups()
+      stage = circuit()
+
+      names = fn ->
+        stage.id
+        |> Competitions.circuit_team_standings()
+        |> Enum.map(fn %{rows: rows} -> Enum.map(rows, & &1.name) end)
+      end
+
+      # Two reads of an all-level group agree, and each group is alphabetical:
+      # otherwise the four shaded teams could differ between two page loads.
+      assert names.() == names.()
+
+      for group_names <- names.() do
+        assert group_names == Enum.sort_by(group_names, &Cuevolution.Names.sort_key/1)
+      end
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+      assert html =~ "Group A"
+    end
+
+    test "reading the group tables writes nothing, drawn or not", %{conn: conn} do
+      stage = circuit()
+
+      # The seeds configure the group stages, not the Circuit — so this is the
+      # case where the old get_or_create_group_config/2 call inserted a row.
+      assert team_configs(stage) == 0
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      assert html =~ "The team groups have not been drawn yet."
+      assert team_configs(stage) == 0
+
+      # And with a draw, where the real table is built: dealing it wrote the
+      # config, and the page view must write nothing on top of that.
+      drawn_team_groups()
+      before = Repo.aggregate(StageGroupConfig, :count)
+
+      {:ok, _view, drawn} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      assert drawn =~ "Group A"
+      assert Repo.aggregate(StageGroupConfig, :count) == before
+      assert Competitions.circuit_team_standings(stage.id) != []
+    end
+
+    test "a hand-deleted group config falls back to the published advancer count",
+         %{conn: conn} do
+      drawn_team_groups()
+      stage = circuit()
+
+      Repo.delete_all(
+        from c in StageGroupConfig,
+          where: c.stage_id == ^stage.id and c.category == "team"
+      )
+
+      assert team_configs(stage) == 0
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      # Still four to the Nationals, and still no row written to replace it.
+      assert html =~ "Top 4 to the Nationals"
+      assert team_configs(stage) == 0
+
+      for %{advancer_count: advancers} <- Competitions.circuit_team_standings(stage.id) do
+        assert advancers == 4
+      end
+    end
+
+    test "qualifying teams are marked in words, not colour alone", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, _view, html} = live(conn, ~p"/live?category=team&view=table&scope=groups")
+
+      assert html =~ "In the top four — qualifying for the Nationals"
+      assert html =~ ">Q</span>"
     end
   end
 end

@@ -32,7 +32,7 @@
           phx-click="switch"
           phx-value-view={view}
           class={[
-            "rounded-lg px-4 py-1.5 text-[13.5px] font-semibold",
+            "min-h-11 rounded-lg px-4 py-1.5 text-[13.5px] font-semibold sm:min-h-0",
             @view == view && "bg-white text-ink-950 shadow-sm",
             @view != view && "text-ink-500 hover:text-ink-950"
           ]}
@@ -157,64 +157,120 @@
 
     <%!-- Table: the SP Points ranking that decides who reaches the Finals. --%>
     <div :if={@view == :table}>
-      <p
-        :if={@rows == []}
-        class="rounded-2xl border border-ink-200 bg-white px-5 py-6 text-center text-[13.5px] text-ink-400"
-      >
-        No standings yet for this category.
-      </p>
-
-      <div :if={@rows != []} class="overflow-x-auto rounded-2xl border border-ink-200 bg-white">
-        <table class="table-stack w-full border-collapse sm:min-w-[1120px]">
-          <thead>
-            <tr>
-              <th
-                :for={{label, title, align} <- standings_columns(@standings_state)}
-                scope="col"
-                title={title}
-                class={[
-                  "whitespace-nowrap px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-500",
-                  align
-                ]}
-              >
-                {label}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              :for={row <- @rows}
-              class={[
-                "border-t border-ink-100",
-                Map.get(row, :finish) == :champion && "bg-gold-50/50"
-              ]}
-            >
-              <td
-                :for={{label, _title, align} <- standings_columns(@standings_state)}
-                data-label={label}
-                class={[
-                  "whitespace-nowrap px-3 py-2.5 text-[13px]",
-                  align,
-                  label in ["Player", "Team"] && "text-[14px] font-medium text-ink-950",
-                  label == "SP Points" && "font-bold tabular-nums text-ink-950",
-                  label not in ["Player", "Team", "SP Points", "Region", "Status", "Finish"] &&
-                    "tabular-nums text-ink-600",
-                  label in ["Region", "Status", "Finish"] && "text-ink-600"
-                ]}
-              >
-                {standings_cell(row, label, @standings_state)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <%!-- The team event is the only one with groups, so the scope switch
+            belongs on its tab and nowhere else. --%>
+      <div :if={@tab == "team"} class="mb-3 flex w-fit gap-1 rounded-xl bg-ink-100 p-1">
+        <button
+          :for={{label, scope} <- scopes()}
+          type="button"
+          phx-click="switch"
+          phx-value-scope={scope}
+          class={[
+            "min-h-11 rounded-lg px-4 py-1.5 text-[13.5px] font-semibold sm:min-h-0",
+            @scope == scope && "bg-white text-ink-950 shadow-sm",
+            @scope != scope && "text-ink-500 hover:text-ink-950"
+          ]}
+        >
+          {label}
+        </button>
       </div>
 
-      <p :if={@rows != []} class="mt-3 text-[12px] leading-relaxed text-ink-400">
+      <p
+        :if={not @has_rows?}
+        class="rounded-2xl border border-ink-200 bg-white px-5 py-6 text-center text-[13.5px] text-ink-400"
+      >
+        {empty_message(@standings_state)}
+      </p>
+
+      <div :if={@has_rows?} class="space-y-4">
+        <div
+          :for={section <- @sections}
+          class="overflow-hidden rounded-2xl border border-ink-200 bg-white"
+        >
+          <div
+            :if={section.title}
+            class="flex items-center justify-between gap-3 border-b border-ink-200 px-4 py-2.5"
+          >
+            <h2 class="text-[15px] font-bold tracking-tight text-ink-950">{section.title}</h2>
+            <span
+              :if={section.note}
+              class="text-[11px] font-medium uppercase tracking-[0.06em] text-ink-400"
+            >
+              {section.note}
+            </span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="table-stack w-full border-collapse sm:min-w-[1120px]">
+              <thead>
+                <tr>
+                  <th
+                    :for={{label, title, align} <- standings_columns(@standings_state)}
+                    scope="col"
+                    title={title}
+                    class={[
+                      "whitespace-nowrap px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-500",
+                      align
+                    ]}
+                  >
+                    {label}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={row <- section.rows}
+                  class={[
+                    "border-t border-ink-100",
+                    Map.get(row, :finish) == :champion && "bg-gold-100/40",
+                    @standings_state == :team_group && Map.get(row, :advancing) &&
+                      "bg-green-50"
+                  ]}
+                >
+                  <td
+                    :for={{label, _title, align} <- standings_columns(@standings_state)}
+                    data-label={label}
+                    class={[
+                      "whitespace-nowrap px-3 py-2.5 text-[13px]",
+                      align,
+                      label in ["Player", "Team"] && "text-[14px] font-medium text-ink-950",
+                      label == "SP Points" && "font-bold tabular-nums text-ink-950",
+                      label not in ["Player", "Team", "SP Points", "Region", "Status", "Finish"] &&
+                        "tabular-nums text-ink-600",
+                      label in ["Region", "Status", "Finish"] && "text-ink-600"
+                    ]}
+                  >
+                    {standings_cell(row, label, @standings_state)}<span
+                      :if={
+                        label == "Team" and @standings_state == :team_group and
+                          Map.get(row, :advancing)
+                      }
+                      title="In the top four — qualifying for the Nationals"
+                      class="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700"
+                    >Q</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <p :if={@has_rows?} class="mt-3 text-[12px] leading-relaxed text-ink-400">
+        <span :if={@standings_state == :team_group}>
+          Each group is a season-long round robin, and the top four — shaded and marked
+          <span class="font-mono">Q</span>
+          — go to the Nationals.
+          Ranked on SP Points — 2 for entering and 3 for every match won — then head-to-head,
+          then frame difference. A position shown as <span class="font-mono">4=</span>
+          means those
+          teams are still level after every tiebreaker, so nothing yet separates them.
+        </span>
         <span :if={@standings_state == :team}>
           Ranked on SP Points, then match difference and frame difference. MP/MW/ML and FP/FW/FL
           are the match and frame record, with each win percentage alongside.
         </span>
-        <span :if={@standings_state != :team}>
+        <span :if={@standings_state not in [:team, :team_group]}>
           Ranked on SP Points, then frame-win %. Players knocked out at the same stage share a
           position, shown as <span class="font-mono">3=</span>, and share their points. MP, MW and
           ML include walkovers and byes; the frame columns leave them out.

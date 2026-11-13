@@ -3,8 +3,10 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   The spectator view of the Circuit and the Finals — no account, no controls.
 
   Two views on the same data: **Live**, the matches being played right now
-  with their frame counts, and **Table**, the SP Points ranking. Both update
-  themselves. The page subscribes to the `"standings"` topic, which every
+  with their frame counts, and **Table**, the SP Points ranking. On the Teams
+  tab the table comes in two scopes — **Overall**, every team in one ranking,
+  and **Groups**, the two Circuit round-robin groups with the qualification
+  line marked. Both update themselves. The page subscribes to the `"standings"` topic, which every
   recorded bracket result broadcasts on, so a frame entered by the tournament
   director moves this page on every screen showing it without a reload.
 
@@ -27,7 +29,13 @@ defmodule CuevolutionWeb.PublicStandingsLive do
 
     {:ok,
      socket
-     |> assign(page_title: "Live standings", tabs: @tabs, tab: "male", view: :live)
+     |> assign(
+       page_title: "Live standings",
+       tabs: @tabs,
+       tab: "male",
+       view: :live,
+       scope: :overall
+     )
      |> StandingsRefresh.init()
      |> load()}
   end
@@ -36,17 +44,22 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   def handle_params(params, _uri, socket) do
     tab = if params["category"] in ~w(male female team), do: params["category"], else: "male"
     view = if params["view"] == "table", do: :table, else: :live
+    scope = if params["scope"] == "groups", do: :groups, else: :overall
 
-    {:noreply, socket |> assign(tab: tab, view: view) |> load()}
+    {:noreply, socket |> assign(tab: tab, view: view, scope: scope) |> load()}
   end
 
   @impl true
   def handle_event("switch", %{"tab" => tab}, socket) do
-    {:noreply, push_patch(socket, to: path_for(tab, socket.assigns.view))}
+    {:noreply, push_patch(socket, to: path_for(tab, socket.assigns.view, socket.assigns.scope))}
   end
 
   def handle_event("switch", %{"view" => view}, socket) do
-    {:noreply, push_patch(socket, to: path_for(socket.assigns.tab, view))}
+    {:noreply, push_patch(socket, to: path_for(socket.assigns.tab, view, socket.assigns.scope))}
+  end
+
+  def handle_event("switch", %{"scope" => scope}, socket) do
+    {:noreply, push_patch(socket, to: path_for(socket.assigns.tab, socket.assigns.view, scope))}
   end
 
   @impl true
@@ -58,8 +71,15 @@ defmodule CuevolutionWeb.PublicStandingsLive do
     {:noreply, StandingsRefresh.refreshed(socket, &load/1)}
   end
 
-  defp path_for(tab, view) do
-    ~p"/live?#{%{"category" => tab, "view" => to_string(view)}}"
+  defp path_for(tab, view, scope) do
+    params = %{"category" => tab, "view" => to_string(view)}
+
+    params =
+      if tab == "team" and to_string(scope) == "groups",
+        do: Map.put(params, "scope", "groups"),
+        else: params
+
+    ~p"/live?#{params}"
   end
 
   # Only the view on screen is loaded. This page is public and unauthenticated,
@@ -78,34 +98,62 @@ defmodule CuevolutionWeb.PublicStandingsLive do
     |> load_view(socket.assigns.view, category)
   end
 
-  # The published per-circuit table (SP Points & Standings brief, Nov 2026).
   # The team event is a round robin with no bracket, so it keeps the cumulative
-  # table it already had — the brief covers singles only.
+  # table it already had — the per-circuit brief covers singles only. Its two
+  # groups are the other half of the story: the cumulative table says who is
+  # best, the group tables say who is qualifying, and a captain wants the
+  # second one.
   defp load_view(socket, :table, "team" = category) do
-    assign(socket,
-      rows: Competitions.standings_for_category(category),
-      standings_state: :team,
-      matches: @no_matches
-    )
+    socket
+    |> assign(matches: @no_matches)
+    |> load_team_table(socket.assigns.scope, category)
   end
 
+  # The published per-circuit table (SP Points & Standings brief, Nov 2026).
   defp load_view(socket, :table, category) do
     stage = Competitions.circuit_stage()
 
     case Competitions.circuit_standings(stage.id, category) do
       nil ->
-        assign(socket, rows: [], standings_state: :provisional, matches: @no_matches)
+        socket |> assign_table([], :provisional) |> assign(matches: @no_matches)
 
       %{rows: rows, state: state} ->
-        assign(socket, rows: rows, standings_state: state, matches: @no_matches)
+        socket |> assign_table([section(rows)], state) |> assign(matches: @no_matches)
     end
   end
 
   defp load_view(socket, :live, category) do
+    socket
+    |> assign_table([], :provisional)
+    |> assign(matches: Competitions.live_matches_for_category(category))
+  end
+
+  defp load_team_table(socket, :groups, _category) do
+    sections =
+      Competitions.circuit_team_standings(Competitions.circuit_stage().id)
+      |> Enum.map(fn %{group: group, rows: rows, advancer_count: advancers} ->
+        rows
+        |> Enum.map(&Map.delete(&1, :participation))
+        |> section(group.name, "Top #{advancers} to the Nationals")
+      end)
+
+    assign_table(socket, sections, :team_group)
+  end
+
+  defp load_team_table(socket, _overall, category) do
+    assign_table(socket, [section(Competitions.standings_for_category(category))], :team)
+  end
+
+  defp section(rows, title \\ nil, note \\ nil), do: %{title: title, note: note, rows: rows}
+
+  # `has_rows?` rather than the template asking whether every section is empty:
+  # a drawn-but-unplayed team event has two sections full of teams on zero, and
+  # a table of zeroes is the right thing to show, not an empty state.
+  defp assign_table(socket, sections, state) do
     assign(socket,
-      rows: [],
-      standings_state: :provisional,
-      matches: Competitions.live_matches_for_category(category)
+      sections: sections,
+      standings_state: state,
+      has_rows?: Enum.any?(sections, &(&1.rows != []))
     )
   end
 
@@ -151,6 +199,14 @@ defmodule CuevolutionWeb.PublicStandingsLive do
     ]
   end
 
+  def standings_columns(:team_group) do
+    [{"Pos", _title, align} | rest] = standings_columns(:team)
+    {record, [sp_points]} = Enum.split(rest, -1)
+
+    [{"Pos", "Position in the group", align}] ++
+      record ++ [{"FD", "Frame difference", "text-right"}, sp_points]
+  end
+
   def standings_columns(state) do
     base = [
       {"Pos", "Position", "text-left"},
@@ -179,32 +235,51 @@ defmodule CuevolutionWeb.PublicStandingsLive do
   end
 
   @doc false
-  def standings_cell(row, "Pos", :team), do: row.rank
+  def standings_cell(%{tied: true} = row, "Pos", :team_group), do: "#{row.rank}="
+  def standings_cell(row, "Pos", state) when state in [:team, :team_group], do: row.rank
   def standings_cell(row, "Pos", state), do: Competitions.position_label(row, state)
   def standings_cell(row, "Player", _state), do: row.name
   def standings_cell(row, "Team", _state), do: row.name
   def standings_cell(row, "Region", _state), do: row.region
   def standings_cell(row, "Status", _state), do: Competitions.status_label(row)
   def standings_cell(row, "Finish", _state), do: row.finish_label
+  def standings_cell(row, "MP", :team_group), do: row.matches_played
   def standings_cell(row, "MP", _state), do: row.played
+  def standings_cell(row, "MW", :team_group), do: row.wins
   def standings_cell(row, "MW", _state), do: row.won
+  def standings_cell(row, "ML", :team_group), do: row.losses
   def standings_cell(row, "ML", _state), do: row.lost
   def standings_cell(row, "Win %", _state), do: Competitions.pct_label(row.win_pct) || "-"
-  def standings_cell(row, "FP", :team), do: row.frames_played
+
+  def standings_cell(row, "FP", state) when state in [:team, :team_group],
+    do: row.frames_played
+
   def standings_cell(row, "FP", _state), do: row.racks_played
-  def standings_cell(row, "FW", :team), do: row.frames_won
+
+  def standings_cell(row, "FW", state) when state in [:team, :team_group], do: row.frames_won
   def standings_cell(row, "FW", _state), do: row.racks_won
-  def standings_cell(row, "FL", :team), do: row.frames_lost
+  def standings_cell(row, "FL", state) when state in [:team, :team_group], do: row.frames_lost
   def standings_cell(row, "FL", _state), do: row.racks_lost
 
-  def standings_cell(row, "Frame Win %", :team),
+  def standings_cell(row, "Frame Win %", state) when state in [:team, :team_group],
     do: Competitions.pct_label(row.frame_win_pct) || "-"
 
   def standings_cell(row, "Frame Win %", _state),
     do: Competitions.pct_label(row.rack_win_pct) || "-"
 
-  def standings_cell(row, "SP Points", :team), do: row.sp_points
+  def standings_cell(row, "FD", :team_group), do: signed(row.frame_diff)
+
+  def standings_cell(row, "SP Points", state) when state in [:team, :team_group],
+    do: row.sp_points
+
   def standings_cell(row, "SP Points", _state), do: row.points
+
+  @doc false
+  def scopes, do: [{"Overall", :overall}, {"Groups", :groups}]
+
+  @doc false
+  def empty_message(:team_group), do: "The team groups have not been drawn yet."
+  def empty_message(_state), do: "No standings yet for this category."
 
   @doc false
   def signed(value) when value > 0, do: "+#{value}"

@@ -1,11 +1,16 @@
 defmodule CuevolutionWeb.StandingsLiveTest do
   use CuevolutionWeb.ConnCase, async: true
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
 
   alias Cuevolution.Accounts
   alias Cuevolution.Competitions
+  alias Cuevolution.Competitions.Fixture
+  alias Cuevolution.Competitions.Group
+  alias Cuevolution.Competitions.Round
   alias Cuevolution.Competitions.Stage
+  alias Cuevolution.Repo
 
   defp log_in_player(conn, player) do
     token = Accounts.generate_player_session_token(player)
@@ -16,7 +21,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
   # across all 4 stages, so tests asserting a fixture's participant shows
   # up in standings need to pin it to Circuit explicitly.
   defp circuit_fixture(category \\ "male") do
-    circuit = Cuevolution.Repo.get_by!(Stage, name: "Circuit")
+    circuit = Repo.get_by!(Stage, name: "Circuit")
     bracket = Competitions.ensure_knockout_bracket(circuit.id, category)
     participant_a = insert(:stage_participation, stage_id: circuit.id, category: category)
     participant_b = insert(:stage_participation, stage_id: circuit.id, category: category)
@@ -33,6 +38,31 @@ defmodule CuevolutionWeb.StandingsLiveTest do
       participant_a_id: participant_a.id,
       participant_b_id: participant_b.id
     )
+  end
+
+  # Twenty teams is what the team event takes: two national groups of ten.
+  defp drawn_team_groups do
+    circuit = Repo.get_by!(Stage, name: "Circuit")
+    admin = insert(:admin, role: "tournament_director")
+
+    for _ <- 1..20 do
+      team = insert(:team)
+
+      insert(:stage_participation,
+        stage_id: circuit.id,
+        category: "team",
+        player_id: nil,
+        team_id: team.id,
+        region_id: team.region_id
+      )
+    end
+
+    {:ok, _} = Competitions.draw_circuit_team_groups(circuit.id, admin)
+    :ok
+  end
+
+  defp open_teams(view) do
+    view |> element("button[phx-click='switch_tab'][phx-value-tab='team']") |> render_click()
   end
 
   test "redirects anonymous visitors to login", %{conn: conn} do
@@ -77,7 +107,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
   test "does not show the fresh-account banner for a player with a team", %{conn: conn} do
     captain = insert(:player)
     {:ok, _team} = Cuevolution.Teams.create_team(captain, %{"name" => "The Sharks"})
-    captain = Cuevolution.Repo.get!(Cuevolution.Accounts.Player, captain.id)
+    captain = Repo.get!(Cuevolution.Accounts.Player, captain.id)
 
     conn = log_in_player(conn, captain)
     {:ok, _view, html} = live(conn, ~p"/standings")
@@ -117,7 +147,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
         "points" => 9
       })
 
-    participant = Cuevolution.Repo.preload(fixture, :participant_a).participant_a
+    participant = Repo.preload(fixture, :participant_a).participant_a
     conn = log_in_player(conn, player)
 
     {:ok, view, _html} = live(conn, ~p"/standings")
@@ -142,7 +172,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
         "score" => %{"a" => 5, "b" => 3}
       })
 
-    participant = Cuevolution.Repo.preload(fixture, :participant_a).participant_a
+    participant = Repo.preload(fixture, :participant_a).participant_a
     conn = log_in_player(conn, player)
 
     {:ok, view, _html} = live(conn, ~p"/standings")
@@ -167,7 +197,7 @@ defmodule CuevolutionWeb.StandingsLiveTest do
     player = insert(:player)
     fixture = circuit_fixture()
     admin = insert(:admin)
-    participant = Cuevolution.Repo.preload(fixture, :participant_a).participant_a
+    participant = Repo.preload(fixture, :participant_a).participant_a
 
     conn = log_in_player(conn, player)
     {:ok, view, _html} = live(conn, ~p"/standings")
@@ -188,5 +218,162 @@ defmodule CuevolutionWeb.StandingsLiveTest do
       })
 
     assert render(view) =~ "12"
+  end
+
+  describe "the Teams tab's group standings" do
+    setup %{conn: conn} do
+      %{conn: log_in_player(conn, insert(:player))}
+    end
+
+    test "the scope switch is on the Teams tab only", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/standings")
+
+      refute html =~ "switch_team_scope"
+      assert open_teams(view) =~ "switch_team_scope"
+    end
+
+    test "the groups scope shows both group tables with the qualification line",
+         %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      open_teams(view)
+
+      html =
+        view
+        |> element("button[phx-click='switch_team_scope'][phx-value-scope='groups']")
+        |> render_click()
+
+      assert html =~ "Group A"
+      assert html =~ "Group B"
+      assert html =~ "Top 4 to the Nationals"
+
+      for {label, title} <- CuevolutionWeb.StandingsLive.metric_columns() do
+        assert html =~ ~s(title="#{title}"), "the #{label} column is missing"
+      end
+    end
+
+    test "a team result shows up in the group table's record", %{conn: conn} do
+      drawn_team_groups()
+      admin = insert(:admin, role: "tournament_director")
+
+      fixture =
+        Repo.one!(
+          from f in Fixture,
+            join: r in Round,
+            on: r.id == f.round_id,
+            join: g in Group,
+            on: g.id == r.group_id,
+            where: g.category == "team" and f.bye == false,
+            order_by: [asc: r.sequence, asc: f.slot],
+            limit: 1
+        )
+
+      {:ok, _} =
+        Competitions.record_result(fixture, admin, %{
+          "winner_participation_id" => fixture.participant_a_id,
+          "score" => %{"a" => 13, "b" => 6}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      open_teams(view)
+
+      html =
+        view
+        |> element("button[phx-click='switch_team_scope'][phx-value-scope='groups']")
+        |> render_click()
+
+      # 13 of 19 frames for the winner, 6 for the loser.
+      assert html =~ "68.4%"
+      assert html =~ "31.6%"
+    end
+
+    test "before the draw it says so instead of showing an empty table", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      open_teams(view)
+
+      html =
+        view
+        |> element("button[phx-click='switch_team_scope'][phx-value-scope='groups']")
+        |> render_click()
+
+      assert html =~ "No team groups yet"
+      assert html =~ "The Circuit team draw has not been made yet"
+    end
+
+    test "the overall table survives a round trip through the groups view", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      overall = open_teams(view)
+
+      # A team name from the flat table, which is streamed.
+      [first | _] = Competitions.standings_for_category("team")
+      assert overall =~ first.name
+
+      groups =
+        view
+        |> element("button[phx-click='switch_team_scope'][phx-value-scope='groups']")
+        |> render_click()
+
+      assert groups =~ "Group A"
+
+      # Back to Overall: the stream container was removed from the DOM while
+      # the groups view was up, so this is the case where a stream comes back
+      # empty if it is not reset.
+      back =
+        view
+        |> element("button[phx-click='switch_team_scope'][phx-value-scope='overall']")
+        |> render_click()
+
+      refute back =~ "Group A"
+      assert back =~ first.name
+      assert back =~ "SP Points"
+    end
+
+    test "the filter is put away in the groups view, where it does nothing", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      overall = open_teams(view)
+      assert overall =~ "standings-filter"
+
+      groups =
+        view
+        |> element("button[phx-click='switch_team_scope'][phx-value-scope='groups']")
+        |> render_click()
+
+      refute groups =~ "standings-filter"
+    end
+
+    test "the overall team table claims no qualification of its own", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      overall = open_teams(view)
+
+      # Team qualification is decided inside a group, so the cumulative table
+      # must not paint an advancing accent of its own — it ranks on Cuevo
+      # Points, which a team round robin never earns.
+      refute overall =~ "border-green-500"
+      assert overall =~ "decided inside their group"
+    end
+
+    test "leaving the Teams tab resets the scope to overall", %{conn: conn} do
+      drawn_team_groups()
+
+      {:ok, view, _html} = live(conn, ~p"/standings")
+      open_teams(view)
+
+      view
+      |> element("button[phx-click='switch_team_scope'][phx-value-scope='groups']")
+      |> render_click()
+
+      view |> element("button[phx-click='switch_tab'][phx-value-tab='male']") |> render_click()
+      html = open_teams(view)
+
+      refute html =~ "Group A"
+      refute html =~ "Top 4 to the Nationals"
+    end
   end
 end

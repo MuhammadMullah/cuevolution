@@ -3862,16 +3862,34 @@ defmodule Cuevolution.Competitions do
   order by construction rather than by coincidence.
 
   Each row carries `advancing: true` for the top four, the ones that go on to
-  the Nationals.
+  the Nationals (`circuit_team_qualifiers/1` promotes on exactly this), and
+  `tied: true` where a team is still level with its rivals after every
+  tiebreaker — so a table can shade the top four and still admit that the
+  order inside a tie is not settled. Rows go in alphabetically, so a tie that
+  nothing separates is at least stable between page loads rather than in
+  whatever order the database returned.
+
+  Read-only, and `[]` before the draw: the public scoreboard and the player
+  page both call this, and a page view — anonymous, at that — must not write.
   """
   def circuit_team_standings(stage_id) do
-    groups = circuit_team_groups(stage_id)
+    case circuit_team_groups(stage_id) do
+      [] -> []
+      groups -> team_group_tables(stage_id, groups)
+    end
+  end
+
+  defp team_group_tables(stage_id, groups) do
     group_ids = Enum.map(groups, & &1.id)
     matches_by_group = circuit_team_matches_by_group(group_ids)
-    advancer_count = get_or_create_group_config(stage_id, @circuit_team_category).advancer_count
+    advancer_count = circuit_team_advancer_count(stage_id)
 
     Enum.map(groups, fn group ->
-      participations = Enum.map(group.group_memberships, & &1.stage_participation)
+      participations =
+        group.group_memberships
+        |> Enum.map(& &1.stage_participation)
+        |> Enum.sort_by(&Names.sort_key(participant_name(&1)))
+
       by_id = Map.new(participations, &{&1.id, &1})
 
       rows =
@@ -3894,6 +3912,17 @@ defmodule Cuevolution.Competitions do
     end)
   end
 
+  # A read, not a write. The public scoreboard and the player page both reach
+  # this, and a page view — anonymous, at that — must not insert a config row,
+  # which is what `get_or_create_group_config/2` would do. Dealing the draw
+  # creates the config, so the fallback only covers a config deleted by hand.
+  defp circuit_team_advancer_count(stage_id) do
+    case group_config(stage_id, @circuit_team_category) do
+      nil -> default_group_config(stage_id, @circuit_team_category).advancer_count
+      config -> config.advancer_count
+    end
+  end
+
   # Unlike the group stages at Grassroots and Regional, a Circuit team result
   # counts as soon as it is recorded. Those stages have a verification step
   # before a result is final; the Circuit does not — its bracket matches are
@@ -3908,7 +3937,7 @@ defmodule Cuevolution.Competitions do
       where: r.group_id in ^group_ids,
       where: f.status in ["completed", "verified", "walkover"],
       select: {r.group_id, mr},
-      preload: [fixture: [:participant_a, :participant_b]]
+      preload: [:match_frames, fixture: [:participant_a, :participant_b]]
     )
     |> Repo.all()
     |> Enum.group_by(fn {group_id, _mr} -> group_id end, fn {_group_id, mr} ->
@@ -6389,11 +6418,18 @@ defmodule Cuevolution.Competitions do
 
   defp frame_tally(%MatchResult{} = result, %Fixture{}), do: frame_tally_from_score(result)
 
+  defp tally_match_frames(%MatchResult{match_frames: frames}) when is_list(frames),
+    do: tally_frames(frames)
+
   defp tally_match_frames(%MatchResult{} = result) do
     MatchFrame
     |> where([f], f.match_result_id == ^result.id)
     |> Repo.all()
-    |> Enum.reduce({0, 0}, fn frame, {a, b} ->
+    |> tally_frames()
+  end
+
+  defp tally_frames(frames) do
+    Enum.reduce(frames, {0, 0}, fn frame, {a, b} ->
       if frame.winner_player_id == frame.home_player_id, do: {a + 1, b}, else: {a, b + 1}
     end)
   end
