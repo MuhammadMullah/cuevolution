@@ -41,7 +41,7 @@
     :if={@rows != []}
     class="overflow-x-auto rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(13,12,34,0.05)]"
   >
-    <table class="table-stack w-full border-collapse sm:min-w-[1180px]">
+    <table class="table-stack w-full border-collapse">
       <thead>
         <tr>
           <th
@@ -49,7 +49,7 @@
             scope="col"
             title={full}
             class={[
-              "sticky top-0 whitespace-nowrap bg-ink-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-500",
+              "sticky top-0 bg-ink-50 px-1.5 py-3 text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-ink-500 sm:px-2.5 sm:text-[11px]",
               align
             ]}
           >
@@ -70,7 +70,7 @@
             :for={{short, _full, align} <- columns(@state)}
             data-label={short}
             class={[
-              "whitespace-nowrap px-4 py-2.5 text-[14px]",
+              "whitespace-nowrap px-1.5 py-2.5 text-[13px] sm:px-2.5",
               align,
               short == "Player" && "font-medium text-ink-950",
               short == "SP Points" && "font-bold tabular-nums text-ink-950",

@@ -148,6 +148,20 @@ defmodule CuevolutionWeb.StandingsLive do
     {"Frame Win %", "Frames won / frames played"}
   ]
 
+  # Same ladder as the public table: a twelve-column table cannot fit a phone,
+  # and stacking twelve labelled fields per team made a page ten screens long.
+  # Position, name, played, won and points stay at every width.
+  @doc false
+  def column_visibility(label) do
+    cond do
+      label in ["MP", "MW"] -> nil
+      label in ["ML", "Win %"] -> "hidden sm:table-cell"
+      label in ["Frame Win %", "Stage"] -> "hidden md:table-cell"
+      label in ["FP", "FW", "FL", "FD", "Region"] -> "hidden lg:table-cell"
+      true -> nil
+    end
+  end
+
   @doc false
   def signed_frames(value) when value > 0, do: "+#{value}"
   def signed_frames(value), do: to_string(value)

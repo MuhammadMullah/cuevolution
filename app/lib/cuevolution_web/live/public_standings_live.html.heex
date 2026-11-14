@@ -201,7 +201,7 @@
           </div>
 
           <div class="overflow-x-auto">
-            <table class="table-stack w-full border-collapse sm:min-w-[1120px]">
+            <table class="w-full border-collapse">
               <thead>
                 <tr>
                   <th
@@ -209,8 +209,9 @@
                     scope="col"
                     title={title}
                     class={[
-                      "whitespace-nowrap px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-500",
-                      align
+                      "px-1.5 py-3 text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-ink-500 sm:px-2.5 sm:text-[11px]",
+                      align,
+                      column_visibility(label)
                     ]}
                   >
                     {label}
@@ -231,12 +232,15 @@
                     :for={{label, _title, align} <- standings_columns(@standings_state)}
                     data-label={label}
                     class={[
-                      "whitespace-nowrap px-3 py-2.5 text-[13px]",
+                      "px-1.5 py-2.5 text-[13px] sm:px-2.5",
                       align,
-                      label in ["Player", "Team"] && "text-[14px] font-medium text-ink-950",
-                      label == "SP Points" && "font-bold tabular-nums text-ink-950",
+                      column_visibility(label),
+                      label in ["Player", "Team"] &&
+                        "text-[13.5px] font-medium text-ink-950 sm:text-[14px]",
+                      label == "SP Points" &&
+                        "whitespace-nowrap font-bold tabular-nums text-ink-950",
                       label not in ["Player", "Team", "SP Points", "Region", "Status", "Finish"] &&
-                        "tabular-nums text-ink-600",
+                        "whitespace-nowrap tabular-nums text-ink-600",
                       label in ["Region", "Status", "Finish"] && "text-ink-600"
                     ]}
                   >

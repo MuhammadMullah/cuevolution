@@ -274,6 +274,28 @@ defmodule CuevolutionWeb.PublicStandingsLive do
 
   def standings_cell(row, "SP Points", _state), do: row.points
 
+  # Which columns survive which width. A twelve-column standings table cannot
+  # fit a phone, and the stacked-card fallback is worse than useless here: two
+  # groups of ten became an 8,000px page of twelve-field cards. So the table
+  # stays a table and sheds its least essential columns first, keeping the four
+  # a reader actually came for — where a team is, who it is, how many it has
+  # won, and its points.
+  @always ["Pos", "Player", "Team", "MP", "MW", "SP Points"]
+  @from_sm ["ML", "Win %"]
+  @from_md ["Frame Win %", "Status", "Finish"]
+  @from_lg ["FP", "FW", "FL", "FD", "Region"]
+
+  @doc false
+  def column_visibility(label) do
+    cond do
+      label in @always -> nil
+      label in @from_sm -> "hidden sm:table-cell"
+      label in @from_md -> "hidden md:table-cell"
+      label in @from_lg -> "hidden lg:table-cell"
+      true -> nil
+    end
+  end
+
   @doc false
   def scopes, do: [{"Overall", :overall}, {"Groups", :groups}]
 
